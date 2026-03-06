@@ -1,11 +1,53 @@
 'use client';
 
+/**
+ * Public Form Page — /f/[token]
+ *
+ * What it does:
+ *   The respondent-facing side of the Form Builder. Loads a published form by its
+ *   UUID share token (not the internal numeric ID), renders all fields with the
+ *   correct HTML input types, applies validation, and submits answers to the backend.
+ *
+ * URL patterns:
+ *   /f/{token}             — New submission (blank form)
+ *   /f/{token}?edit={uuid} — Edit mode: pre-fills the form with a previous submission
+ *                            so the respondent can change their answers.
+ *
+ * Data loading (useEffect):
+ *   1. Fetches the form schema via GET /api/forms/public/{token} (no auth required).
+ *   2. Parses field options and logic rules from JSON (backend sends pre-parsed objects
+ *      but falls back to JSON.parse for legacy string representations).
+ *   3. Fetches distinct values for each LOOKUP field via GET /api/forms/{id}/columns/{col}/values.
+ *   4. If ?edit={uuid} is present, fetches the existing submission via
+ *      GET /api/forms/{formId}/submissions/{submissionId} and pre-fills the answers.
+ *
+ * Conditional field visibility (Logic Rules):
+ *   Rules stored in FormVersion.rules are evaluated CLIENT-SIDE to show/hide fields
+ *   in real time as the respondent types. The same rules are also evaluated SERVER-SIDE
+ *   by RuleEngineService.validateSubmission() when the form is submitted.
+ *   Only the SHOW and HIDE action types affect client-side visibility; REQUIRE and
+ *   VALIDATION_ERROR are enforced server-side only.
+ *
+ * Submission:
+ *   - New: POST /api/forms/public/{token}/submissions (token-based, no auth)
+ *   - Edit: PUT /api/forms/{formId}/submissions/{submissionId}
+ *   Returns a submissionId UUID used in the "Edit your response" link shown on the
+ *   success screen (when form.allowEditResponse is true).
+ *
+ * Field types rendered:
+ *   TEXT, NUMERIC, DATE, BOOLEAN (checkbox), TEXTAREA, DROPDOWN (select), RADIO,
+ *   CHECKBOX_GROUP, TIME, RATING (star buttons), SCALE (numbered buttons),
+ *   FILE (uploads to /api/upload then stores URL), GRID_RADIO, GRID_CHECK, LOOKUP.
+ *
+ * Uses Sonner for toast notifications, Lucide for icons.
+ */
+
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { submitFormResponse } from '@/services/api';
 import { toast } from 'sonner';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, CheckCircle, Layers } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import ThemeToggle from '@/components/ThemeToggle';
 
 // 1. UPDATED INTERFACE
 interface FormField {
@@ -22,20 +64,22 @@ interface FormField {
 
 interface FormVersion {
   fields: FormField[];
-  rules?: any; // Add rules to interface
+  rules?: any;
 }
 
 interface FormData {
+  id: number; // <-- Added to hold the internal database ID
   title: string;
   description: string;
   versions: FormVersion[];
+  allowEditResponse: boolean;
 }
 
 export default function PublicFormPage() {
   const params = useParams();
   const router = useRouter();
-  const formId = params.id as string;
-  
+  const token = params.token as string; // <-- Now correctly using token instead of id
+
   const searchParams = useSearchParams();
   const editSubmissionId = searchParams.get('edit');
 
@@ -44,38 +88,50 @@ export default function PublicFormPage() {
   const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeFields, setActiveFields] = useState<any[]>([]); // Need this to track base fields
+  const [activeFields, setActiveFields] = useState<any[]>([]);
+  const [isSubmitted, setIsSubmitted] = useState(false); // <-- Added state for success screen
+  const [submittedId, setSubmittedId] = useState<string | null>(null); // NEW: Track submission ID for edit link
 
-  // NEW STATE: Store the options fetched from other forms
   const [lookupData, setLookupData] = useState<Record<string, string[]>>({});
   const [rules, setRules] = useState<any[]>([]);
 
-  // 1. Fetch Form Definition
+  // 1. Fetch Form Definition via Secure Token
+  // 1. Fetch Form Definition via Secure Token
   useEffect(() => {
-    if (!formId) return;
+    if (!token) return;
 
-    fetch(`http://localhost:8080/api/forms/${formId}`)
+    fetch(`http://localhost:8080/api/forms/public/${token}`)
       .then((res) => {
-        if (!res.ok) throw new Error('Form not found or server error');
+        if (!res.ok) throw new Error('Form not found or link is invalid');
         return res.json();
       })
       .then(async (data) => {
+        // --- 1. BULLETPROOF SAFETY CHECK ---
+        const versions = data.versions || [];
+        if (versions.length === 0) {
+          throw new Error('Form version data is missing from the server.');
+        }
+
+        const activeVersion = versions[0];
         const initialAnswers: Record<string, any> = {};
-        const activeFieldsList = data.versions[0]?.fields || [];
+        const activeFieldsList = activeVersion.fields || [];
+        const internalFormId = data.id; // Capture the actual DB ID for edits/lookups
 
         activeFieldsList.forEach((field: any) => {
-          // 1. Parse Options JSON safely
-          if (field.options && typeof field.options === 'string') {
-            try {
-              const parsed = JSON.parse(field.options);
-              field.parsedOptions = parsed;
-              field.options = parsed;
-            } catch (e) {
-              field.parsedOptions = [];
+          if (field.options) {
+            if (typeof field.options === 'string') {
+              try {
+                const parsed = JSON.parse(field.options);
+                field.parsedOptions = parsed;
+                field.options = parsed;
+              } catch (e) {
+                field.parsedOptions = [];
+              }
+            } else if (typeof field.options === 'object') {
+              field.parsedOptions = field.options;
             }
           }
 
-          // 2. Set Default Value
           if (field.defaultValue) {
             if (field.fieldType === 'BOOLEAN') {
               initialAnswers[field.columnName] = field.defaultValue === 'true';
@@ -93,21 +149,18 @@ export default function PublicFormPage() {
 
         setActiveFields(activeFieldsList);
 
-        // --- ADD RULE PARSING HERE ---
         let parsedRules = [];
-        if (data.versions[0].rules) {
+        if (activeVersion.rules) {
           try {
-            parsedRules = typeof data.versions[0].rules === 'string'
-              ? JSON.parse(data.versions[0].rules)
-              : data.versions[0].rules;
+            parsedRules = typeof activeVersion.rules === 'string'
+              ? JSON.parse(activeVersion.rules)
+              : activeVersion.rules;
           } catch (e) {
             console.error("Failed to parse rules", e);
           }
         }
         setRules(parsedRules);
-        // -----------------------------
 
-        // --- FETCH LOOKUP DATA ---
         const lookupsToFetch: { fieldCol: string; formId: string; targetCol: string }[] = [];
 
         activeFieldsList.forEach((field: any) => {
@@ -140,13 +193,15 @@ export default function PublicFormPage() {
           setLoading(false);
         }
 
-        data.versions[0].fields = activeFieldsList;
+        // Safely update the form state
+        activeVersion.fields = activeFieldsList;
+        data.versions = [activeVersion];
         setForm(data);
 
-        // --- NEW: FETCH EXISTING SUBMISSION IF EDITING ---
+        // --- FETCH EXISTING SUBMISSION IF EDITING ---
         if (editSubmissionId) {
           try {
-            const subRes = await fetch(`http://localhost:8080/api/forms/${formId}/submissions/${editSubmissionId}`);
+            const subRes = await fetch(`http://localhost:8080/api/forms/${internalFormId}/submissions/${editSubmissionId}`);
             const subData = await subRes.json();
 
             const prefilledAnswers: Record<string, any> = {};
@@ -174,7 +229,7 @@ export default function PublicFormPage() {
         setError(err.message);
         setLoading(false);
       });
-  }, [formId, editSubmissionId]);
+  }, [token, editSubmissionId]);
 
   const handleInputChange = (columnName: string, value: any) => {
     setAnswers((prev) => ({
@@ -186,18 +241,16 @@ export default function PublicFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // --- ADD THIS BLOCK TO STOP SUBMISSION ---
     if (customErrors.length > 0) {
       toast.error("Please fix the errors before submitting.");
       return;
     }
-    // -----------------------------------------
 
     setIsSubmitting(true);
 
     try {
-      if (editSubmissionId) {
-        const response = await fetch(`http://localhost:8080/api/forms/${formId}/submissions/${editSubmissionId}`, {
+      if (editSubmissionId && form?.id) {
+        const response = await fetch(`http://localhost:8080/api/forms/${form.id}/submissions/${editSubmissionId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(answers),
@@ -205,13 +258,22 @@ export default function PublicFormPage() {
 
         if (!response.ok) throw new Error("Failed to update");
         toast.success("Response updated successfully!");
-      } else {
-        await submitFormResponse(formId, answers);
-        toast.success("Response submitted successfully!");
-      }
+        setIsSubmitted(true);
 
-      setAnswers({});
-      router.push(`/forms/${formId}/responses`);
+      } else {
+        const response = await fetch(`http://localhost:8080/api/forms/public/${token}/submissions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers),
+        });
+
+        if (!response.ok) throw new Error("Submission Failed");
+        const resData = await response.json();
+
+        toast.success("Response submitted successfully!");
+        setSubmittedId(resData.submissionId);
+        setIsSubmitted(true);
+      }
 
     } catch (err: any) {
       console.error(err);
@@ -223,15 +285,11 @@ export default function PublicFormPage() {
     }
   };
 
-  // --- THE RULE ENGINE EVALUATOR ---
-
-  // --- UPGRADED RULE ENGINE EVALUATOR ---
   const evaluateRules = () => {
     let visibleCols = new Set(activeFields.map((f: any) => f.columnName));
     let dynamicallyRequiredCols = new Set<string>();
     let customErrors: string[] = [];
 
-    // 1. If a field is the target of a "SHOW" rule, hide it by default.
     rules.forEach(rule => {
       rule.actions.forEach((action: any) => {
         if (action.type === 'SHOW' && action.targetField) {
@@ -240,7 +298,6 @@ export default function PublicFormPage() {
       });
     });
 
-    // 2. Evaluate all rules against the user's current answers
     rules.forEach(rule => {
       const condition = rule.conditions[0];
       if (!condition) return;
@@ -264,7 +321,6 @@ export default function PublicFormPage() {
         }
       }
 
-      // 3. If the condition is met, apply the respective actions!
       if (isMatch) {
         rule.actions.forEach((action: any) => {
           if (action.type === 'SHOW' && action.targetField) {
@@ -272,9 +328,9 @@ export default function PublicFormPage() {
           } else if (action.type === 'HIDE' && action.targetField) {
             visibleCols.delete(action.targetField);
           } else if (action.type === 'REQUIRE' && action.targetField) {
-            dynamicallyRequiredCols.add(action.targetField); // Mark as required!
+            dynamicallyRequiredCols.add(action.targetField);
           } else if (action.type === 'VALIDATION_ERROR' && action.message) {
-            customErrors.push(action.message); // Trigger custom error!
+            customErrors.push(action.message);
           }
         });
       }
@@ -289,83 +345,131 @@ export default function PublicFormPage() {
 
   const { visibleFields, dynamicallyRequiredCols, customErrors } = evaluateRules();
 
+  if (loading) return (
+    <div className="flex justify-center items-center h-screen" style={{ background: 'var(--bg-base)', color: 'var(--text-muted)' }}>
+      Loading form...
+    </div>
+  );
+  if (error || !form) return (
+    <div className="flex justify-center items-center h-screen" style={{ background: 'var(--bg-base)', color: '#ef4444' }}>
+      Error: {error || 'Form not found'}
+    </div>
+  );
 
-  if (loading) return <div className="flex justify-center p-20 text-gray-500">Loading form...</div>;
-  if (error || !form) return <div className="flex justify-center p-20 text-red-500">Error: {error || 'Form not found'}</div>;
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--bg-base)' }}>
+        <div
+          className="max-w-md w-full rounded-2xl overflow-hidden border text-center"
+          style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow-lg)' }}
+        >
+          {/* Gradient top banner */}
+          <div className="h-2 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />
+          <div className="p-10 space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto shadow-lg">
+              <CheckCircle className="w-9 h-9 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Thank You!</h2>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Your response has been successfully {editSubmissionId ? 'updated' : 'submitted'}.
+            </p>
 
-  // const visibleFields = evaluateRules();
+            <div className="pt-4 flex flex-col gap-3">
+              {form?.allowEditResponse && (submittedId || editSubmissionId) && (
+                <a
+                  href={`/f/${token}?edit=${submittedId || editSubmissionId}`}
+                  className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors"
+                  style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
+                >
+                  Edit your response
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  if (editSubmissionId) { window.location.href = `/f/${token}`; }
+                  else { window.location.reload(); }
+                }}
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors border"
+                style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+              >
+                Submit another response
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
-        <div className="bg-white px-8 py-10 border-b border-gray-100">
-          <h1 className="text-3xl font-bold text-gray-900">{form.title}</h1>
-          {form.description && (
-            <p className="mt-2 text-gray-600 text-lg">{form.description}</p>
-          )}
+    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
+      {/* Minimal top nav with theme toggle */}
+      <div
+        className="border-b px-6 py-3 flex justify-between items-center"
+        style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}
+      >
+        <div className="flex items-center">
+          <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>FormBuilder</span>
         </div>
+        <ThemeToggle />
+      </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
-          {visibleFields.map((field) => {
-            // Check if it's required by the database OR dynamically by the Rule Engine
-            const isDynamicallyRequired = dynamicallyRequiredCols.has(field.columnName);
-            const isEffectivelyRequired = field.isMandatory || isDynamicallyRequired;
-            
-            // Override the field definition temporarily for the renderInput function
-            const fieldToRender = { ...field, isMandatory: isEffectivelyRequired };
+      <div className="py-10 px-4 sm:px-6">
+        <div
+          className="max-w-2xl mx-auto rounded-2xl overflow-hidden border"
+          style=
+          {{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow-lg)' }}
+        >
+          {/* Colored accent bar at top */}
+          <div className="h-1.5 w-full gradient-accent" />
 
-            return (
-              <div key={field.id} className="transition-all duration-300 ease-in-out">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {field.fieldLabel} {isEffectivelyRequired && <span className="text-red-500">*</span>}
-                </label>
-
-                {renderInput(fieldToRender, answers[field.columnName], handleInputChange, lookupData[field.columnName] || [])}
-
-                {field.fieldType === 'NUMERIC' && field.validationRules?.min && (
-                  <p className="text-xs text-gray-400 mt-1">Minimum value: {field.validationRules.min}</p>
-                )}
-              </div>
-            );
-          })}
-
-          {/* --- DISPLAY CUSTOM VALIDATION ERRORS --- */}
-          {customErrors.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md mt-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Validation Error</h3>
-                  <div className="mt-2 text-sm text-red-700">
-                    <ul className="list-disc pl-5 space-y-1">
-                      {customErrors.map((err, idx) => (
-                        <li key={idx}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="pt-6 border-t border-gray-100">
-            <button
-              type="submit"
-              disabled={isSubmitting || customErrors.length > 0}
-              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition-colors
-                ${isSubmitting || customErrors.length > 0
-                  ? 'bg-blue-400 cursor-not-allowed opacity-70'
-                  : 'bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900'
-                }`}
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Response'}
-            </button>
+          {/* Form header */}
+          <div className="px-8 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{form.title}</h1>
+            {form.description && (
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>{form.description}</p>
+            )}
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="px-8 py-8 space-y-7">
+            {visibleFields.map((field) => {
+              const isDynamicallyRequired = dynamicallyRequiredCols.has(field.columnName);
+              const isEffectivelyRequired = field.isMandatory || isDynamicallyRequired;
+              const fieldToRender = { ...field, isMandatory: isEffectivelyRequired };
+
+              return (
+                <div key={field.id} className="transition-all duration-300 ease-in-out">
+                  <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    {field.fieldLabel} {isEffectivelyRequired && <span className="text-red-500">*</span>}
+                  </label>
+                  {renderInput(fieldToRender, answers[field.columnName], handleInputChange, lookupData[field.columnName] || [])}
+                  {field.fieldType === 'NUMERIC' && field.validationRules?.min && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>Minimum value: {field.validationRules.min}</p>
+                  )}
+                </div>
+              );
+            })}
+
+            {customErrors.length > 0 && (
+              <div className="border-l-4 p-4 rounded-r-lg" style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
+                <h3 className="text-sm font-semibold" style={{ color: '#b91c1c' }}>Validation Error</h3>
+                <ul className="mt-2 text-sm list-disc pl-5 space-y-1" style={{ color: '#dc2626' }}>
+                  {customErrors.map((err, idx) => <li key={idx}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+
+            <div className="pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button
+                type="submit"
+                disabled={isSubmitting || customErrors.length > 0}
+                className="w-full flex justify-center py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all gradient-accent shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Response'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -393,12 +497,19 @@ function renderInput(
     name: field.columnName,
     required: field.isMandatory,
     disabled: false,
-    className: "block w-full rounded-md border-gray-300 shadow-sm focus:border-black focus:ring-black sm:text-sm p-3 border hover:border-gray-400 transition-colors bg-white",
+    style: {
+      background: 'var(--input-bg)',
+      borderColor: 'var(--input-border)',
+      color: 'var(--text-primary)',
+    } as React.CSSProperties,
+    className: "block w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2",
     value: value || '',
     onChange: (e: any) => onChange(field.columnName, e.target.value),
     minLength: field.validationRules?.minLength,
     maxLength: field.validationRules?.maxLength,
     pattern: field.validationRules?.pattern,
+    onFocus: (e: any) => { e.currentTarget.style.borderColor = 'var(--input-focus)'; e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-muted)'; },
+    onBlur: (e: any) => { e.currentTarget.style.borderColor = 'var(--input-border)'; e.currentTarget.style.boxShadow = 'none'; },
   };
 
   const listOptions = (Array.isArray(field.parsedOptions) ? field.parsedOptions : []) as string[];

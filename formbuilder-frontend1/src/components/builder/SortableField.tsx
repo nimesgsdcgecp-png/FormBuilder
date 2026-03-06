@@ -1,7 +1,19 @@
 // src/components/builder/SortableField.tsx
+
+/**
+ * SortableField — A Draggable / Sortable Field Card on the Builder Canvas
+ *
+ * What it does:
+ *   Renders a single field card on the canvas that can be:
+ *     1. Clicked → selects the field and opens its settings in the PropertiesPanel.
+ *     2. Dragged → reorders the field by dragging the grip handle up or down.
+ *     3. Deleted → removes the field from the canvas via the trash button.
+ *
+ * Field type icons are color-coded to match the sidebar category palette.
+ */
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2 } from 'lucide-react';
+import { GripVertical, Trash2, Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2 } from 'lucide-react';
 import { FormField } from '@/types/schema';
 
 interface SortableFieldProps {
@@ -11,60 +23,109 @@ interface SortableFieldProps {
   isSelected: boolean;
 }
 
-export function SortableField({ field, onRemove, onSelect, isSelected }: SortableFieldProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: field.id });
+/** Map each FieldType to its icon and category color */
+const FIELD_TYPE_META: Record<string, { icon: any; iconColor: string; iconBg: string; label: string }> = {
+  TEXT: { icon: Type, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Text Input' },
+  NUMERIC: { icon: Hash, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Number' },
+  DATE: { icon: Calendar, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Date Picker' },
+  BOOLEAN: { icon: ToggleLeft, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Checkbox' },
+  TEXTAREA: { icon: AlignLeft, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Long Text' },
+  DROPDOWN: { icon: List, iconColor: '#8b5cf6', iconBg: '#f5f3ff', label: 'Dropdown' },
+  RADIO: { icon: Disc, iconColor: '#8b5cf6', iconBg: '#f5f3ff', label: 'Multiple Choice' },
+  CHECKBOX_GROUP: { icon: Layers, iconColor: '#8b5cf6', iconBg: '#f5f3ff', label: 'Checkboxes' },
+  TIME: { icon: Clock, iconColor: '#f59e0b', iconBg: '#fffbeb', label: 'Time' },
+  RATING: { icon: Star, iconColor: '#f59e0b', iconBg: '#fffbeb', label: 'Star Rating' },
+  SCALE: { icon: BarChartHorizontal, iconColor: '#f59e0b', iconBg: '#fffbeb', label: 'Linear Scale' },
+  FILE: { icon: Upload, iconColor: '#f59e0b', iconBg: '#fffbeb', label: 'File Upload' },
+  GRID_RADIO: { icon: Grid3X3, iconColor: '#10b981', iconBg: '#ecfdf5', label: 'Choice Grid' },
+  GRID_CHECK: { icon: Table, iconColor: '#10b981', iconBg: '#ecfdf5', label: 'Checkbox Grid' },
+  LOOKUP: { icon: Link2, iconColor: '#ec4899', iconBg: '#fdf2f8', label: 'Linked Data' },
+};
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+export function SortableField({ field, onRemove, onSelect, isSelected }: SortableFieldProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
+
+  const meta = FIELD_TYPE_META[field.type] || FIELD_TYPE_META.TEXT;
+  const FieldIcon = meta.icon;
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`relative flex items-center gap-4 p-4 mb-2 bg-white border rounded shadow-sm group cursor-pointer
-        ${isSelected ? 'border-blue-500 ring-1 ring-blue-500 z-10' : 'border-gray-200 hover:border-blue-300'}`}
+      className="relative flex items-center gap-3 p-4 mb-2 rounded-xl border cursor-pointer transition-all duration-150 group"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        background: 'var(--card-bg)',
+        borderColor: isSelected ? 'var(--accent)' : 'var(--card-border)',
+        boxShadow: isSelected
+          ? '0 0 0 3px var(--accent-muted)'
+          : 'var(--card-shadow)',
+      }}
       onClick={(e) => {
-        e.stopPropagation(); // <--- CRITICAL FIX: Stops the click from reaching the Canvas background
+        e.stopPropagation();
         onSelect(field.id);
       }}
     >
-      {/* Drag Handle */}
-      <div 
-        {...attributes} 
-        {...listeners} 
-        className="cursor-grab text-gray-400 hover:text-gray-600 focus:outline-none"
-        onClick={(e) => e.stopPropagation()} // Prevent drag handle click from selecting
+      {/* Grip Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+        style={{ color: 'var(--text-faint)' }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'}
       >
-        <GripVertical size={20} />
+        <GripVertical size={18} />
       </div>
 
-      {/* Field Content Preview */}
-      <div className="flex-1 pointer-events-none"> {/* Disable pointer events here so click passes to parent div */}
-        <label className="block text-sm font-medium text-gray-700">
-          {field.label} {field.validation.required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="mt-1 p-2 bg-gray-50 border border-gray-200 rounded text-gray-400 text-sm">
-          {field.type} Input Preview
+      {/* Field Type Icon */}
+      <div
+        className="p-2 rounded-lg shrink-0"
+        style={{ background: meta.iconBg }}
+      >
+        <FieldIcon size={16} style={{ color: meta.iconColor }} />
+      </div>
+
+      {/* Field content preview */}
+      <div className="flex-1 min-w-0 pointer-events-none">
+        <div className="flex items-center gap-2">
+          <label
+            className="text-sm font-semibold truncate"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {field.label || 'Untitled Field'}
+          </label>
+          {field.validation.required && (
+            <span className="text-red-500 text-xs font-bold shrink-0">*</span>
+          )}
+        </div>
+        <div className="text-[11px] mt-0.5 font-medium" style={{ color: 'var(--text-faint)' }}>
+          {meta.label}
         </div>
       </div>
 
       {/* Delete Button */}
-      <button 
+      <button
         onClick={(e) => {
-          e.stopPropagation(); // Stop delete click from selecting
+          e.stopPropagation();
           onRemove(field.id);
         }}
-        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+        className="p-2 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100"
+        style={{ color: 'var(--text-faint)' }}
+        onMouseEnter={e => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.background = '#fee2e2';
+          el.style.color = '#dc2626';
+          el.style.opacity = '1';
+        }}
+        onMouseLeave={e => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.background = 'transparent';
+          el.style.color = 'var(--text-faint)';
+        }}
       >
-        <Trash2 size={18} />
+        <Trash2 size={16} />
       </button>
     </div>
   );

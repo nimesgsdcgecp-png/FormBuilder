@@ -8,12 +8,43 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * FormRepository — Data Access Layer for the {@link Form} entity
+ *
+ * What it does:
+ * Extends Spring Data JPA's {@code JpaRepository}, which provides
+ * out-of-the-box
+ * CRUD operations (save, findById, findAll, delete, etc.) for the {@code forms}
+ * table — no SQL boilerplate required.
+ *
+ * Custom queries:
+ * Spring Data JPA auto-generates these from the method name using its
+ * "query derivation" mechanism:
+ *
+ * - {@link #findByStatusNotOrderByUpdatedAtDesc} — fetches all non-archived
+ * forms
+ * for the dashboard, sorted newest-first.
+ * - {@link #findByPublicShareToken} — resolves a UUID share token (from the
+ * public /f/{token} URL) to the matching Form, used by the public form page and
+ * public submission endpoint.
+ *
+ * Application flow:
+ * FormController → FormService / SubmissionService → FormRepository →
+ * PostgreSQL
+ */
 @Repository
 public interface FormRepository extends JpaRepository<Form, Long> {
-    // You can add custom queries here later, e.g.:
-    // List<Form> findByStatus(FormStatus status);
-    List<Form> findByStatusNot(FormStatus status);
 
-    // --- ADD THIS METHOD ---
+    /**
+     * Returns all forms whose status is NOT the given value, ordered by most
+     * recently updated. Used by the dashboard to exclude ARCHIVED forms.
+     */
+    List<Form> findByStatusNotOrderByUpdatedAtDesc(FormStatus status);
+
+    /**
+     * Looks up a form by its public share token (a UUID stored in the {@code forms}
+     * table). Returns {@code Optional.empty()} if no match is found, which causes
+     * the service layer to throw a 404-equivalent error.
+     */
     Optional<Form> findByPublicShareToken(String publicShareToken);
 }

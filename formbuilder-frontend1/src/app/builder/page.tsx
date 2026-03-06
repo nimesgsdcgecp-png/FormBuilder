@@ -1,5 +1,14 @@
 'use client';
 
+/**
+ * Builder Page — /builder
+ *
+ * The main drag-and-drop form creation/editing interface. Consists of:
+ *   - Left: Sidebar (field type palette — drag sources)
+ *   - Centre: Canvas (droppable field canvas) OR LogicPanel (when Logic tab is active)
+ *   - Right: PropertiesPanel (field properties editor — only in EDITOR tab)
+ */
+
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -18,14 +27,15 @@ import { FieldType } from '@/types/schema';
 import { saveForm, deleteForm } from '@/services/api';
 import { toast } from 'sonner';
 import LogicPanel from '@/components/builder/LogicPanel';
+import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save } from 'lucide-react';
 
-// Components
 import Sidebar, { FIELD_TYPES } from '@/components/builder/Sidebar';
 import { SidebarBtnOverlay } from '@/components/builder/DraggableSidebarBtn';
 import Canvas from '@/components/builder/Canvas';
 import PropertiesPanel from '@/components/builder/PropertiesPanel';
 import { SortableField } from '@/components/builder/SortableField';
-
+import ThemeToggle from '@/components/ThemeToggle';
+import Link from 'next/link';
 
 
 function BuilderContent() {
@@ -33,17 +43,9 @@ function BuilderContent() {
   const searchParams = useSearchParams();
   const editFormId = searchParams.get('id');
 
-
   const {
-    schema,
-    addField,
-    reorderFields,
-    setFormId,
-    setTitle,
-    setDescription,
-    setFields,
-    setRules,
-    resetForm
+    schema, addField, reorderFields, setFormId, setTitle, setDescription,
+    setFields, setRules, resetForm, setAllowEditResponse
   } = useFormStore();
 
   const [activeSidebarItem, setActiveSidebarItem] = useState<FieldType | null>(null);
@@ -51,10 +53,9 @@ function BuilderContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC'>('EDITOR');
 
-  // --- LOAD EXISTING FORM ---
   useEffect(() => {
     if (!editFormId) {
-      resetForm(); // <--- Clear the store for a new form!
+      resetForm();
       return;
     }
 
@@ -64,46 +65,43 @@ function BuilderContent() {
         setFormId(data.id);
         setTitle(data.title);
         setDescription(data.description || '');
+        setAllowEditResponse(data.allowEditResponse || false);
 
-        // Map Backend Fields to Frontend Store
+        useFormStore.setState((state) => ({
+          schema: { ...state.schema, publicShareToken: data.publicShareToken }
+        }));
+
+        let parsedRules = [];
+        if (data.versions[0].rules) {
+          if (typeof data.versions[0].rules === 'string') {
+            try { parsedRules = JSON.parse(data.versions[0].rules); }
+            catch (e) { console.error("Failed to parse rules from DB", e); }
+          } else {
+            parsedRules = data.versions[0].rules;
+          }
+        }
+        setRules(parsedRules);
+
         const mappedFields = data.versions[0].fields.map((f: any) => {
-          // 1. Parse Options JSON String -> Array
-          let parsedOptions: string[] = [];
+          let parsedOptions: any = [];
           if (f.options) {
-            try {
-              parsedOptions = JSON.parse(f.options);
-            } catch (e) {
-              console.error("Failed to parse options for field", f.id, e);
+            if (typeof f.options === 'string') {
+              try { parsedOptions = JSON.parse(f.options); }
+              catch (e) { parsedOptions = f.options.split(',').map((s: string) => s.trim()); }
+            } else {
+              parsedOptions = f.options;
             }
           }
-          
-          let parsedRules = [];
-          if (data.versions[0].rules) {
-            try {
-              // The database might send it as a JSON string, so we safely parse it
-              parsedRules = typeof data.versions[0].rules === 'string' 
-                ? JSON.parse(data.versions[0].rules) 
-                : data.versions[0].rules;
-            } catch (e) {
-              console.error("Failed to parse rules from DB", e);
-            }
-          }
-          setRules(parsedRules);
-
           return {
             id: f.id.toString(),
             type: f.fieldType,
             label: f.fieldLabel,
             columnName: f.columnName,
             defaultValue: f.defaultValue,
-            options: parsedOptions, // <--- Set the parsed array
-            validation: {
-              required: f.isMandatory,
-              ...f.validationRules
-            }
+            options: parsedOptions,
+            validation: { required: f.isMandatory, ...f.validationRules }
           };
         });
-
         setFields(mappedFields);
       })
       .catch(err => {
@@ -116,18 +114,15 @@ function BuilderContent() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  // --- NEW SAVE LOGIC ---
   const handleSave = async (status: 'DRAFT' | 'PUBLISHED') => {
     if (schema.fields.length === 0) {
-      toast.error("Cannot save empty form");
+      toast.error("Cannot save an empty form");
       return;
     }
-
     setIsSaving(true);
     try {
       const payload = { ...schema, status };
       await saveForm(payload);
-
       toast.success(`Form ${status === 'DRAFT' ? 'saved as draft' : 'published successfully'}!`);
       router.push('/');
     } catch (error) {
@@ -138,11 +133,8 @@ function BuilderContent() {
     }
   };
 
-  // --- NEW ARCHIVE LOGIC ---
-  // --- NEW ARCHIVE LOGIC WITH SONNER ---
   const handleArchive = () => {
     if (!editFormId) return;
-
     toast('Archive this form?', {
       description: 'You will be redirected to the dashboard.',
       action: {
@@ -157,35 +149,27 @@ function BuilderContent() {
           }
         }
       },
-      cancel: {
-        label: 'Cancel',
-        onClick: () => { }
-      }
+      cancel: { label: 'Cancel', onClick: () => { } }
     });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const activeData = active.data.current;
-
     if (activeData?.isSidebarBtn) {
       setActiveSidebarItem(activeData.type);
       setActiveCanvasItemId(null);
       return;
     }
-
     setActiveSidebarItem(null);
     setActiveCanvasItemId(active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     setActiveSidebarItem(null);
     setActiveCanvasItemId(null);
-
     if (!over) return;
-
     const activeData = active.data.current;
     if (activeData?.isSidebarBtn) {
       if (over.id === 'canvas-droppable' || schema.fields.some(f => f.id === over.id)) {
@@ -193,7 +177,6 @@ function BuilderContent() {
       }
       return;
     }
-
     if (active.id !== over.id) {
       const oldIndex = schema.fields.findIndex((f) => f.id === active.id);
       const newIndex = schema.fields.findIndex((f) => f.id === over.id);
@@ -204,12 +187,12 @@ function BuilderContent() {
   const renderOverlay = () => {
     if (activeSidebarItem) {
       const tool = FIELD_TYPES.find(t => t.type === activeSidebarItem);
-      return tool ? <SidebarBtnOverlay label={tool.label} icon={tool.icon} /> : null;
+      return tool ? <SidebarBtnOverlay label={tool.label} icon={tool.icon} category={tool.category} /> : null;
     }
     if (activeCanvasItemId) {
       const field = schema.fields.find(f => f.id === activeCanvasItemId);
       return field ? (
-        <div className="opacity-80 rotate-2 pointer-events-none">
+        <div className="opacity-80 rotate-1 pointer-events-none">
           <SortableField field={field} onRemove={() => { }} onSelect={() => { }} isSelected={false} />
         </div>
       ) : null;
@@ -219,78 +202,134 @@ function BuilderContent() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex h-screen w-full bg-gray-100 overflow-hidden">
-        
-        {/* 1. Conditionally render Sidebar */}
+      <div
+        className="flex h-screen w-full overflow-hidden"
+        style={{ background: 'var(--canvas-bg)' }}
+      >
+        {/* 1. Sidebar */}
         {activeTab === 'EDITOR' && <Sidebar />}
-        
+
         <main className="flex-1 flex flex-col min-w-0 h-full">
-          {/* HEADER (Always Visible) */}
-          <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-10">
-            <h1 className="font-bold text-gray-800">
-              {editFormId ? 'Edit Form' : 'Create Form'}
-            </h1>
-            
-            {/* TOGGLE */}
-            <div className="flex bg-gray-100 p-1 rounded-lg">
+          {/* ── Top Header Bar ── */}
+          <header
+            className="h-14 border-b flex items-center justify-between px-5 shrink-0 z-10"
+            style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}
+          >
+            {/* Left: Back link + form title */}
+            <div className="flex items-center gap-3">
+              <Link
+                href="/"
+                className="p-1.5 rounded-lg transition-all"
+                style={{ color: 'var(--text-muted)' }}
+                title="Back to Dashboard"
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+              >
+                <ArrowLeft size={18} />
+              </Link>
+              <div className="w-px h-5" style={{ background: 'var(--border)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {editFormId ? 'Edit Form' : 'Create Form'}
+              </span>
+            </div>
+
+            {/* Centre: Tab toggle */}
+            <div
+              className="flex rounded-lg p-1"
+              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
+            >
               <button
                 onClick={() => setActiveTab('EDITOR')}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'EDITOR' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
+                style={
+                  activeTab === 'EDITOR'
+                    ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                    : { color: 'var(--text-muted)' }
+                }
               >
-                Form Editor
+                <Layout size={13} /> Form Editor
               </button>
               <button
                 onClick={() => setActiveTab('LOGIC')}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'LOGIC' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
+                style={
+                  activeTab === 'LOGIC'
+                    ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                    : { color: 'var(--text-muted)' }
+                }
               >
-                Logic Rules
+                <GitBranch size={13} /> Logic Rules
               </button>
             </div>
 
-            {/* ACTION BUTTONS */}
-            <div className="flex gap-3">
+            {/* Right: Action buttons */}
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+
               {editFormId && (
                 <button
                   onClick={handleArchive}
-                  className="px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 text-sm font-medium rounded shadow-sm transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                  style={{ color: '#b91c1c', background: '#fee2e2' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fecaca'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fee2e2'}
                 >
-                  Archive
+                  <Archive size={13} /> Archive
                 </button>
               )}
+
               <button
                 onClick={() => handleSave('DRAFT')}
                 disabled={isSaving}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 text-sm font-medium rounded shadow-sm transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
+                style={{
+                  background: 'var(--bg-muted)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-secondary)'
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
               >
-                Save Draft
+                <Save size={13} /> Save Draft
               </button>
+
+              {schema.publicShareToken && (
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/f/${schema.publicShareToken}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success("Share link copied to clipboard!");
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                  style={{ color: 'var(--accent)', background: 'var(--accent-subtle)' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)'}
+                >
+                  <Link2 size={13} /> Share
+                </button>
+              )}
+
               <button
                 onClick={() => handleSave('PUBLISHED')}
                 disabled={isSaving}
-                className={`px-4 py-2 text-white text-sm font-medium rounded shadow-sm transition-colors ${isSaving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm transition-all hover:shadow-md disabled:opacity-60"
               >
-                {isSaving ? 'Saving...' : 'Publish'}
+                {isSaving ? 'Saving...' : 'Publish →'}
               </button>
             </div>
           </header>
 
-          {/* 2. Conditionally render Canvas or LogicPanel */}
-          {activeTab === 'EDITOR' ? (
-            <Canvas />
-          ) : (
-            <LogicPanel />
-          )}
-
+          {/* 2. Main content */}
+          {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
         </main>
-        
-        {/* 3. Conditionally render Properties and Drag Overlay */}
+
+        {/* 3. Right panel */}
         {activeTab === 'EDITOR' && (
           <>
             <PropertiesPanel />
             <DragOverlay>{renderOverlay()}</DragOverlay>
           </>
         )}
-
       </div>
     </DndContext>
   );
@@ -298,7 +337,11 @@ function BuilderContent() {
 
 export default function BuilderPage() {
   return (
-    <Suspense fallback={<div>Loading builder...</div>}>
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-base)', color: 'var(--text-muted)' }}>
+        Loading builder...
+      </div>
+    }>
       <BuilderContent />
     </Suspense>
   );

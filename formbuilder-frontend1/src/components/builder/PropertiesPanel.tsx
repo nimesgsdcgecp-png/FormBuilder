@@ -1,17 +1,74 @@
 'use client';
 
+/**
+ * PropertiesPanel — Field Configuration Side Panel in the Builder
+ *
+ * The right-hand panel that appears when a field card on the canvas is selected.
+ * Provides controls to configure label, default value, options, grid config,
+ * lookup config, and validation rules.
+ */
+
 import { useFormStore } from '@/store/useFormStore';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Settings2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+
+/** Reusable section header for properties panel sections */
+function SectionHeader({ label, color = 'var(--accent)' }: { label: string; color?: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-4 pb-2 border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="h-[3px] w-3 rounded-full" style={{ background: color }} />
+      <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/** Reusable styled input */
+function PanelInput({ ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className="w-full px-3 py-2 rounded-lg border text-sm transition-all"
+      style={{
+        background: 'var(--input-bg)',
+        borderColor: 'var(--input-border)',
+        color: 'var(--text-primary)',
+        ...(props.disabled ? { color: 'var(--text-faint)', cursor: 'not-allowed' } : {}),
+      }}
+      onFocus={e => {
+        if (!props.disabled) e.currentTarget.style.borderColor = 'var(--input-focus)';
+      }}
+      onBlur={e => {
+        e.currentTarget.style.borderColor = 'var(--input-border)';
+      }}
+    />
+  );
+}
+
+/** Reusable styled select */
+function PanelSelect({ ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className="w-full px-3 py-2 rounded-lg border text-sm transition-all"
+      style={{
+        background: 'var(--input-bg)',
+        borderColor: 'var(--input-border)',
+        color: 'var(--text-primary)',
+      }}
+      onFocus={e => { e.currentTarget.style.borderColor = 'var(--input-focus)'; }}
+      onBlur={e => { e.currentTarget.style.borderColor = 'var(--input-border)'; }}
+    />
+  );
+}
 
 export default function PropertiesPanel() {
   const { schema, selectedFieldId, updateField } = useFormStore();
-  
-  // State for Lookup Feature
+
   const [availableForms, setAvailableForms] = useState<any[]>([]);
   const [selectedFormSchema, setSelectedFormSchema] = useState<any>(null);
 
-  // Fetch all forms when panel loads
   useEffect(() => {
     fetch('http://localhost:8080/api/forms')
       .then(res => res.json())
@@ -19,10 +76,8 @@ export default function PropertiesPanel() {
       .catch(console.error);
   }, []);
 
-  // Find the currently selected field object
   const selectedField = schema.fields.find((f) => f.id === selectedFieldId);
 
-  // If the user selects a source form, fetch its full schema to get the columns
   useEffect(() => {
     if (selectedField?.type === 'LOOKUP') {
       const config = selectedField.options as any;
@@ -35,353 +90,340 @@ export default function PropertiesPanel() {
     }
   }, [selectedField?.type, (selectedField?.options as any)?.formId]);
 
+  // Empty state
   if (!selectedField) {
     return (
-      <aside className="w-80 bg-gray-50 border-l border-gray-200 p-6 flex flex-col items-center justify-center text-center">
-        <p className="text-gray-400">Select a field on the canvas to edit its properties.</p>
+      <aside
+        className="w-80 border-l flex flex-col items-center justify-center text-center px-8 shrink-0"
+        style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
+      >
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+          style={{ background: 'var(--bg-subtle)' }}
+        >
+          <Settings2 size={24} style={{ color: 'var(--text-faint)' }} />
+        </div>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+          Select a field to edit
+        </p>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
+          Properties will appear here
+        </p>
       </aside>
     );
   }
 
   return (
-    <aside className="w-80 bg-white border-l border-gray-200 h-full flex flex-col">
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
-        <h2 className="font-semibold text-gray-800">Field Properties</h2>
-        <span className="text-xs text-gray-500 uppercase tracking-wide">
+    <aside
+      className="w-80 border-l h-full flex flex-col shrink-0"
+      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+    >
+      {/* Panel header */}
+      <div
+        className="px-4 py-4 border-b shrink-0"
+        style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
+      >
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Field Properties</h2>
+        <span
+          className="text-[11px] font-bold uppercase tracking-widest mt-0.5 block"
+          style={{ color: 'var(--accent)' }}
+        >
           {selectedField.type} Field
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 pt-2">
         {/* Label Input */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Label
-          </label>
-          <input
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Label</label>
+          <PanelInput
             type="text"
             value={selectedField.label}
             onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
-        {/* Database Column Name (Read-Only) */}
+        {/* Column Name (Read-Only) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Column Name (SQL)
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            Column Name <span className="font-normal" style={{ color: 'var(--text-faint)' }}>(auto-generated)</span>
           </label>
-          <input
+          <PanelInput
             type="text"
             value={selectedField.columnName}
             disabled
-            className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-500 text-sm font-mono cursor-not-allowed"
+            className="font-mono text-xs"
           />
-          <p className="text-xs text-gray-400 mt-1">
-            Auto-generated for database integrity.
-          </p>
         </div>
 
-        {/* --- DEFAULT VALUE INPUT --- */}
+        {/* Default Value */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Default Value
-          </label>
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Default Value</label>
           {selectedField.type === 'BOOLEAN' ? (
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+            <PanelSelect
               value={selectedField.defaultValue || ''}
               onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
             >
               <option value="">(None)</option>
               <option value="true">Checked (True)</option>
               <option value="false">Unchecked (False)</option>
-            </select>
+            </PanelSelect>
           ) : (
-            <input
+            <PanelInput
               type={selectedField.type === 'NUMERIC' ? 'number' : 'text'}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
               placeholder={selectedField.type === 'DATE' ? 'YYYY-MM-DD' : 'Enter default value...'}
               value={selectedField.defaultValue || ''}
               onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
             />
           )}
-          <p className="text-xs text-gray-400 mt-1">
-            This value will be pre-filled for the user.
-          </p>
         </div>
 
-        {/* --- OPTIONS MANAGER (For Dropdown, Radio, Checkbox Group) --- */}
+        {/* Options Manager — Dropdown, Radio, Checkbox Group */}
         {(selectedField.type === 'DROPDOWN' || selectedField.type === 'RADIO' || selectedField.type === 'CHECKBOX_GROUP') && (
-          <div className="space-y-3 pt-4 border-t border-gray-100">
-            <h3 className="text-sm font-medium text-gray-900">Options</h3>
-            
+          <div>
+            <SectionHeader label="Options" color="#8b5cf6" />
             <div className="space-y-2">
-              {/* Force cast to string[] because we know for these types it is an array */}
               {((Array.isArray(selectedField.options) ? selectedField.options : []) as string[]).map((option, index) => (
-                <div key={index} className="flex gap-2">
-                  <input
+                <div key={index} className="flex gap-2 items-center">
+                  <PanelInput
                     type="text"
                     value={option}
                     onChange={(e) => {
-                      const currentOptions = Array.isArray(selectedField.options) ? selectedField.options : [];
-                      const newOptions = [...currentOptions];
+                      const newOptions = [...(Array.isArray(selectedField.options) ? selectedField.options : [])];
                       newOptions[index] = e.target.value;
                       updateField(selectedField.id, { options: newOptions });
                     }}
-                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
                     placeholder={`Option ${index + 1}`}
                   />
                   <button
                     onClick={() => {
-                      const currentOptions = Array.isArray(selectedField.options) ? selectedField.options : [];
-                      const newOptions = currentOptions.filter((_, i) => i !== index);
+                      const newOptions = (Array.isArray(selectedField.options) ? selectedField.options : []).filter((_, i) => i !== index);
                       updateField(selectedField.id, { options: newOptions });
                     }}
-                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    className="p-2 rounded-lg shrink-0 transition-colors"
+                    style={{ color: 'var(--text-faint)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'; }}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               ))}
             </div>
-
             <button
               onClick={() => {
-                const currentOptions = Array.isArray(selectedField.options) ? selectedField.options : [];
-                // Add empty string as placeholder
-                const newOptions = [...currentOptions, ""]; 
+                const newOptions = [...(Array.isArray(selectedField.options) ? selectedField.options : []), ""];
                 updateField(selectedField.id, { options: newOptions });
               }}
-              className="flex items-center gap-1 text-xs text-blue-600 font-medium hover:underline mt-2"
+              className="flex items-center gap-1.5 mt-3 text-xs font-semibold transition-colors"
+              style={{ color: 'var(--accent)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.75'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
             >
-              <Plus size={14} /> Add Option
+              <Plus size={13} /> Add Option
             </button>
           </div>
         )}
 
-        {/* --- GRID MANAGER (For Grids) --- */}
+        {/* Grid Manager — Grid Radio / Grid Check */}
         {(selectedField.type === 'GRID_RADIO' || selectedField.type === 'GRID_CHECK') && (
-          <div className="space-y-6 pt-4 border-t border-gray-100">
-            
-            {/* We render two sections: one for Rows, one for Cols */}
-            {['rows', 'cols'].map((dimension) => {
-              // Safe cast to Grid Object
-              const gridOpts = (
-                (typeof selectedField.options === 'object' && !Array.isArray(selectedField.options)) 
-                  ? selectedField.options 
-                  : { rows: [], cols: [] }
-              ) as { rows: string[], cols: string[] };
+          <div>
+            <SectionHeader label="Grid Config" color="#10b981" />
+            <div className="space-y-5">
+              {['rows', 'cols'].map((dimension) => {
+                const gridOpts = (
+                  (typeof selectedField.options === 'object' && !Array.isArray(selectedField.options))
+                    ? selectedField.options
+                    : { rows: [], cols: [] }
+                ) as { rows: string[], cols: string[] };
 
-              const items = dimension === 'rows' ? (gridOpts.rows || []) : (gridOpts.cols || []);
+                const items = dimension === 'rows' ? (gridOpts.rows || []) : (gridOpts.cols || []);
 
-              return (
-                <div key={dimension} className="space-y-2">
-                  <h3 className="text-sm font-medium text-gray-900 capitalize">
-                    {dimension === 'cols' ? 'Columns' : 'Rows'}
-                  </h3>
-                  
-                  {items.map((item, index) => (
-                    <div key={index} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={item}
-                        onChange={(e) => {
-                          const newItems = [...items];
-                          newItems[index] = e.target.value;
-                          
-                          // Update the specific dimension in the object
-                          const newOpts = { ...gridOpts, [dimension]: newItems };
-                          updateField(selectedField.id, { options: newOpts });
-                        }}
-                        className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                        placeholder={`Label ${index + 1}`}
-                      />
-                      <button
-                        onClick={() => {
-                          const newItems = items.filter((_, i) => i !== index);
-                          const newOpts = { ...gridOpts, [dimension]: newItems };
-                          updateField(selectedField.id, { options: newOpts });
-                        }}
-                        className="p-1 text-red-500 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                return (
+                  <div key={dimension}>
+                    <p className="text-xs font-semibold mb-2 capitalize" style={{ color: 'var(--text-muted)' }}>
+                      {dimension === 'cols' ? 'Columns' : 'Rows'}
+                    </p>
+                    <div className="space-y-2">
+                      {items.map((item, index) => (
+                        <div key={index} className="flex gap-2">
+                          <PanelInput
+                            type="text"
+                            value={item}
+                            onChange={(e) => {
+                              const newItems = [...items];
+                              newItems[index] = e.target.value;
+                              updateField(selectedField.id, { options: { ...gridOpts, [dimension]: newItems } });
+                            }}
+                            placeholder={`Label ${index + 1}`}
+                          />
+                          <button
+                            onClick={() => {
+                              const newItems = items.filter((_, i) => i !== index);
+                              updateField(selectedField.id, { options: { ...gridOpts, [dimension]: newItems } });
+                            }}
+                            className="p-2 rounded-lg shrink-0 transition-colors"
+                            style={{ color: 'var(--text-faint)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fee2e2'; (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'; }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-
-                  <button
-                    onClick={() => {
-                       const newItems = [...items, ""];
-                       const newOpts = { ...gridOpts, [dimension]: newItems };
-                       updateField(selectedField.id, { options: newOpts });
-                    }}
-                    className="flex items-center gap-1 text-xs text-blue-600 font-medium hover:underline"
-                  >
-                    <Plus size={14} /> Add {dimension === 'cols' ? 'Column' : 'Row'}
-                  </button>
-                </div>
-              );
-            })}
+                    <button
+                      onClick={() => {
+                        const newItems = [...items, ""];
+                        updateField(selectedField.id, { options: { ...gridOpts, [dimension]: newItems } });
+                      }}
+                      className="flex items-center gap-1.5 mt-2 text-xs font-semibold"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      <Plus size={13} /> Add {dimension === 'cols' ? 'Column' : 'Row'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* --- LOOKUP MANAGER --- */}
+        {/* Lookup Manager */}
         {selectedField.type === 'LOOKUP' && (
-          <div className="space-y-4 pt-4 border-t border-gray-100">
-            <h3 className="text-sm font-medium text-gray-900">Linked Database</h3>
-            
-            {/* 1. Select Source Form */}
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Source Form</label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-                value={(selectedField.options as any)?.formId || ''}
-                onChange={(e) => {
-                   updateField(selectedField.id, { 
-                     options: { formId: e.target.value, columnName: '' } 
-                   });
-                }}
-              >
-                <option value="">-- Select a Form --</option>
-                {availableForms
-                   // Don't let a form link to itself (infinite loop)
-                   .filter(f => f.id.toString() !== schema.id?.toString()) 
-                   .map(form => (
-                     <option key={form.id} value={form.id}>{form.title}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 2. Select Display Column (Only shows if a form is selected) */}
-            {(selectedField.options as any)?.formId && selectedFormSchema && (
+          <div>
+            <SectionHeader label="Linked Database" color="#ec4899" />
+            <div className="space-y-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Display Column</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-                  value={(selectedField.options as any)?.columnName || ''}
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Source Form</label>
+                <PanelSelect
+                  value={(selectedField.options as any)?.formId || ''}
                   onChange={(e) => {
-                     const currentConfig = selectedField.options as any;
-                     updateField(selectedField.id, { 
-                       options: { ...currentConfig, columnName: e.target.value } 
-                     });
+                    updateField(selectedField.id, { options: { formId: e.target.value, columnName: '' } });
                   }}
                 >
-                  <option value="">-- Select a Field --</option>
-                  {selectedFormSchema.versions[0].fields
-                     // Only allow linking to simple text/number fields
-                     .filter((f: any) => ['TEXT', 'NUMERIC', 'DROPDOWN', 'RADIO'].includes(f.fieldType))
-                     .map((field: any) => (
-                       <option key={field.id} value={field.columnName}>
-                         {field.fieldLabel}
-                       </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-gray-400 mt-1">This is the data that will appear in the dropdown.</p>
+                  <option value="">-- Select a Form --</option>
+                  {availableForms
+                    .filter(f => f.id.toString() !== schema.id?.toString())
+                    .map(form => (
+                      <option key={form.id} value={form.id}>{form.title}</option>
+                    ))}
+                </PanelSelect>
               </div>
-            )}
+
+              {(selectedField.options as any)?.formId && selectedFormSchema && (
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Display Column</label>
+                  <PanelSelect
+                    value={(selectedField.options as any)?.columnName || ''}
+                    onChange={(e) => {
+                      const currentConfig = selectedField.options as any;
+                      updateField(selectedField.id, { options: { ...currentConfig, columnName: e.target.value } });
+                    }}
+                  >
+                    <option value="">-- Select a Field --</option>
+                    {selectedFormSchema.versions[0].fields
+                      .filter((f: any) => ['TEXT', 'NUMERIC', 'DROPDOWN', 'RADIO'].includes(f.fieldType))
+                      .map((field: any) => (
+                        <option key={field.id} value={field.columnName}>{field.fieldLabel}</option>
+                      ))}
+                  </PanelSelect>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Validation Rules */}
-        <div className="space-y-3 pt-4 border-t border-gray-100">
-          <h3 className="text-sm font-medium text-gray-900">Validation</h3>
+        <div>
+          <SectionHeader label="Validation" color="#3b82f6" />
+          <div className="space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedField.validation?.required || false}
+                onChange={(e) =>
+                  updateField(selectedField.id, {
+                    validation: { ...selectedField.validation, required: e.target.checked }
+                  })
+                }
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Required Field</span>
+            </label>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selectedField.validation?.required || false}
-              onChange={(e) =>
-                updateField(selectedField.id, {
-                  validation: { ...selectedField.validation, required: e.target.checked }
-                })
-              }
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Required Field</span>
-          </label>
-
-          {/* Conditional Input based on type */}
-          {(selectedField.type === 'NUMERIC' || selectedField.type === 'SCALE') && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-500">Min {selectedField.type === 'SCALE' ? '(Start)' : ''}</label>
-                <input
-                  type="number"
-                  className="w-full border p-1 rounded"
-                  value={selectedField.validation?.min ?? (selectedField.type === 'SCALE' ? 1 : '')}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                    updateField(selectedField.id, {
-                      validation: { ...selectedField.validation, min: val }
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Max {selectedField.type === 'SCALE' ? '(End)' : ''}</label>
-                <input
-                  type="number"
-                  className="w-full border p-1 rounded"
-                  value={selectedField.validation?.max ?? (selectedField.type === 'SCALE' ? 5 : '')}
-                  onChange={(e) => {
-                    const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                    updateField(selectedField.id, {
-                      validation: { ...selectedField.validation, max: val }
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Text Validation */}
-          {(selectedField.type === 'TEXT' || selectedField.type === 'TEXTAREA') && (
-            <div className="space-y-3 mt-3">
+            {(selectedField.type === 'NUMERIC' || selectedField.type === 'SCALE') && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-gray-500">Min Length</label>
-                  <input
+                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
+                    Min {selectedField.type === 'SCALE' ? '(Start)' : ''}
+                  </label>
+                  <PanelInput
                     type="number"
-                    className="w-full border p-1 rounded text-sm"
-                    value={selectedField.validation?.minLength ?? ''}
+                    value={selectedField.validation?.min ?? (selectedField.type === 'SCALE' ? 1 : '')}
                     onChange={(e) => {
                       const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                      updateField(selectedField.id, {
-                        validation: { ...selectedField.validation, minLength: val }
-                      });
+                      updateField(selectedField.id, { validation: { ...selectedField.validation, min: val } });
                     }}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Max Length</label>
-                  <input
+                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
+                    Max {selectedField.type === 'SCALE' ? '(End)' : ''}
+                  </label>
+                  <PanelInput
                     type="number"
-                    className="w-full border p-1 rounded text-sm"
-                    value={selectedField.validation?.maxLength ?? ''}
+                    value={selectedField.validation?.max ?? (selectedField.type === 'SCALE' ? 5 : '')}
                     onChange={(e) => {
                       const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                      updateField(selectedField.id, {
-                        validation: { ...selectedField.validation, maxLength: val }
-                      });
+                      updateField(selectedField.id, { validation: { ...selectedField.validation, max: val } });
                     }}
                   />
                 </div>
               </div>
-              <div>
-                 <label className="text-xs text-gray-500">Regex Pattern</label>
-                 <input
-                   type="text"
-                   placeholder="e.g. ^[0-9]{10}$"
-                   className="w-full border p-1 rounded text-sm font-mono text-gray-600"
-                   value={selectedField.validation?.pattern ?? ''}
-                   onChange={(e) => updateField(selectedField.id, {
+            )}
+
+            {(selectedField.type === 'TEXT' || selectedField.type === 'TEXTAREA') && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Min Length</label>
+                    <PanelInput
+                      type="number"
+                      value={selectedField.validation?.minLength ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? undefined : parseInt(e.target.value);
+                        updateField(selectedField.id, { validation: { ...selectedField.validation, minLength: val } });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Max Length</label>
+                    <PanelInput
+                      type="number"
+                      value={selectedField.validation?.maxLength ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? undefined : parseInt(e.target.value);
+                        updateField(selectedField.id, { validation: { ...selectedField.validation, maxLength: val } });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Regex Pattern</label>
+                  <PanelInput
+                    type="text"
+                    placeholder="e.g. ^[0-9]{10}$"
+                    className="font-mono"
+                    value={selectedField.validation?.pattern ?? ''}
+                    onChange={(e) => updateField(selectedField.id, {
                       validation: { ...selectedField.validation, pattern: e.target.value }
-                   })}
-                 />
+                    })}
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </aside>
