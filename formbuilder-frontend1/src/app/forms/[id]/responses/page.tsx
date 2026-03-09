@@ -37,15 +37,33 @@ export default function ResponsesPage() {
 
     const fetchData = async () => {
       try {
-        const formRes = await fetch(`http://localhost:8080/api/forms/${formId}`);
+        const formRes = await fetch(`http://localhost:8080/api/forms/${formId}`, { credentials: 'include' });
+        if (formRes.status === 401) {
+          router.push('/login');
+          return;
+        }
+        if (!formRes.ok) throw new Error('Failed to fetch form data');
+
         const formData = await formRes.json();
         setFormTitle(formData.title);
         setPublicToken(formData.publicShareToken);
 
-        const currentFields = formData.versions[0].fields;
+        const activeVersion = formData.versions?.[0];
+        if (!activeVersion) {
+          setLoading(false);
+          return;
+        }
+
+        const currentFields = activeVersion.fields || [];
         const currentFieldNames = new Set(currentFields.map((f: any) => f.columnName));
 
-        const dataRes = await fetch(`http://localhost:8080/api/forms/${formId}/submissions`);
+        const dataRes = await fetch(`http://localhost:8080/api/forms/${formId}/submissions`, { credentials: 'include' });
+        if (dataRes.status === 401) {
+          router.push('/login');
+          return;
+        }
+        if (!dataRes.ok) throw new Error('Failed to fetch submissions');
+
         const dataRows = await dataRes.json();
         setData(dataRows);
 
@@ -69,13 +87,14 @@ export default function ResponsesPage() {
         setHeaders([...standardHeaders, ...formHeaders, ...ghostHeaders]);
       } catch (error) {
         console.error("Error loading responses:", error);
+        toast.error("Failed to load response data");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [formId]);
+  }, [formId, router]);
 
   const formatLabel = (key: string) =>
     key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');

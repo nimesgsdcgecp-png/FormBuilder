@@ -239,4 +239,28 @@ public class FormController {
                 "message", "Submission successful",
                 "submissionId", submissionId));
     }
+
+    /**
+     * GET /api/forms/public/{token}/submissions/{submissionId}
+     * Publicly retrieve a single submission for editing.
+     */
+    @GetMapping("/public/{token}/submissions/{submissionId}")
+    public ResponseEntity<Map<String, Object>> getPublicSubmission(
+            @PathVariable("token") String token,
+            @PathVariable("submissionId") UUID submissionId) {
+        return ResponseEntity.ok(submissionService.getSubmissionByToken(token, submissionId));
+    }
+
+    /**
+     * PUT /api/forms/public/{token}/submissions/{submissionId}
+     * Publicly update an existing submission.
+     */
+    @PutMapping("/public/{token}/submissions/{submissionId}")
+    public ResponseEntity<Void> updatePublicSubmission(
+            @PathVariable("token") String token,
+            @PathVariable("submissionId") UUID submissionId,
+            @RequestBody Map<String, Object> data) {
+        submissionService.updateSubmissionByToken(token, submissionId, data);
+        return ResponseEntity.ok().build();
+    }
 }

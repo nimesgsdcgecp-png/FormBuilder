@@ -49,6 +49,14 @@ import { Download, FileText, CheckCircle, Layers } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
 
+// Maps font names to CSS font-family values
+const FONT_MAP: Record<string, string> = {
+  'Inter': 'Inter, sans-serif',
+  'Geist Sans': 'var(--font-geist-sans), sans-serif',
+  'Geist Mono': 'var(--font-geist-mono), monospace',
+  'System UI': 'system-ui, sans-serif'
+};
+
 // 1. UPDATED INTERFACE
 interface FormField {
   id: number;
@@ -73,6 +81,9 @@ interface FormData {
   description: string;
   versions: FormVersion[];
   allowEditResponse: boolean;
+  ownerId?: number; // <-- Added to identify the creator
+  themeColor?: string;
+  themeFont?: string;
 }
 
 export default function PublicFormPage() {
@@ -91,6 +102,7 @@ export default function PublicFormPage() {
   const [activeFields, setActiveFields] = useState<any[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false); // <-- Added state for success screen
   const [submittedId, setSubmittedId] = useState<string | null>(null); // NEW: Track submission ID for edit link
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null); // <-- Added to identify logged-in user
 
   const [lookupData, setLookupData] = useState<Record<string, string[]>>({});
   const [rules, setRules] = useState<any[]>([]);
@@ -98,9 +110,15 @@ export default function PublicFormPage() {
   // 1. Fetch Form Definition via Secure Token
   // 1. Fetch Form Definition via Secure Token
   useEffect(() => {
+    // 0. Fetch Current User (if any)
+    fetch(`http://localhost:8080/api/auth/me`, { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => data && setCurrentUserId(data.id))
+      .catch(() => { });
+
     if (!token) return;
 
-    fetch(`http://localhost:8080/api/forms/public/${token}`)
+    fetch(`http://localhost:8080/api/forms/public/${token}`, { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Form not found or link is invalid');
         return res.json();
@@ -151,12 +169,14 @@ export default function PublicFormPage() {
 
         let parsedRules = [];
         if (activeVersion.rules) {
-          try {
-            parsedRules = typeof activeVersion.rules === 'string'
-              ? JSON.parse(activeVersion.rules)
-              : activeVersion.rules;
-          } catch (e) {
-            console.error("Failed to parse rules", e);
+          let raw = activeVersion.rules;
+          if (typeof raw === 'string') {
+            try { raw = JSON.parse(raw); } catch (e) { }
+          }
+          if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as any).logic) {
+            parsedRules = (raw as any).logic;
+          } else {
+            parsedRules = Array.isArray(raw) ? raw : [];
           }
         }
         setRules(parsedRules);
@@ -201,7 +221,7 @@ export default function PublicFormPage() {
         // --- FETCH EXISTING SUBMISSION IF EDITING ---
         if (editSubmissionId) {
           try {
-            const subRes = await fetch(`http://localhost:8080/api/forms/${internalFormId}/submissions/${editSubmissionId}`);
+            const subRes = await fetch(`http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`, { credentials: 'include' });
             const subData = await subRes.json();
 
             const prefilledAnswers: Record<string, any> = {};
@@ -249,14 +269,23 @@ export default function PublicFormPage() {
     setIsSubmitting(true);
 
     try {
-      if (editSubmissionId && form?.id) {
-        const response = await fetch(`http://localhost:8080/api/forms/${form.id}/submissions/${editSubmissionId}`, {
+      if (editSubmissionId) {
+        const response = await fetch(`http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(answers),
+          credentials: 'include',
         });
 
         if (!response.ok) throw new Error("Failed to update");
+
+        // Redirect owner
+        if (currentUserId && form?.ownerId && Number(form.ownerId) === Number(currentUserId)) {
+          toast.success("Response updated! Redirecting back...");
+          router.push(`/forms/${form.id}/responses`);
+          return;
+        }
+
         toast.success("Response updated successfully!");
         setIsSubmitted(true);
 
@@ -265,10 +294,23 @@ export default function PublicFormPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(answers),
+          credentials: 'include',
         });
 
         if (!response.ok) throw new Error("Submission Failed");
         const resData = await response.json();
+
+        // --- DEV: DEBUGGING REDIRECT ---
+        console.log("DEBUG: currentUserId =", currentUserId);
+        console.log("DEBUG: form.ownerId =", form?.ownerId);
+
+        // --- NEW: REDIRECT IF FORM CREATOR ---
+        if (currentUserId && form?.ownerId && Number(form.ownerId) === Number(currentUserId)) {
+          console.log("DEBUG: MATCH FOUND! Redirecting...");
+          toast.success("Response submitted! Redirecting to responses page...");
+          router.push(`/forms/${form.id}/responses`);
+          return;
+        }
 
         toast.success("Response submitted successfully!");
         setSubmittedId(resData.submissionId);
@@ -363,10 +405,13 @@ export default function PublicFormPage() {
           className="max-w-md w-full rounded-2xl overflow-hidden border text-center"
           style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow-lg)' }}
         >
-          {/* Gradient top banner */}
-          <div className="h-2 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />
+          {/* Solid color top banner */}
+          <div className="h-2 w-full" style={{ backgroundColor: form?.themeColor || 'var(--accent)' }} />
           <div className="p-10 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto shadow-lg">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-lg"
+              style={{ backgroundColor: form?.themeColor || 'var(--accent)' }}
+            >
               <CheckCircle className="w-9 h-9 text-white" />
             </div>
             <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Thank You!</h2>
@@ -375,13 +420,13 @@ export default function PublicFormPage() {
             </p>
 
             <div className="pt-4 flex flex-col gap-3">
-              {form?.allowEditResponse && (submittedId || editSubmissionId) && (
+              {(form?.allowEditResponse || (currentUserId && form?.ownerId && Number(form.ownerId) === Number(currentUserId))) && (submittedId || editSubmissionId) && (
                 <a
                   href={`/f/${token}?edit=${submittedId || editSubmissionId}`}
-                  className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors"
+                  className="w-full px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors text-center"
                   style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
                 >
-                  Edit your response
+                  Edit {currentUserId && form?.ownerId && Number(form.ownerId) === Number(currentUserId) ? 'this' : 'your'} response
                 </a>
               )}
               <button
@@ -416,12 +461,16 @@ export default function PublicFormPage() {
 
       <div className="py-10 px-4 sm:px-6">
         <div
-          className="max-w-2xl mx-auto rounded-2xl overflow-hidden border"
-          style=
-          {{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', boxShadow: 'var(--card-shadow-lg)' }}
+          className="max-w-2xl mx-auto rounded-2xl overflow-hidden border font-sans transition-all"
+          style={{
+            background: 'var(--card-bg)',
+            borderColor: 'var(--card-border)',
+            boxShadow: 'var(--card-shadow-lg)',
+            fontFamily: FONT_MAP[form?.themeFont || 'Inter'] || FONT_MAP['Inter']
+          }}
         >
           {/* Colored accent bar at top */}
-          <div className="h-1.5 w-full gradient-accent" />
+          <div className="h-1.5 w-full" style={{ backgroundColor: form.themeColor || 'var(--accent)' }} />
 
           {/* Form header */}
           <div className="px-8 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -463,7 +512,8 @@ export default function PublicFormPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || customErrors.length > 0}
-                className="w-full flex justify-center py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all gradient-accent shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all shadow-sm hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:brightness-110"
+                style={{ backgroundColor: form.themeColor || 'var(--accent)' }}
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Response'}
               </button>
@@ -471,7 +521,7 @@ export default function PublicFormPage() {
           </form>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 

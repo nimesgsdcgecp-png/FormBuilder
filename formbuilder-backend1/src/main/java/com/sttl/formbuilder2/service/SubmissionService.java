@@ -11,6 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.sttl.formbuilder2.model.entity.AppUser;
+import com.sttl.formbuilder2.repository.UserRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
@@ -57,6 +61,21 @@ public class SubmissionService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper; // For rule JSON deserialisation and complex value serialisation
     private final RuleEngineService ruleEngineService;
+    private final UserRepository userRepository;
+
+    private AppUser getCurrentUser() {
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            return userRepository.findByUsername(username).orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isOwner(Form form) {
+        AppUser user = getCurrentUser();
+        return user != null && form.getOwner() != null && form.getOwner().getId().equals(user.getId());
+    }
 
     /**
      * Inserts a new submission row into the form's dynamic submission table.
@@ -88,10 +107,16 @@ public class SubmissionService {
         // 2. Fire the Rule Engine before saving
         if (activeVersion.getRules() != null && !activeVersion.getRules().equals("[]")) {
             try {
-                List<FormRuleDTO> rules = objectMapper.readValue(
-                        activeVersion.getRules(),
-                        new TypeReference<List<FormRuleDTO>>() {
-                        });
+                Object rawRules = objectMapper.readValue(activeVersion.getRules(), Object.class);
+                List<FormRuleDTO> rules;
+                if (rawRules instanceof Map) {
+                    Map<String, Object> rulesMap = (Map<String, Object>) rawRules;
+                    rules = objectMapper.convertValue(rulesMap.get("logic"), new TypeReference<List<FormRuleDTO>>() {
+                    });
+                } else {
+                    rules = objectMapper.convertValue(rawRules, new TypeReference<List<FormRuleDTO>>() {
+                    });
+                }
 
                 // Validate — throws HTTP 400 on REQUIRE / VALIDATION_ERROR violations
                 ruleEngineService.validateSubmission(rules, submissionData);
@@ -273,5 +298,36 @@ public class SubmissionService {
 
         // 2. Re-use the standard submission logic (rule engine, column mapping, etc.)
         return submitData(form.getId(), submissionData);
+    }
+
+    /**
+     * Publicly retrieve a submission for editing via its form token.
+     */
+    public Map<String, Object> getSubmissionByToken(String token, UUID submissionId) {
+        Form form = formRepository.findByPublicShareToken(token)
+                .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
+
+        // Only allow fetch if editing is permitted OR the user is the owner
+        if (!form.isAllowEditResponse() && !isOwner(form)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Editing is disabled for this form.");
+        }
+
+        return getSubmissionById(form.getId(), submissionId);
+    }
+
+    /**
+     * Publicly update a submission for editing via its form token.
+     */
+    @Transactional
+    public void updateSubmissionByToken(String token, UUID submissionId, Map<String, Object> submissionData) {
+        Form form = formRepository.findByPublicShareToken(token)
+                .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
+
+        // Validate permission: must allow edits OR be the form owner
+        if (!form.isAllowEditResponse() && !isOwner(form)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Editing is disabled for this form.");
+        }
+
+        updateSubmission(form.getId(), submissionId, submissionData);
     }
 }

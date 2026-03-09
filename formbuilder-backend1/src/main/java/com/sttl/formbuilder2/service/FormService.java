@@ -13,8 +13,11 @@ import com.sttl.formbuilder2.model.entity.FormField;
 import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import com.sttl.formbuilder2.repository.FormRepository;
+import com.sttl.formbuilder2.model.entity.AppUser;
+import com.sttl.formbuilder2.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +59,16 @@ public class FormService {
     private final FormRepository formRepository;
     private final DynamicTableService dynamicTableService;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
+
+    // ─────────────────────────────────────────────
+    // HELPER: Get Current User
+    // ─────────────────────────────────────────────
+    private AppUser getCurrentUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Current user not found in database"));
+    }
 
     // ─────────────────────────────────────────────
     // CREATE (POST /api/forms)
@@ -87,6 +100,9 @@ public class FormService {
 
         FormStatus incomingStatus = request.getStatus() != null ? request.getStatus() : FormStatus.DRAFT;
         form.setStatus(incomingStatus);
+
+        // Associate the form with the currently logged-in user
+        form.setOwner(getCurrentUser());
 
         // Save early to get the generated ID (needed for the dynamic table name)
         form = formRepository.save(form);
@@ -131,7 +147,8 @@ public class FormService {
      *         loaded).
      */
     public List<FormSummaryResponseDTO> getAllForms() {
-        List<Form> forms = formRepository.findByStatusNotOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
+        AppUser currentUser = getCurrentUser();
+        List<Form> forms = formRepository.findByOwnerAndStatusNotOrderByUpdatedAtDesc(currentUser, FormStatus.ARCHIVED);
         return forms.stream()
                 .map(this::toSummaryDTO)
                 .collect(Collectors.toList());
@@ -308,8 +325,10 @@ public class FormService {
      * Returns {@code "[]"} for null/empty lists so the column always holds valid
      * JSON.
      */
-    private String serializeRules(List<?> rules) {
-        if (rules == null || rules.isEmpty())
+    private String serializeRules(Object rules) {
+        if (rules == null)
+            return "[]";
+        if (rules instanceof List && ((List<?>) rules).isEmpty())
             return "[]";
         try {
             return objectMapper.writeValueAsString(rules);
@@ -392,6 +411,21 @@ public class FormService {
                     .build();
         }).collect(Collectors.toList());
 
+        // Extract theme from metadata within version 0 rules if present
+        String themeColor = null;
+        String themeFont = null;
+        if (!versionDTOs.isEmpty()) {
+            Object rules = versionDTOs.get(0).getRules();
+            if (rules instanceof java.util.Map) {
+                java.util.Map<String, Object> rulesMap = (java.util.Map<String, Object>) rules;
+                if (rulesMap.containsKey("theme")) {
+                    java.util.Map<String, String> theme = (java.util.Map<String, String>) rulesMap.get("theme");
+                    themeColor = theme.get("color");
+                    themeFont = theme.get("font");
+                }
+            }
+        }
+
         return FormDetailResponseDTO.builder()
                 .id(form.getId())
                 .title(form.getTitle())
@@ -401,6 +435,9 @@ public class FormService {
                 .updatedAt(form.getUpdatedAt())
                 .publicShareToken(form.getPublicShareToken())
                 .allowEditResponse(form.isAllowEditResponse())
+                .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)
+                .themeColor(themeColor)
+                .themeFont(themeFont)
                 .versions(versionDTOs)
                 .build();
     }

@@ -63,14 +63,16 @@ function PanelSelect({ ...props }: React.SelectHTMLAttributes<HTMLSelectElement>
   );
 }
 
+import { X } from 'lucide-react';
+
 export default function PropertiesPanel() {
-  const { schema, selectedFieldId, updateField } = useFormStore();
+  const { schema, selectedFieldId, updateField, setThemeColor, setThemeFont, isThemePanelOpen, setThemePanelOpen } = useFormStore();
 
   const [availableForms, setAvailableForms] = useState<any[]>([]);
   const [selectedFormSchema, setSelectedFormSchema] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/forms')
+    fetch('http://localhost:8080/api/forms', { credentials: 'include' })
       .then(res => res.json())
       .then(data => setAvailableForms(data))
       .catch(console.error);
@@ -82,7 +84,7 @@ export default function PropertiesPanel() {
     if (selectedField?.type === 'LOOKUP') {
       const config = selectedField.options as any;
       if (config?.formId) {
-        fetch(`http://localhost:8080/api/forms/${config.formId}`)
+        fetch(`http://localhost:8080/api/forms/${config.formId}`, { credentials: 'include' })
           .then(res => res.json())
           .then(data => setSelectedFormSchema(data))
           .catch(console.error);
@@ -90,7 +92,102 @@ export default function PropertiesPanel() {
     }
   }, [selectedField?.type, (selectedField?.options as any)?.formId]);
 
-  // Empty state
+  // Form-level settings when Palette icon is clicked
+  if (isThemePanelOpen) {
+    const PRESET_COLORS = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#0ea5e9', '#8b5cf6', '#14b8a6', '#f97316'];
+    const PRESET_FONTS = [
+      { name: 'Inter', value: 'var(--font-inter)' },
+      { name: 'Geist Sans', value: 'var(--font-geist-sans)' },
+      { name: 'Geist Mono', value: 'var(--font-geist-mono)' },
+      { name: 'System UI', value: 'system-ui, sans-serif' }
+    ];
+
+    const currentColor = schema.themeColor || '#6366f1';
+    const currentFont = schema.themeFont || 'Inter';
+
+    return (
+      <aside
+        className="w-80 border-l h-full flex flex-col shrink-0 relative"
+        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}
+      >
+        <div
+          className="px-4 py-4 border-b shrink-0 flex justify-between items-center"
+          style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
+        >
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Form Style</h2>
+            <span
+              className="text-[11px] font-bold uppercase tracking-widest mt-0.5 block"
+              style={{ color: 'var(--text-faint)' }}
+            >
+              Global Settings
+            </span>
+          </div>
+          <button
+            onClick={() => setThemePanelOpen(false)}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--text-faint)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'; }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-8 pt-6">
+          {/* Color Picker */}
+          <div>
+            <label className="block text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>Theme Color</label>
+            <div className="flex flex-wrap gap-3">
+              {PRESET_COLORS.map(color => (
+                <button
+                  key={color}
+                  onClick={() => setThemeColor(color)}
+                  className="w-8 h-8 rounded-full border-2 transition-transform hover:scale-110"
+                  style={{
+                    backgroundColor: color,
+                    borderColor: currentColor === color ? 'var(--text-primary)' : 'transparent',
+                    boxShadow: currentColor === color ? '0 0 0 2px var(--bg-surface)' : 'none'
+                  }}
+                  title={`Set color to ${color}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Font Picker */}
+          <div>
+            <label className="block text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>Typography</label>
+            <div className="space-y-2">
+              {PRESET_FONTS.map(font => (
+                <button
+                  key={font.name}
+                  onClick={() => setThemeFont(font.name)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg border transition-all flex items-center justify-between"
+                  style={{
+                    fontFamily: font.value,
+                    background: currentFont === font.name ? 'var(--bg-subtle)' : 'transparent',
+                    borderColor: currentFont === font.name ? 'var(--accent)' : 'var(--border)',
+                    color: currentFont === font.name ? 'var(--text-primary)' : 'var(--text-secondary)'
+                  }}
+                >
+                  <span className="text-sm">{font.name}</span>
+                  {currentFont === font.name && (
+                    <div className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs mt-4" style={{ color: 'var(--text-faint)' }}>
+              These settings apply globally to the public form and the canvas preview.
+            </p>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  // Empty state when no field is selected and Theme Panel is closed
   if (!selectedField) {
     return (
       <aside

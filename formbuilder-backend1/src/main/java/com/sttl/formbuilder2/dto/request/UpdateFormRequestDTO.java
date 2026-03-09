@@ -34,6 +34,6 @@ public class UpdateFormRequestDTO {
     private String description;
     private boolean allowEditResponse;
     private FormStatus status;
+    private Object rules;
     private List<FieldDefinitionRequestDTO> fields;
-    private List<FormRuleRequestDTO> rules;
 }

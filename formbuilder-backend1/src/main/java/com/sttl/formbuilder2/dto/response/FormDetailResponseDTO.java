@@ -44,5 +44,8 @@ public class FormDetailResponseDTO {
     private String targetTableName;
     private String publicShareToken;
     private boolean allowEditResponse;
+    private Long ownerId;
+    private String themeColor;
+    private String themeFont;
     private List<FormVersionResponseDTO> versions;
 }

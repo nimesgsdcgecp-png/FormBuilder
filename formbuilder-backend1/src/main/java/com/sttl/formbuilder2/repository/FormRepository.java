@@ -1,6 +1,7 @@
 package com.sttl.formbuilder2.repository;
 
 import com.sttl.formbuilder2.model.entity.Form;
+import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -40,6 +41,10 @@ public interface FormRepository extends JpaRepository<Form, Long> {
      * recently updated. Used by the dashboard to exclude ARCHIVED forms.
      */
     List<Form> findByStatusNotOrderByUpdatedAtDesc(FormStatus status);
+
+    // Find all forms for a specific user, excluding a specific status (e.g.
+    // ARCHIVED)
+    List<Form> findByOwnerAndStatusNotOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
 
     /**
      * Looks up a form by its public share token (a UUID stored in the {@code forms}

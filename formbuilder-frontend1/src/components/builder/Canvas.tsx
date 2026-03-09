@@ -19,6 +19,14 @@ import { useFormStore } from '@/store/useFormStore';
 import { SortableField } from './SortableField';
 import { MousePointer2 } from 'lucide-react';
 
+// Maps font names to CSS font-family values
+const FONT_MAP: Record<string, string> = {
+  'Inter': 'Inter, sans-serif',
+  'Geist Sans': 'var(--font-geist-sans), sans-serif',
+  'Geist Mono': 'var(--font-geist-mono), monospace',
+  'System UI': 'system-ui, sans-serif'
+};
+
 export default function Canvas() {
   const { schema, removeField, selectField, selectedFieldId, setTitle, setDescription, setAllowEditResponse } = useFormStore();
   const { fields } = schema;
@@ -29,13 +37,19 @@ export default function Canvas() {
     <div
       className="flex-1 p-8 h-full overflow-y-auto transition-colors"
       style={{ background: 'var(--canvas-bg)' }}
-      onClick={() => selectField(null)}
+      onClick={() => {
+        selectField(null);
+        useFormStore.getState().setThemePanelOpen(false);
+      }}
     >
-      <div className="max-w-3xl mx-auto pb-20">
+      <div
+        className="max-w-3xl mx-auto pb-20 transition-all font-sans"
+        style={{ fontFamily: FONT_MAP[schema.themeFont || 'Inter'] || FONT_MAP['Inter'] }}
+      >
         {/* White card — the actual droppable surface */}
         <div
           ref={setNodeRef}
-          className="rounded-xl min-h-[600px] transition-all duration-200"
+          className="rounded-xl min-h-[600px] transition-all duration-200 relative"
           style={{
             background: 'var(--card-bg)',
             border: isOver
@@ -47,9 +61,15 @@ export default function Canvas() {
             padding: '2rem',
           }}
         >
+          {/* Theme color header accent */}
+          <div
+            className="h-2 w-full rounded-t-xl absolute top-0 left-0"
+            style={{ backgroundColor: schema.themeColor || 'var(--accent)' }}
+          />
+
           {/* Form Header */}
           <div
-            className="mb-8 pb-6 border-b"
+            className="mb-8 pb-6 border-b mt-2"
             style={{ borderColor: 'var(--border)' }}
           >
             <input

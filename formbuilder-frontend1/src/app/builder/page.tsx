@@ -27,7 +27,7 @@ import { FieldType } from '@/types/schema';
 import { saveForm, deleteForm } from '@/services/api';
 import { toast } from 'sonner';
 import LogicPanel from '@/components/builder/LogicPanel';
-import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save } from 'lucide-react';
+import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save, Palette, FileText, User } from 'lucide-react';
 
 import Sidebar, { FIELD_TYPES } from '@/components/builder/Sidebar';
 import { SidebarBtnOverlay } from '@/components/builder/DraggableSidebarBtn';
@@ -45,22 +45,50 @@ function BuilderContent() {
 
   const {
     schema, addField, reorderFields, setFormId, setTitle, setDescription,
-    setFields, setRules, resetForm, setAllowEditResponse
+    setFields, setRules, resetForm, setAllowEditResponse, isThemePanelOpen, setThemePanelOpen,
+    setThemeColor, setThemeFont
   } = useFormStore();
 
   const [activeSidebarItem, setActiveSidebarItem] = useState<FieldType | null>(null);
   const [activeCanvasItemId, setActiveCanvasItemId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC'>('EDITOR');
+  const [username, setUsername] = useState<string | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   useEffect(() => {
+    // 1. Check Auth first. If we are just creating a new form, we still need to be logged in.
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/auth/me', {
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          router.push('/login');
+          return;
+        }
+        const data = await response.json();
+        setUsername(data.username);
+      } catch (err) {
+        router.push('/login');
+        return;
+      }
+    };
+    checkAuth();
+
     if (!editFormId) {
       resetForm();
       return;
     }
 
-    fetch(`http://localhost:8080/api/forms/${editFormId}`)
-      .then(res => res.json())
+    fetch(`http://localhost:8080/api/forms/${editFormId}`, { credentials: 'include' })
+      .then(res => {
+        if (res.status === 401) {
+          router.push('/login');
+          throw new Error('Unauthorized');
+        }
+        return res.json();
+      })
       .then(data => {
         setFormId(data.id);
         setTitle(data.title);
@@ -71,13 +99,20 @@ function BuilderContent() {
           schema: { ...state.schema, publicShareToken: data.publicShareToken }
         }));
 
+        if (data.themeColor) setThemeColor(data.themeColor);
+        if (data.themeFont) setThemeFont(data.themeFont);
+
         let parsedRules = [];
         if (data.versions[0].rules) {
-          if (typeof data.versions[0].rules === 'string') {
-            try { parsedRules = JSON.parse(data.versions[0].rules); }
-            catch (e) { console.error("Failed to parse rules from DB", e); }
+          let raw = data.versions[0].rules;
+          if (typeof raw === 'string') {
+            try { raw = JSON.parse(raw); } catch (e) { }
+          }
+          // If it's our new wrapper structure { theme, logic }
+          if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as any).logic) {
+            parsedRules = (raw as any).logic;
           } else {
-            parsedRules = data.versions[0].rules;
+            parsedRules = Array.isArray(raw) ? raw : [];
           }
         }
         setRules(parsedRules);
@@ -153,6 +188,16 @@ function BuilderContent() {
     });
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' });
+      router.push('/login');
+      toast.success('Logged out successfully');
+    } catch (e) {
+      toast.error('Logout failed');
+    }
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const activeData = active.data.current;
@@ -202,136 +247,186 @@ function BuilderContent() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div
-        className="flex h-screen w-full overflow-hidden"
-        style={{ background: 'var(--canvas-bg)' }}
-      >
-        {/* 1. Sidebar */}
-        {activeTab === 'EDITOR' && <Sidebar />}
-
-        <main className="flex-1 flex flex-col min-w-0 h-full">
-          {/* ── Top Header Bar ── */}
-          <header
-            className="h-14 border-b flex items-center justify-between px-5 shrink-0 z-10"
-            style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}
-          >
-            {/* Left: Back link + form title */}
-            <div className="flex items-center gap-3">
-              <Link
-                href="/"
-                className="p-1.5 rounded-lg transition-all"
-                style={{ color: 'var(--text-muted)' }}
-                title="Back to Dashboard"
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-              >
-                <ArrowLeft size={18} />
+      <div className="flex flex-col h-screen w-full overflow-hidden" style={{ background: 'var(--canvas-bg)' }}>
+        {/* ── Top Header Bar (Full Width) ── */}
+        <header
+          className="h-16 border-b flex items-center justify-between px-6 shrink-0 z-20 backdrop-blur-md"
+          style={{ background: 'var(--bg-header)', borderColor: 'var(--header-border)' }}
+        >
+          {/* Left: Back link + form title */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-3 group transition-transform hover:scale-105" title="Go to Dashboard">
+                <div className="w-8 h-8 rounded-lg gradient-accent shadow-sm flex items-center justify-center text-white">
+                  <FileText size={16} className="stroke-[2.5]" />
+                </div>
               </Link>
-              <div className="w-px h-5" style={{ background: 'var(--border)' }} />
-              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {editFormId ? 'Edit Form' : 'Create Form'}
-              </span>
+              <div className="flex flex-col">
+                <input
+                  type="text"
+                  value={schema.title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 w-[200px] focus:outline-none"
+                  style={{ color: 'var(--text-primary)' }}
+                  placeholder="Untitled Form"
+                />
+                <span className="text-[10px] font-semibold opacity-50 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+                  {editFormId ? 'Editing Saved Form' : 'New Form Draft'}
+                </span>
+              </div>
             </div>
+          </div>
 
-            {/* Centre: Tab toggle */}
-            <div
-              className="flex rounded-lg p-1"
-              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
+          {/* Centre: Tab toggle */}
+          <div
+            className="flex rounded-lg p-1"
+            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
+          >
+            <button
+              onClick={() => setActiveTab('EDITOR')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
+              style={
+                activeTab === 'EDITOR'
+                  ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: 'var(--text-muted)' }
+              }
             >
+              <Layout size={13} /> Form Editor
+            </button>
+            <button
+              onClick={() => setActiveTab('LOGIC')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
+              style={
+                activeTab === 'LOGIC'
+                  ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
+                  : { color: 'var(--text-muted)' }
+              }
+            >
+              <GitBranch size={13} /> Logic Rules
+            </button>
+          </div>
+
+          {/* Right: Action buttons */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setThemePanelOpen(!isThemePanelOpen)}
+              className={`p-2 rounded-lg transition-colors ${isThemePanelOpen ? 'bg-[var(--accent)] text-white' : ''}`}
+              style={!isThemePanelOpen ? { color: 'var(--text-muted)' } : {}}
+              title="Theme Options"
+            >
+              <Palette size={18} />
+            </button>
+
+            <ThemeToggle />
+
+
+
+            {editFormId && (
               <button
-                onClick={() => setActiveTab('EDITOR')}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
-                style={
-                  activeTab === 'EDITOR'
-                    ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                    : { color: 'var(--text-muted)' }
-                }
+                onClick={handleArchive}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ color: '#b91c1c', background: '#fee2e2' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fecaca'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fee2e2'}
               >
-                <Layout size={13} /> Form Editor
+                <Archive size={13} /> Archive
               </button>
+            )}
+
+            <button
+              onClick={() => handleSave('DRAFT')}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
+              style={{
+                background: 'var(--bg-muted)',
+                borderColor: 'var(--border)',
+                color: 'var(--text-secondary)'
+              }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
+            >
+              <Save size={13} /> Save Draft
+            </button>
+
+            {schema.publicShareToken && (
               <button
-                onClick={() => setActiveTab('LOGIC')}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
-                style={
-                  activeTab === 'LOGIC'
-                    ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                    : { color: 'var(--text-muted)' }
-                }
-              >
-                <GitBranch size={13} /> Logic Rules
-              </button>
-            </div>
-
-            {/* Right: Action buttons */}
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-
-              {editFormId && (
-                <button
-                  onClick={handleArchive}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                  style={{ color: '#b91c1c', background: '#fee2e2' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fecaca'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fee2e2'}
-                >
-                  <Archive size={13} /> Archive
-                </button>
-              )}
-
-              <button
-                onClick={() => handleSave('DRAFT')}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
-                style={{
-                  background: 'var(--bg-muted)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-secondary)'
+                onClick={() => {
+                  const url = `${window.location.origin}/f/${schema.publicShareToken}`;
+                  navigator.clipboard.writeText(url);
+                  toast.success("Share link copied to clipboard!");
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ color: 'var(--accent)', background: 'var(--accent-subtle)', cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)'}
               >
-                <Save size={13} /> Save Draft
+                <Link2 size={13} /> Share
               </button>
+            )}
 
-              {schema.publicShareToken && (
+            <button
+              onClick={() => handleSave('PUBLISHED')}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm transition-all hover:shadow-md disabled:opacity-60"
+            >
+              {isSaving ? 'Saving...' : 'Publish →'}
+            </button>
+
+            {username && (
+              <div className="relative border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }}>
                 <button
-                  onClick={() => {
-                    const url = `${window.location.origin}/f/${schema.publicShareToken}`;
-                    navigator.clipboard.writeText(url);
-                    toast.success("Share link copied to clipboard!");
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                  style={{ color: 'var(--accent)', background: 'var(--accent-subtle)' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)'}
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-sm transition-transform hover:scale-105 focus:outline-none focus:ring-2"
+                  style={{ background: 'var(--accent)', outlineColor: 'var(--accent-subtle)' }}
+                  title="Account profile"
                 >
-                  <Link2 size={13} /> Share
+                  {username.charAt(0).toUpperCase()}
                 </button>
-              )}
 
-              <button
-                onClick={() => handleSave('PUBLISHED')}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm transition-all hover:shadow-md disabled:opacity-60"
-              >
-                {isSaving ? 'Saving...' : 'Publish →'}
-              </button>
-            </div>
-          </header>
+                {isProfileOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg border overflow-hidden z-20 animate-in fade-in slide-in-from-top-2"
+                    style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
+                  >
+                    <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-muted)' }}>
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{username}</p>
+                    </div>
+                    <div className="p-1">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                        style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      >
+                        <User size={16} />
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </header>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* 1. Sidebar */}
+          {activeTab === 'EDITOR' && <Sidebar />}
 
           {/* 2. Main content */}
-          {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
-        </main>
+          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+            {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
+          </main>
 
-        {/* 3. Right panel */}
-        {activeTab === 'EDITOR' && (
-          <>
-            <PropertiesPanel />
-            <DragOverlay>{renderOverlay()}</DragOverlay>
-          </>
-        )}
+          {/* 3. Right panel */}
+          {activeTab === 'EDITOR' && (
+            <>
+              <PropertiesPanel />
+              <DragOverlay>{renderOverlay()}</DragOverlay>
+            </>
+          )}
+        </div>
       </div>
-    </DndContext>
+    </DndContext >
   );
 }
 

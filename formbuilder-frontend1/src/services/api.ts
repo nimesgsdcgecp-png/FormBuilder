@@ -25,6 +25,14 @@
  */
 import { FormSchema } from '@/types/schema';
 
+// Custom error to allow components to catch 401s and redirect to /login
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
 const API_BASE_URL = 'http://localhost:8080/api';
 
 /**
@@ -46,7 +54,13 @@ export const saveForm = async (schema: FormSchema) => {
     description: schema.description,
     allowEditResponse: schema.allowEditResponse,
     status: schema.status || 'DRAFT',
-    rules: schema.rules || [],
+    rules: {
+      theme: {
+        color: schema.themeColor,
+        font: schema.themeFont
+      },
+      logic: schema.rules || []
+    },
     fields: schema.fields.map((field) => ({
       label: field.label,
       type: field.type,
@@ -76,9 +90,11 @@ export const saveForm = async (schema: FormSchema) => {
     method: isUpdate ? 'PUT' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to save form');
   }
@@ -96,8 +112,12 @@ export const saveForm = async (schema: FormSchema) => {
 export const deleteSubmission = async (formId: string, submissionId: string) => {
   const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/${submissionId}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
-  if (!response.ok) throw new Error('Failed to delete submission');
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to delete submission');
+  }
 };
 
 /**
@@ -110,8 +130,12 @@ export const deleteSubmission = async (formId: string, submissionId: string) => 
 export const deleteForm = async (id: number) => {
   const response = await fetch(`${API_BASE_URL}/forms/${id}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
-  if (!response.ok) throw new Error('Failed to delete form');
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to delete form');
+  }
 };
 
 /**
@@ -129,9 +153,11 @@ export const submitFormResponse = async (formId: string, data: Record<string, an
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(data),
+    credentials: 'include',
   });
 
   if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
     const error = await response.json();
     throw new Error(error.message || 'Submission failed');
   }

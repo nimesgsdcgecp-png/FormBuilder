@@ -38,6 +38,7 @@ import { FormField, FormSchema, FieldType } from '@/types/schema';
 interface FormState {
   schema: FormSchema;
   selectedFieldId: string | null;
+  isThemePanelOpen: boolean;
 
   // Rule actions — called from LogicPanel
   addRule: (rule: any) => void;
@@ -50,6 +51,8 @@ interface FormState {
   setFormId: (id: number) => void;
   setTitle: (title: string) => void;
   setDescription: (description: string) => void;
+  setThemeColor: (color: string) => void;
+  setThemeFont: (font: string) => void;
   setFields: (fields: FormField[]) => void;
   setAllowEditResponse: (allow: boolean) => void;
 
@@ -59,20 +62,24 @@ interface FormState {
   updateField: (id: string, updates: Partial<FormField>) => void;
   selectField: (id: string | null) => void;
   reorderFields: (newOrder: FormField[]) => void;
+  setThemePanelOpen: (isOpen: boolean) => void;
 }
 
 export const useFormStore = create<FormState>((set) => ({
 
   /** Default blank form state loaded when /builder is opened for a new form. */
   schema: {
-    id: undefined, // Will be set after the first save or when loading an existing form
+    id: undefined,
     title: 'Untitled Form',
     description: '',
     targetTableName: '',
     fields: [],
     allowEditResponse: false,
+    themeColor: '#6366f1',  // Default: indigo
+    themeFont: 'Inter',     // Default: Inter
   },
   selectedFieldId: null,
+  isThemePanelOpen: false,
 
   /** Replace the entire rules array — used when loading an existing form. */
   setRules: (rules) => set((state) => ({
@@ -111,8 +118,9 @@ export const useFormStore = create<FormState>((set) => ({
 
   /** Resets all state to the blank new-form defaults. Called at the start of /builder for a new form. */
   resetForm: () => set({
-    schema: { id: undefined, title: 'Untitled Form', description: '', targetTableName: '', fields: [] },
-    selectedFieldId: null
+    schema: { id: undefined, title: 'Untitled Form', description: '', targetTableName: '', fields: [], themeColor: '#6366f1', themeFont: 'Inter' },
+    selectedFieldId: null,
+    isThemePanelOpen: false
   }),
 
   /** Sets the form's database ID after a save response. */
@@ -128,6 +136,12 @@ export const useFormStore = create<FormState>((set) => ({
 
   setDescription: (description) =>
     set((state) => ({ schema: { ...state.schema, description } })),
+
+  setThemeColor: (color) =>
+    set((state) => ({ schema: { ...state.schema, themeColor: color } })),
+
+  setThemeFont: (font) =>
+    set((state) => ({ schema: { ...state.schema, themeFont: font } })),
 
   /**
    * Adds a new field of the given type to the end of the field list.
@@ -215,7 +229,10 @@ export const useFormStore = create<FormState>((set) => ({
   }),
 
   /** Sets or clears the selected field. The PropertiesPanel reads this to know what to display. */
-  selectField: (id) => set({ selectedFieldId: id }),
+  selectField: (id) => set({ selectedFieldId: id, isThemePanelOpen: false }),
+
+  /** Toggle theme panel */
+  setThemePanelOpen: (isOpen) => set({ isThemePanelOpen: isOpen, selectedFieldId: isOpen ? null : null }),
 
   /** Replaces the entire field list with a reordered copy — called after @dnd-kit/sortable's arrayMove. */
   reorderFields: (newOrder) =>

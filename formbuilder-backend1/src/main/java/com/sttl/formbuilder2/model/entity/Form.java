@@ -111,4 +111,11 @@ public class Form {
     @OrderBy("versionNumber DESC")
     @Builder.Default
     private List<FormVersion> versions = new ArrayList<>();
+
+    /**
+     * The user who created this form. Enables multi-tenancy/data isolation.
+     */
+    @ManyToOne
+    @JoinColumn(name = "owner_id", nullable = true) // nullable true for now to handle legacy data without errors
+    private AppUser owner;
 }

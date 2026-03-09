@@ -171,7 +171,10 @@ export default function LogicPanel() {
                 {/* THEN — Action */}
                 <div
                   className="p-4 rounded-xl border"
-                  style={{ background: '#f5f3ff', borderColor: '#ddd6fe' }}
+                  style={{
+                    background: 'var(--then-bg, #f5f3ff25)',
+                    borderColor: 'var(--then-border, #4f29f7)',
+                  }}
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span
