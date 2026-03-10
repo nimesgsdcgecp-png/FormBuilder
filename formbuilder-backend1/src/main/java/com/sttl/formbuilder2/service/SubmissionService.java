@@ -182,20 +182,21 @@ public class SubmissionService {
     }
 
     /**
-     * Returns all submission rows for a form, ordered newest-first.
-     * Used by the admin responses page to populate the data table.
+     * Returns a list of all submission rows for a form.
      *
-     * @param formId The internal form ID.
-     * @return List of maps where each map is one row: {columnName → value}.
+     * @param id The internal form ID.
+     * @return List containing the map representations of rows.
      */
-    public List<Map<String, Object>> getSubmissions(Long formId) {
-        Form form = formRepository.findById(formId)
+    public List<Map<String, Object>> getSubmissions(Long id) {
+        Form form = formRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         String tableName = form.getTargetTableName();
-        String sql = "SELECT * FROM " + tableName + " ORDER BY submitted_at DESC";
 
-        return jdbcTemplate.queryForList(sql);
+        // Return all rows, ordered securely by submitted_at DESC generally
+        String dataSql = "SELECT * FROM " + tableName + " ORDER BY \"submitted_at\" DESC";
+
+        return jdbcTemplate.queryForList(dataSql);
     }
 
     /**

@@ -120,8 +120,10 @@ public class FormService {
 
         form.getVersions().add(version);
 
-        // 5. Set the dynamic submission table name (e.g. "sub_3_v1")
-        String dynamicTableName = "sub_" + form.getId() + "_v1";
+        // 5. Set the dynamic submission table name (e.g. "sub_3_u5_v1")
+        // Including the user ID ensures there are no table name collisions across
+        // different users
+        String dynamicTableName = "sub_" + form.getId() + "_u" + form.getOwner().getId() + "_v1";
         form.setTargetTableName(dynamicTableName);
 
         // 6. Save everything via cascade (Form → FormVersion → FormField)
@@ -310,8 +312,24 @@ public class FormService {
                 }
             }
 
-            // Derive SQL column name: "First Name" → "first_name"
-            String colName = fieldDTO.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+            // Derive SQL column name: prefer the frontend-provided name, else generate from
+            // label
+            String colName = fieldDTO.getColumnName();
+            if (colName == null || colName.trim().isEmpty()) {
+                colName = fieldDTO.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+            }
+
+            // Ensure column name is not too long (max 64 per @Column in FormField)
+            if (colName.length() > 60) {
+                // Truncate and add a hash to keep it short and unique-ish
+                colName = colName.substring(0, 50) + "_" + Integer.toHexString(colName.hashCode()).substring(0, 4);
+            }
+
+            // Fallback for empty labels (e.g. user just added a field)
+            if (colName.isEmpty() || colName.equals("_")) {
+                colName = fieldDTO.getType().name().toLowerCase() + "_" + System.nanoTime() % 10000;
+            }
+
             field.setColumnName(colName);
 
             formFields.add(field);

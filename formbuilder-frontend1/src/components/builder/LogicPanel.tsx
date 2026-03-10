@@ -135,7 +135,9 @@ export default function LogicPanel() {
                       style={{ ...selectStyle, flex: '1 1 130px' }}
                     >
                       <option value="">Select Field...</option>
-                      {fields.map(f => <option key={f.id} value={f.columnName}>{f.label}</option>)}
+                      {fields
+                        .filter(f => f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL')
+                        .map(f => <option key={f.id} value={f.columnName}>{f.label}</option>)}
                     </select>
 
                     <select
@@ -237,7 +239,9 @@ export default function LogicPanel() {
                         style={selectStyle}
                       >
                         <option value="">Select Target Field...</option>
-                        {fields.map(f => <option key={f.id} value={f.columnName}>{f.label}</option>)}
+                        {fields
+                          .filter(f => f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL')
+                          .map(f => <option key={f.id} value={f.columnName}>{f.label}</option>)}
                       </select>
                     )}
                   </div>

@@ -30,7 +30,8 @@
 /** All possible field input types. Must stay in sync with the Java FieldType enum. */
 export type FieldType = 'TEXT' | 'NUMERIC' | 'DATE' | 'BOOLEAN' | 'TEXTAREA'
   | 'DROPDOWN' | 'RADIO' | 'CHECKBOX_GROUP'
-  | 'TIME' | 'RATING' | 'SCALE' | 'FILE' | 'GRID_RADIO' | 'GRID_CHECK' | 'LOOKUP';
+  | 'TIME' | 'RATING' | 'SCALE' | 'FILE' | 'GRID_RADIO' | 'GRID_CHECK' | 'LOOKUP'
+  | 'SECTION_HEADER' | 'INFO_LABEL' | 'PAGE_BREAK' | 'DATE_TIME';
 
 /** Comparison operators for rule conditions. Mirrors the Java RuleOperator enum. */
 export type RuleOperator = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN' | 'CONTAINS';

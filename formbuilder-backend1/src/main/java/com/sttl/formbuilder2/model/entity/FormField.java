@@ -62,7 +62,7 @@ public class FormField {
     private FormVersion formVersion;
 
     /** Human-readable label shown to the respondent (e.g. "Your Email Address"). */
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String fieldLabel;
 
     /**

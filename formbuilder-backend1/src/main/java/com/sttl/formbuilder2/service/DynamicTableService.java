@@ -73,7 +73,14 @@ public class DynamicTableService {
 
         // Dynamic form field columns — one per field definition
         for (FieldDefinitionRequestDTO field : fields) {
-            String columnName = generateColumnName(field.getLabel());
+            if (field.getType() == FieldType.SECTION_HEADER || field.getType() == FieldType.INFO_LABEL
+                    || field.getType() == FieldType.PAGE_BREAK) {
+                continue;
+            }
+            String columnName = field.getColumnName();
+            if (columnName == null || columnName.trim().isEmpty()) {
+                columnName = generateColumnName(field.getLabel());
+            }
             String sqlType = mapToSqlType(field.getType());
             sql.append(columnName).append(" ").append(sqlType).append(", ");
         }
@@ -108,7 +115,14 @@ public class DynamicTableService {
         List<String> existingColumns = jdbcTemplate.queryForList(checkSql, String.class, tableName);
 
         for (FieldDefinitionRequestDTO field : newFields) {
-            String columnName = generateColumnName(field.getLabel());
+            if (field.getType() == FieldType.SECTION_HEADER || field.getType() == FieldType.INFO_LABEL
+                    || field.getType() == FieldType.PAGE_BREAK) {
+                continue;
+            }
+            String columnName = field.getColumnName();
+            if (columnName == null || columnName.trim().isEmpty()) {
+                columnName = generateColumnName(field.getLabel());
+            }
             if (!existingColumns.contains(columnName)) {
                 String sql = "ALTER TABLE " + tableName
                         + " ADD COLUMN " + columnName
@@ -178,10 +192,12 @@ public class DynamicTableService {
             case NUMERIC, RATING, SCALE -> "INTEGER";
             case DATE -> "DATE";
             case TIME -> "TIME";
+            case DATE_TIME -> "TIMESTAMP";
             case BOOLEAN -> "BOOLEAN";
             case TEXTAREA, CHECKBOX_GROUP,
                     GRID_RADIO, GRID_CHECK ->
                 "TEXT";
+            case SECTION_HEADER, INFO_LABEL, PAGE_BREAK -> null;
             default -> "VARCHAR(255)";
         };
     }

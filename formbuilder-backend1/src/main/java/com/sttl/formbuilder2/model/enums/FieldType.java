@@ -57,4 +57,8 @@ public enum FieldType {
     GRID_CHECK,
 
     LOOKUP,
+    SECTION_HEADER,
+    INFO_LABEL,
+    PAGE_BREAK,
+    DATE_TIME,
 }

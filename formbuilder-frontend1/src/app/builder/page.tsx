@@ -36,6 +36,7 @@ import PropertiesPanel from '@/components/builder/PropertiesPanel';
 import { SortableField } from '@/components/builder/SortableField';
 import ThemeToggle from '@/components/ThemeToggle';
 import Link from 'next/link';
+import { Eye, ExternalLink } from 'lucide-react';
 
 
 function BuilderContent() {
@@ -318,6 +319,20 @@ function BuilderContent() {
             </button>
 
             <ThemeToggle />
+
+            <button
+              onClick={() => {
+                localStorage.setItem('form_builder_preview', JSON.stringify(schema));
+                window.open('/builder/preview', '_blank');
+              }}
+              className="p-2 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+              title="Preview in New Tab"
+            >
+              <Eye size={18} />
+            </button>
 
 
 

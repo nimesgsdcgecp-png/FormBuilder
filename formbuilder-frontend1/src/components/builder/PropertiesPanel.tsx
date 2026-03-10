@@ -9,7 +9,7 @@
  */
 
 import { useFormStore } from '@/store/useFormStore';
-import { Plus, Trash2, Settings2 } from 'lucide-react';
+import { Plus, Trash2, Settings2, Divide } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 /** Reusable section header for properties panel sections */
@@ -230,15 +230,61 @@ export default function PropertiesPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 pt-2">
-        {/* Label Input */}
+        {selectedField.type === 'PAGE_BREAK' && (
+          <div className="p-4 rounded-xl border mb-2 flex flex-col items-center text-center gap-3"
+            style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+              <Divide size={20} />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Wizard Step Boundary</h3>
+              <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Dropping this marker splits your form into multiple pages. Respondents must click "Next" to continue.
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Label / Title Input */}
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Label</label>
-          <PanelInput
-            type="text"
-            value={selectedField.label}
-            onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
-          />
+          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            {selectedField.type === 'SECTION_HEADER' ? 'Section Title' : selectedField.type === 'INFO_LABEL' ? 'Information Content' : selectedField.type === 'PAGE_BREAK' ? 'Marker Label' : 'Label'}
+          </label>
+          {selectedField.type === 'INFO_LABEL' ? (
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none"
+              style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)', minHeight: '80px' }}
+              value={selectedField.label}
+              onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+            />
+          ) : (
+            <PanelInput
+              type="text"
+              value={selectedField.label}
+              onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+              disabled={selectedField.type === 'PAGE_BREAK'}
+            />
+          )}
+          {selectedField.type === 'PAGE_BREAK' && (
+            <p className="text-[10px] mt-2 italic" style={{ color: 'var(--text-faint)' }}>
+              Markers act as "Step Ends". Fields below this point will appear on the next page.
+            </p>
+          )}
         </div>
+
+        {/* Placeholder / Description Input */}
+        {selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              {selectedField.type === 'SECTION_HEADER' ? 'Sub-description' : 'Placeholder'}
+            </label>
+            <PanelInput
+              type="text"
+              placeholder={selectedField.type === 'SECTION_HEADER' ? 'e.g. This section covers personal details...' : 'Enter placeholder...'}
+              value={selectedField.placeholder || ''}
+              onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
+            />
+          </div>
+        )}
 
         {/* Column Name (Read-Only) */}
         <div>
@@ -254,26 +300,28 @@ export default function PropertiesPanel() {
         </div>
 
         {/* Default Value */}
-        <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Default Value</label>
-          {selectedField.type === 'BOOLEAN' ? (
-            <PanelSelect
-              value={selectedField.defaultValue || ''}
-              onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
-            >
-              <option value="">(None)</option>
-              <option value="true">Checked (True)</option>
-              <option value="false">Unchecked (False)</option>
-            </PanelSelect>
-          ) : (
-            <PanelInput
-              type={selectedField.type === 'NUMERIC' ? 'number' : 'text'}
-              placeholder={selectedField.type === 'DATE' ? 'YYYY-MM-DD' : 'Enter default value...'}
-              value={selectedField.defaultValue || ''}
-              onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
-            />
-          )}
-        </div>
+        {selectedField.type !== 'SECTION_HEADER' && selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Default Value</label>
+            {selectedField.type === 'BOOLEAN' ? (
+              <PanelSelect
+                value={selectedField.defaultValue || ''}
+                onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
+              >
+                <option value="">(None)</option>
+                <option value="true">Checked (True)</option>
+                <option value="false">Unchecked (False)</option>
+              </PanelSelect>
+            ) : (
+              <PanelInput
+                type={selectedField.type === 'NUMERIC' ? 'number' : 'text'}
+                placeholder={selectedField.type === 'DATE' ? 'YYYY-MM-DD' : 'Enter default value...'}
+                value={selectedField.defaultValue || ''}
+                onChange={(e) => updateField(selectedField.id, { defaultValue: e.target.value })}
+              />
+            )}
+          </div>
+        )}
 
         {/* Options Manager — Dropdown, Radio, Checkbox Group */}
         {(selectedField.type === 'DROPDOWN' || selectedField.type === 'RADIO' || selectedField.type === 'CHECKBOX_GROUP') && (
@@ -432,96 +480,98 @@ export default function PropertiesPanel() {
         )}
 
         {/* Validation Rules */}
-        <div>
-          <SectionHeader label="Validation" color="#3b82f6" />
-          <div className="space-y-3">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedField.validation?.required || false}
-                onChange={(e) =>
-                  updateField(selectedField.id, {
-                    validation: { ...selectedField.validation, required: e.target.checked }
-                  })
-                }
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-              />
-              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Required Field</span>
-            </label>
+        {selectedField.type !== 'SECTION_HEADER' && selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
+          <div>
+            <SectionHeader label="Validation" color="#3b82f6" />
+            <div className="space-y-3">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedField.validation?.required || false}
+                  onChange={(e) =>
+                    updateField(selectedField.id, {
+                      validation: { ...selectedField.validation, required: e.target.checked }
+                    })
+                  }
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Required Field</span>
+              </label>
 
-            {(selectedField.type === 'NUMERIC' || selectedField.type === 'SCALE') && (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
-                    Min {selectedField.type === 'SCALE' ? '(Start)' : ''}
-                  </label>
-                  <PanelInput
-                    type="number"
-                    value={selectedField.validation?.min ?? (selectedField.type === 'SCALE' ? 1 : '')}
-                    onChange={(e) => {
-                      const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                      updateField(selectedField.id, { validation: { ...selectedField.validation, min: val } });
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
-                    Max {selectedField.type === 'SCALE' ? '(End)' : ''}
-                  </label>
-                  <PanelInput
-                    type="number"
-                    value={selectedField.validation?.max ?? (selectedField.type === 'SCALE' ? 5 : '')}
-                    onChange={(e) => {
-                      const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                      updateField(selectedField.id, { validation: { ...selectedField.validation, max: val } });
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {(selectedField.type === 'TEXT' || selectedField.type === 'TEXTAREA') && (
-              <div className="space-y-3">
+              {(selectedField.type === 'NUMERIC' || selectedField.type === 'SCALE') && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Min Length</label>
+                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
+                      Min {selectedField.type === 'SCALE' ? '(Start)' : ''}
+                    </label>
                     <PanelInput
                       type="number"
-                      value={selectedField.validation?.minLength ?? ''}
+                      value={selectedField.validation?.min ?? (selectedField.type === 'SCALE' ? 1 : '')}
                       onChange={(e) => {
                         const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                        updateField(selectedField.id, { validation: { ...selectedField.validation, minLength: val } });
+                        updateField(selectedField.id, { validation: { ...selectedField.validation, min: val } });
                       }}
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Max Length</label>
+                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>
+                      Max {selectedField.type === 'SCALE' ? '(End)' : ''}
+                    </label>
                     <PanelInput
                       type="number"
-                      value={selectedField.validation?.maxLength ?? ''}
+                      value={selectedField.validation?.max ?? (selectedField.type === 'SCALE' ? 5 : '')}
                       onChange={(e) => {
                         const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                        updateField(selectedField.id, { validation: { ...selectedField.validation, maxLength: val } });
+                        updateField(selectedField.id, { validation: { ...selectedField.validation, max: val } });
                       }}
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Regex Pattern</label>
-                  <PanelInput
-                    type="text"
-                    placeholder="e.g. ^[0-9]{10}$"
-                    className="font-mono"
-                    value={selectedField.validation?.pattern ?? ''}
-                    onChange={(e) => updateField(selectedField.id, {
-                      validation: { ...selectedField.validation, pattern: e.target.value }
-                    })}
-                  />
+              )}
+
+              {(selectedField.type === 'TEXT' || selectedField.type === 'TEXTAREA') && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Min Length</label>
+                      <PanelInput
+                        type="number"
+                        value={selectedField.validation?.minLength ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : parseInt(e.target.value);
+                          updateField(selectedField.id, { validation: { ...selectedField.validation, minLength: val } });
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Max Length</label>
+                      <PanelInput
+                        type="number"
+                        value={selectedField.validation?.maxLength ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : parseInt(e.target.value);
+                          updateField(selectedField.id, { validation: { ...selectedField.validation, maxLength: val } });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block" style={{ color: 'var(--text-faint)' }}>Regex Pattern</label>
+                    <PanelInput
+                      type="text"
+                      placeholder="e.g. ^[0-9]{10}$"
+                      className="font-mono"
+                      value={selectedField.validation?.pattern ?? ''}
+                      onChange={(e) => updateField(selectedField.id, {
+                        validation: { ...selectedField.validation, pattern: e.target.value }
+                      })}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </aside>
   );

@@ -18,7 +18,7 @@
  */
 
 import { FieldType } from '@/types/schema';
-import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2 } from 'lucide-react';
+import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, CalendarClock } from 'lucide-react';
 import { DraggableSidebarBtn } from './DraggableSidebarBtn';
 
 /** Each group has a label displayed as a section header in the sidebar. */
@@ -34,6 +34,7 @@ export const FIELD_TYPES = [
   { type: 'TEXT' as FieldType, label: 'Text Input', icon: Type, category: 'basic' },
   { type: 'NUMERIC' as FieldType, label: 'Number', icon: Hash, category: 'basic' },
   { type: 'DATE' as FieldType, label: 'Date Picker', icon: Calendar, category: 'basic' },
+  { type: 'DATE_TIME' as FieldType, label: 'Date & Time', icon: CalendarClock, category: 'basic' },
   { type: 'BOOLEAN' as FieldType, label: 'Checkbox', icon: ToggleLeft, category: 'basic' },
   { type: 'TEXTAREA' as FieldType, label: 'Long Text', icon: AlignLeft, category: 'basic' },
 
@@ -54,6 +55,11 @@ export const FIELD_TYPES = [
 
   // Linked data (requires source form + column configuration)
   { type: 'LOOKUP' as FieldType, label: 'Linked Data', icon: Link2, category: 'lookup' },
+
+  // Layout / Static elements
+  { type: 'SECTION_HEADER' as FieldType, label: 'Section Header', icon: Heading, category: 'layout' },
+  { type: 'INFO_LABEL' as FieldType, label: 'Info / Label', icon: Info, category: 'layout' },
+  { type: 'PAGE_BREAK' as FieldType, label: 'Page Break', icon: Divide, category: 'layout' },
 ];
 
 /** Category metadata for the sidebar section headers */
@@ -82,6 +88,11 @@ const GROUPS: FieldGroup[] = [
     label: 'Lookup',
     color: '#ec4899',
     fields: FIELD_TYPES.filter(f => f.category === 'lookup'),
+  },
+  {
+    label: 'Layout',
+    color: '#64748b',
+    fields: FIELD_TYPES.filter(f => f.category === 'layout'),
   },
 ];
 

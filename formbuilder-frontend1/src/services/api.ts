@@ -63,6 +63,7 @@ export const saveForm = async (schema: FormSchema) => {
     },
     fields: schema.fields.map((field) => ({
       label: field.label,
+      columnName: field.columnName,
       type: field.type,
       required: field.validation?.required || false,
       options: field.options,
@@ -97,6 +98,28 @@ export const saveForm = async (schema: FormSchema) => {
     if (response.status === 401) throw new UnauthorizedError();
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || 'Failed to save form');
+  }
+
+  return response.json();
+};
+
+/**
+ * Fetches the list of all submissions for a form.
+ *
+ * @param formId  The internal form ID.
+ * @returns List of submissions.
+ */
+export const getSubmissions = async (
+  formId: string
+) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to fetch submissions');
   }
 
   return response.json();

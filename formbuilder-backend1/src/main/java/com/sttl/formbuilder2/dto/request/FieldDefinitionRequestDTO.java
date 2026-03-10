@@ -37,6 +37,7 @@ import java.util.Map;
 @Data
 public class FieldDefinitionRequestDTO {
     private String label;
+    private String columnName;
     private FieldType type;
     private boolean required;
     private Object options;
