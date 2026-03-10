@@ -16,7 +16,7 @@ export const FONT_MAP: Record<string, string> = {
 interface FormRendererProps {
     schema: FormSchema;
     initialAnswers?: Record<string, any>;
-    onSubmit?: (answers: Record<string, any>) => void;
+    onSubmit?: (answers: Record<string, any>, status: 'DRAFT' | 'FINAL') => void;
     submitButtonText?: string;
     isPreview?: boolean;
 }
@@ -210,20 +210,28 @@ export default function FormRenderer({
 
         if (!validateStep(safeCurrentStep)) return;
 
+        await performSubmit('FINAL');
+    };
+
+    const handleSaveDraft = async () => {
+        await performSubmit('DRAFT');
+    };
+
+    const performSubmit = async (status: 'DRAFT' | 'FINAL') => {
         if (isPreview) {
             toast.info("This is a preview. Form submission is disabled.");
             console.log("Preview Data:", answers);
             return;
         }
-        if (customErrors.length > 0) {
+        if (status === 'FINAL' && customErrors.length > 0) {
             toast.error("Please fix the validation errors before submitting.");
             return;
         }
         setIsSubmitting(true);
         try {
-            if (onSubmit) await onSubmit(answers);
+            if (onSubmit) await onSubmit(answers, status);
         } catch (err) {
-            toast.error("Submission failed");
+            toast.error(status === 'DRAFT' ? "Failed to save draft" : "Submission failed");
         } finally {
             setIsSubmitting(false);
         }
@@ -364,6 +372,31 @@ export default function FormRenderer({
                             style={{ backgroundColor: schema.themeColor || 'var(--accent)' }}
                         >
                             Next Step
+                        </button>
+                    )}
+
+                    {/* Always show Save Draft as a subtle option if not in preview */}
+                    {!isPreview && (
+                        <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={handleSaveDraft}
+                            className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold transition-all border shadow-sm"
+                            style={{
+                                borderColor: 'var(--border-primary)',
+                                color: 'var(--text-secondary)',
+                                background: 'transparent'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-muted)';
+                                e.currentTarget.style.borderColor = 'var(--border-strong)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = 'var(--border-primary)';
+                            }}
+                        >
+                            {isSubmitting ? '...' : 'Save Draft'}
                         </button>
                     )}
                 </div>

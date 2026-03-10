@@ -70,6 +70,7 @@ public class DynamicTableService {
         // Standard system columns present in every submission table
         sql.append("submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
         sql.append("submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
+        sql.append("submission_status VARCHAR(20) DEFAULT 'FINAL', ");
 
         // Dynamic form field columns — one per field definition
         for (FieldDefinitionRequestDTO field : fields) {
@@ -128,9 +129,15 @@ public class DynamicTableService {
                         + " ADD COLUMN " + columnName
                         + " " + mapToSqlType(field.getType());
                 // DEV: Log for debugging
-                System.out.println("Executing Schema Evolution: " + sql);
                 jdbcTemplate.execute(sql);
             }
+        }
+
+        // Ensure submission_status column exists (for existing tables)
+        if (!existingColumns.contains("submission_status")) {
+            String sql = "ALTER TABLE " + tableName + " ADD COLUMN submission_status VARCHAR(20) DEFAULT 'FINAL'";
+            System.out.println("Executing Schema Evolution (Status Column): " + sql);
+            jdbcTemplate.execute(sql);
         }
     }
 

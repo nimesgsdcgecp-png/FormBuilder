@@ -97,15 +97,17 @@ public class SubmissionService {
      * @return The UUID of the newly created submission row.
      */
     @Transactional
-    public UUID submitData(Long formId, Map<String, Object> submissionData) {
+    public UUID submitData(Long formId, Map<String, Object> submissionData, String status) {
         // 1. Fetch Form Metadata
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         FormVersion activeVersion = form.getVersions().get(0);
 
-        // 2. Fire the Rule Engine before saving
-        if (activeVersion.getRules() != null && !activeVersion.getRules().equals("[]")) {
+        boolean isDraft = "DRAFT".equalsIgnoreCase(status);
+
+        // 2. Fire the Rule Engine before saving (Skip if DRAFT)
+        if (!isDraft && activeVersion.getRules() != null && !activeVersion.getRules().equals("[]")) {
             try {
                 Object rawRules = objectMapper.readValue(activeVersion.getRules(), Object.class);
                 List<FormRuleDTO> rules;
@@ -140,6 +142,11 @@ public class SubmissionService {
 
         boolean hasData = false;
 
+        // Add status column
+        sql.append("submission_status, ");
+        placeholders.append("?, ");
+        arguments.add(status != null ? status.toUpperCase() : "FINAL");
+
         // 3. Loop through defined fields and build the INSERT statement
         for (FormField field : activeVersion.getFields()) {
             String colName = field.getColumnName();
@@ -163,7 +170,7 @@ public class SubmissionService {
 
                 hasData = true;
 
-            } else if (field.getIsMandatory()) {
+            } else if (field.getIsMandatory() && !isDraft) {
                 throw new RuntimeException("Missing required field: " + field.getFieldLabel());
             }
         }
@@ -211,8 +218,14 @@ public class SubmissionService {
     public Map<String, Object> getSubmissionById(Long formId, UUID submissionId) {
         Form form = formRepository.findById(formId).orElseThrow(() -> new RuntimeException("Form not found"));
         String tableName = form.getTargetTableName();
-        String sql = "SELECT * FROM " + tableName + " WHERE submission_id = ?";
-        return jdbcTemplate.queryForMap(sql, submissionId);
+        String sql = "SELECT * FROM " + tableName + " WHERE submission_id = CAST(? AS UUID)";
+
+        try {
+            return jdbcTemplate.queryForMap(sql, submissionId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            System.err.println("Draft not found in table " + tableName + " for ID: " + submissionId);
+            return null; // Controller will handle null
+        }
     }
 
     /**
@@ -225,13 +238,18 @@ public class SubmissionService {
      * @param submissionData Map of {columnName: newValue} pairs.
      */
     @Transactional
-    public void updateSubmission(Long formId, UUID submissionId, Map<String, Object> submissionData) {
+    public UUID updateSubmission(Long formId, UUID submissionId, Map<String, Object> submissionData, String status) {
         Form form = formRepository.findById(formId).orElseThrow(() -> new RuntimeException("Form not found"));
         FormVersion activeVersion = form.getVersions().get(0);
         String tableName = form.getTargetTableName();
 
         StringBuilder sql = new StringBuilder("UPDATE " + tableName + " SET ");
         List<Object> arguments = new ArrayList<>();
+
+        if (status != null) {
+            sql.append("submission_status = ?, ");
+            arguments.add(status.toUpperCase());
+        }
 
         for (FormField field : activeVersion.getFields()) {
             String colName = field.getColumnName();
@@ -257,10 +275,11 @@ public class SubmissionService {
 
         // Remove trailing ", " and append the WHERE clause
         sql.setLength(sql.length() - 2);
-        sql.append(" WHERE submission_id = ?");
+        sql.append(" WHERE submission_id = CAST(? AS UUID)");
         arguments.add(submissionId);
 
         jdbcTemplate.update(sql.toString(), arguments.toArray());
+        return submissionId;
     }
 
     /**
@@ -282,6 +301,30 @@ public class SubmissionService {
     }
 
     /**
+     * Hard-deletes multiple submission rows in a single batch.
+     * Use a parameterized IN clause for performance.
+     *
+     * @param formId        The internal form ID.
+     * @param submissionIds List of UUIDs to delete.
+     */
+    @Transactional
+    public void deleteSubmissionsBulk(Long formId, List<UUID> submissionIds) {
+        if (submissionIds == null || submissionIds.isEmpty())
+            return;
+
+        Form form = formRepository.findById(formId)
+                .orElseThrow(() -> new RuntimeException("Form not found"));
+
+        String tableName = form.getTargetTableName();
+
+        // Dynamically build 'IN (?, ?, ...)' placeholders
+        String placeholders = String.join(",", submissionIds.stream().map(id -> "?").toList());
+        String sql = "DELETE FROM " + tableName + " WHERE submission_id IN (" + placeholders + ")";
+
+        jdbcTemplate.update(sql, submissionIds.toArray());
+    }
+
+    /**
      * Accepts a submission from a public respondent identified by their share token
      * (used by the public form page, no authentication required).
      * Resolves the token to an internal form ID and delegates to
@@ -292,13 +335,13 @@ public class SubmissionService {
      * @return The generated submission UUID.
      */
     @Transactional
-    public UUID submitDataByToken(String token, Map<String, Object> submissionData) {
+    public UUID submitDataByToken(String token, Map<String, Object> submissionData, String status) {
         // 1. Resolve the token to the internal Form
         Form form = formRepository.findByPublicShareToken(token)
                 .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
 
         // 2. Re-use the standard submission logic (rule engine, column mapping, etc.)
-        return submitData(form.getId(), submissionData);
+        return submitData(form.getId(), submissionData, status);
     }
 
     /**
@@ -308,27 +351,49 @@ public class SubmissionService {
         Form form = formRepository.findByPublicShareToken(token)
                 .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
 
-        // Only allow fetch if editing is permitted OR the user is the owner
-        if (!form.isAllowEditResponse() && !isOwner(form)) {
+        Map<String, Object> submission = getSubmissionById(form.getId(), submissionId);
+        if (submission == null)
+            return null;
+
+        // Extract status for logic check
+        String status = (String) submission.get("submission_status");
+        boolean isDraft = "DRAFT".equalsIgnoreCase(status);
+
+        // Logic:
+        // 1. If it's a DRAFT, allow access (so respondents can resume work).
+        // 2. Otherwise, only allow if form.isAllowEditResponse() is true OR user is the
+        // owner.
+        if (!isDraft && !form.isAllowEditResponse() && !isOwner(form)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Editing is disabled for this form.");
         }
 
-        return getSubmissionById(form.getId(), submissionId);
+        return submission;
     }
 
     /**
      * Publicly update a submission for editing via its form token.
      */
     @Transactional
-    public void updateSubmissionByToken(String token, UUID submissionId, Map<String, Object> submissionData) {
+    public UUID updateSubmissionByToken(String token, UUID submissionId, Map<String, Object> submissionData,
+            String status) {
+        // 1. Resolve token
         Form form = formRepository.findByPublicShareToken(token)
                 .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
 
-        // Validate permission: must allow edits OR be the form owner
-        if (!form.isAllowEditResponse() && !isOwner(form)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Editing is disabled for this form.");
+        // 2. Security Check: Only allow update if DRAFT or allowEditResponse is true
+        Map<String, Object> current = getSubmissionById(form.getId(), submissionId);
+        if (current == null)
+            throw new RuntimeException("Submission not found.");
+
+        String currentStatus = (String) current.get("submission_status");
+        boolean isDraft = "DRAFT".equalsIgnoreCase(currentStatus);
+
+        if (!isDraft && !form.isAllowEditResponse() && !isOwner(form)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This submission has already been finalized and cannot be edited.");
         }
 
-        updateSubmission(form.getId(), submissionId, submissionData);
+        // 3. Perform the update
+        return updateSubmission(form.getId(), submissionId, submissionData, status);
     }
 }

@@ -1,6 +1,7 @@
 package com.sttl.formbuilder2.controller;
 
 import com.sttl.formbuilder2.dto.request.CreateFormRequestDTO;
+import com.sttl.formbuilder2.dto.request.SubmissionRequestDTO;
 import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
 import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
@@ -143,9 +144,9 @@ public class FormController {
     @PostMapping("/{id}/submissions")
     public ResponseEntity<Map<String, Object>> submitForm(
             @PathVariable("id") Long id,
-            @RequestBody Map<String, Object> submissionData) {
+            @RequestBody SubmissionRequestDTO request) {
 
-        UUID submissionId = submissionService.submitData(id, submissionData);
+        UUID submissionId = submissionService.submitData(id, request.getData(), request.getStatus());
         return ResponseEntity.ok(Map.of(
                 "message", "Submission successful",
                 "submissionId", submissionId));
@@ -169,12 +170,12 @@ public class FormController {
      * present in the current form version are included in the UPDATE statement.
      */
     @PutMapping("/{formId}/submissions/{submissionId}")
-    public ResponseEntity<Void> updateSubmission(
+    public ResponseEntity<Map<String, Object>> updateSubmission(
             @PathVariable("formId") Long formId,
             @PathVariable("submissionId") UUID submissionId,
-            @RequestBody Map<String, Object> data) {
-        submissionService.updateSubmission(formId, submissionId, data);
-        return ResponseEntity.ok().build();
+            @RequestBody SubmissionRequestDTO request) {
+        UUID id = submissionService.updateSubmission(formId, submissionId, request.getData(), request.getStatus());
+        return ResponseEntity.ok(Map.of("submissionId", id, "message", "Update successful"));
     }
 
     /**
@@ -187,6 +188,18 @@ public class FormController {
             @PathVariable("formId") Long formId,
             @PathVariable("submissionId") UUID submissionId) {
         submissionService.deleteSubmission(formId, submissionId);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * DELETE /api/forms/{formId}/submissions/bulk
+     * Hard-deletes multiple submission rows in one call.
+     */
+    @DeleteMapping("/{formId}/submissions/bulk")
+    public ResponseEntity<Void> deleteSubmissionsBulk(
+            @PathVariable("formId") Long formId,
+            @RequestBody List<UUID> submissionIds) {
+        submissionService.deleteSubmissionsBulk(formId, submissionIds);
         return ResponseEntity.ok().build();
     }
 
@@ -233,8 +246,8 @@ public class FormController {
     @PostMapping("/public/{token}/submissions")
     public ResponseEntity<?> submitPublicForm(
             @PathVariable("token") String token,
-            @RequestBody Map<String, Object> answers) {
-        UUID submissionId = submissionService.submitDataByToken(token, answers);
+            @RequestBody SubmissionRequestDTO request) {
+        UUID submissionId = submissionService.submitDataByToken(token, request.getData(), request.getStatus());
         return ResponseEntity.ok(Map.of(
                 "message", "Submission successful",
                 "submissionId", submissionId));
@@ -256,11 +269,12 @@ public class FormController {
      * Publicly update an existing submission.
      */
     @PutMapping("/public/{token}/submissions/{submissionId}")
-    public ResponseEntity<Void> updatePublicSubmission(
+    public ResponseEntity<Map<String, Object>> updatePublicSubmission(
             @PathVariable("token") String token,
             @PathVariable("submissionId") UUID submissionId,
-            @RequestBody Map<String, Object> data) {
-        submissionService.updateSubmissionByToken(token, submissionId, data);
-        return ResponseEntity.ok().build();
+            @RequestBody SubmissionRequestDTO request) {
+        UUID id = submissionService.updateSubmissionByToken(token, submissionId, request.getData(),
+                request.getStatus());
+        return ResponseEntity.ok(Map.of("submissionId", id, "message", "Update successful"));
     }
 }

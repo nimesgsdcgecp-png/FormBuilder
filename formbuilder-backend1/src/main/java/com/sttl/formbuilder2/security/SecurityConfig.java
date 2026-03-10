@@ -43,22 +43,21 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 // 3. Configure rules
+                // 3. Configure rules
                 .authorizeHttpRequests(auth -> auth
-                        // Allow our specific public endpoints
+                        // 1. PUBLIC FORM ENDPOINTS (Must be at the top)
+                        .requestMatchers("/api/forms/public/**").permitAll()
+                        .requestMatchers("/api/forms/*/columns/*/values").permitAll()
+                        .requestMatchers("/api/upload").permitAll()
+
+                        // Allow our specific auth endpoints
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/forms/public/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/forms/public/*/submissions").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/forms/public/*/submissions/*").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/forms/public/*/submissions/*").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/forms/*/columns/*/values").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/upload").permitAll() // If file uploads are public
 
                         // Allow Swagger / OpenAPI completely
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
-                        // Require auth for everything else (Dashboard, Builder, Responses, Form
-                        // editing)
+                        // Require auth for everything else
                         .anyRequest().authenticated())
 
                 // 4. Use stateful sessions (this is what enables JSESSIONID cookies)

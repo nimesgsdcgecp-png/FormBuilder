@@ -144,6 +144,26 @@ export const deleteSubmission = async (formId: string, submissionId: string) => 
 };
 
 /**
+ * Deletes multiple submissions in one call.
+ * Calls DELETE /api/forms/{formId}/submissions/bulk.
+ *
+ * @param formId       The internal form ID.
+ * @param submissionIds Array of submission UUIDs.
+ */
+export const deleteSubmissionsBulk = async (formId: string, submissionIds: string[]) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/bulk`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(submissionIds),
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to delete submissions');
+  }
+};
+
+/**
  * Archives (soft-deletes) a form via DELETE /api/forms/{id}.
  * Currently not used directly from a component — archiving is done inline
  * in the dashboard page — but exported here for future reuse.
@@ -169,13 +189,13 @@ export const deleteForm = async (id: number) => {
  * @param data   Map of {columnName: value} pairs from the respondent.
  * @returns The backend response containing {submissionId, message}.
  */
-export const submitFormResponse = async (formId: string, data: Record<string, any>) => {
+export const submitFormResponse = async (formId: string, data: Record<string, any>, status: 'DRAFT' | 'FINAL' = 'FINAL') => {
   const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ data, status }),
     credentials: 'include',
   });
 

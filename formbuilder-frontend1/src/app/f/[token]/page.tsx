@@ -97,18 +97,39 @@ function PublicFormContent() {
             const subRes = await fetch(`http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`, { credentials: 'include' });
             if (subRes.ok) {
               const subData = await subRes.json();
+              if (!subData) {
+                setLoading(false);
+                return;
+              }
+
               const answers: Record<string, any> = {};
+              const subDataLower: Record<string, any> = {};
+              Object.keys(subData).forEach(k => subDataLower[k.toLowerCase()] = subData[k]);
+
               mappedFields.forEach(f => {
-                const val = subData[f.columnName];
-                if (f.type === 'CHECKBOX_GROUP' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
-                  try { answers[f.columnName] = typeof val === 'string' ? JSON.parse(val) : val; } catch (e) { answers[f.columnName] = val; }
-                } else {
-                  answers[f.columnName] = val;
+                const colLower = f.columnName.toLowerCase();
+                const val = subDataLower[colLower];
+
+                if (val !== undefined && val !== null) {
+                  if (f.type === 'CHECKBOX_GROUP' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
+                    try {
+                      answers[f.columnName] = typeof val === 'string' ? JSON.parse(val) : val;
+                    } catch (e) {
+                      answers[f.columnName] = val;
+                    }
+                  } else {
+                    answers[f.columnName] = val;
+                  }
                 }
               });
+
               setInitialAnswers(answers);
+            } else if (subRes.status === 403) {
+              setError("This response has already been submitted and cannot be edited.");
             }
-          } catch (e) { console.error("Failed to load submission data"); }
+          } catch (e) {
+            console.error("Failed to load submission data", e);
+          }
         }
 
         setLoading(false);
@@ -119,7 +140,7 @@ function PublicFormContent() {
       });
   }, [token, editSubmissionId]);
 
-  const handleSubmit = async (answers: Record<string, any>) => {
+  const handleSubmit = async (answers: Record<string, any>, status: 'DRAFT' | 'FINAL' = 'FINAL') => {
     try {
       const url = editSubmissionId
         ? `http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`
@@ -128,7 +149,7 @@ function PublicFormContent() {
       const response = await fetch(url, {
         method: editSubmissionId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answers),
+        body: JSON.stringify({ data: answers, status }),
         credentials: 'include',
       });
 
@@ -142,9 +163,18 @@ function PublicFormContent() {
         return;
       }
 
-      toast.success("Response submitted successfully!");
+      toast.success(status === 'DRAFT' ? "Draft saved successfully!" : "Response submitted successfully!");
       setSubmittedId(resData.submissionId);
-      setIsSubmitted(true);
+
+      // If it's a draft, update the URL so a refresh doesn't lose the ID
+      if (status === 'DRAFT' && !editSubmissionId) {
+        const newUrl = `${window.location.pathname}?edit=${resData.submissionId}`;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+        // Also update local state so subsequent saves use PUT
+        router.push(newUrl, { scroll: false });
+      }
+
+      if (status === 'FINAL') setIsSubmitted(true);
     } catch (err) {
       toast.error("Submission failed. Please try again.");
       throw err;
