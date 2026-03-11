@@ -19,39 +19,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * FormController — REST Controller for Forms and Submissions
- *
- * What it does:
- * Exposes the primary REST API of the FormBuilder backend under the base path
- * {@code /api/forms}. It acts as a thin routing layer — all business logic is
- * delegated to {@code FormService}, {@code SubmissionService}, and
- * {@code DynamicTableService}.
- *
- * CORS is configured globally in {@code WebConfig} (allows origin:
- * localhost:3000).
- *
- * Grouped endpoints:
- *
- * Form CRUD (authenticated / builder use):
- * GET /api/forms — List (dashboard, lightweight)
- * POST /api/forms — Create a new form
- * GET /api/forms/{id} — Full form detail with schema + versions
- * PUT /api/forms/{id} — Update form title, fields, rules, etc.
- * DELETE /api/forms/{id} — Soft-delete (archive)
- *
- * Submissions (authenticated responses table):
- * GET /api/forms/{id}/submissions — All rows for a form
- * POST /api/forms/{id}/submissions — New submission (by form ID)
- * GET /api/forms/{id}/submissions/{subId} — Single row lookup
- * PUT /api/forms/{id}/submissions/{subId} — Edit an existing submission
- * DELETE /api/forms/{id}/submissions/{subId} — Delete a submission row
- *
- * Lookup (for the LOOKUP field type):
- * GET /api/forms/{id}/columns/{col}/values — Distinct column values
- *
- * Public (token-based, no auth):
- * GET /api/forms/public/{token} — Resolve token → form schema
- * POST /api/forms/public/{token}/submissions — Submit via public share link
+ * REST Controller for Forms and Submissions.
+ * Exposes the primary API under /api/forms.
+ * Delegates business logic to FormService, SubmissionService, and DynamicTableService.
  */
 @RestController
 @RequestMapping("/api/forms")

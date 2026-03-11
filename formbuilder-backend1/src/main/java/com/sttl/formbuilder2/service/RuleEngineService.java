@@ -14,32 +14,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RuleEngineService — Server-Side Logic Rule Evaluation Engine
- *
- * What it does:
- * Evaluates the IF→THEN logic rules attached to a form version when a
- * submission
- * is received. Called by {@code SubmissionService} with the deserialized rules
- * and the respondent's answers BEFORE the data is saved to the database.
- *
- * Two-phase evaluation:
- * 1. {@link #validateSubmission} — Pre-save validation. Throws HTTP 400
- * if a REQUIRE or VALIDATION_ERROR action is triggered, preventing the INSERT.
- * 2. {@link #executePostSubmissionWorkflows} — Post-save workflows (currently
- * logs
- * SEND_EMAIL actions to stdout; replace with JavaMailSender for production).
- *
- * Condition evaluation ({@link #evaluateCondition}):
- * Currently evaluates only the FIRST condition per rule (multi-condition AND/OR
- * support is planned via {@code FormRuleDTO.conditionLogic}). Comparisons are
- * case-insensitive strings; GREATER_THAN / LESS_THAN parse values as doubles.
- *
- * Key design decision — internal DTOs:
- * Uses {@code dto.internal.*} (FormRuleDTO, RuleConditionDTO, RuleActionDTO)
- * rather
- * than the {@code dto.request.*} equivalents because these objects are
- * deserialized
- * from JSON stored in the database — they are not HTTP request bodies.
+/**
+ * Server-Side Logic Rule Evaluation Engine.
+ * Evaluates the IF→THEN logic rules attached to a form version when a submission
+ * is received, preventing invalid inserts and triggering post-submission workflows.
  */
 @Service
 public class RuleEngineService {

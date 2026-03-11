@@ -21,35 +21,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * SubmissionService — Business Logic for Form Submissions
- *
- * What it does:
- * Handles the full lifecycle of a form submission: inserting, reading,
- * updating,
- * and deleting rows in the dynamic submission tables managed by
- * {@code DynamicTableService}. Also integrates the rule engine before inserting
- * new submissions.
- *
- * Key design decisions:
- * - Uses {@code JdbcTemplate} directly (not JPA) because the submission tables
- * have dynamic schemas that vary per form — JPA requires compile-time entity
- * definitions, which is incompatible with runtime DDL.
- * - The rule engine is invoked BEFORE the INSERT. Validation errors from the
- * engine
- * throw a {@code ResponseStatusException} (HTTP 400) which propagates up and
- * prevents the data from being saved.
- * - Complex values (lists, maps from multi-select / grid fields) are serialised
- * to JSON strings via Jackson's {@code ObjectMapper} before insertion, since
- * submission table columns are all simple SQL types.
- *
- * Dependencies:
- * - {@code FormRepository} — to load form metadata (table name, field
- * definitions).
- * - {@code JdbcTemplate} — for raw SQL DML against dynamic submission tables.
- * - {@code ObjectMapper} — for deserialising stored rules JSON and serialising
- * complex field values (e.g. checkbox arrays).
- * - {@code RuleEngineService} — validates and executes post-submission
- * workflows.
+ * Handles the full lifecycle of a form submission: inserting, reading, updating,
+ * and deleting rows in the dynamic submission tables.
+ * Integrates the rule engine for validation before inserting new submissions.
  */
 @Service
 @RequiredArgsConstructor
@@ -76,23 +50,13 @@ public class SubmissionService {
     }
 
     /**
-     * Inserts a new submission row into the form's dynamic submission table.
-     *
-     * Steps:
-     * 1. Load the form and its active version (index 0 = latest published version).
-     * 2. If the version has logic rules, deserialise them and run the rule engine:
-     * - {@code validateSubmission} throws HTTP 400 if a REQUIRE or VALIDATION_ERROR
-     * action is triggered, blocking the save.
-     * - {@code executePostSubmissionWorkflows} runs AFTER the (eventual) save
-     * trigger (e.g. SEND_EMAIL).
-     * 3. Build the INSERT SQL dynamically using only the columns defined in the
-     * current form version. Unknown keys in {@code submissionData} are ignored.
-     * 4. Serialise complex values (List/Map from checkboxes/grids) to JSON strings.
-     * 5. Execute INSERT … RETURNING submission_id to get the generated UUID.
+     * Inserts a new submission row into the form's dynamic table.
+     * Evaluates form rules before insertion. Complex values are serialized to JSON.
      *
      * @param formId         The internal form ID.
-     * @param submissionData Map of {columnName: value} pairs from the respondent.
-     * @return The UUID of the newly created submission row.
+     * @param submissionData Map of respondent data.
+     * @param status         Submission status (e.g., "FINAL", "DRAFT").
+     * @return The UUID of the newly created submission.
      */
     @Transactional
     public UUID submitData(Long formId, Map<String, Object> submissionData, String status) {
@@ -298,13 +262,12 @@ public class SubmissionService {
     }
 
     /**
-     * Updates an existing submission row with new values from the respondent.
-     * Only columns present in the current form version are included in the UPDATE
-     * statement. Complex values (arrays/objects) are serialised to JSON strings.
+     * Updates an existing submission row. Complex values are serialised to JSON.
      *
      * @param formId         The internal form ID.
      * @param submissionId   The UUID of the submission to update.
-     * @param submissionData Map of {columnName: newValue} pairs.
+     * @param submissionData Updated submission data.
+     * @param status         Updated submission status.
      */
     @Transactional
     public UUID updateSubmission(Long formId, UUID submissionId, Map<String, Object> submissionData, String status) {

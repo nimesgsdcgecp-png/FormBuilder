@@ -1,11 +1,9 @@
 'use client';
 
 /**
- * PropertiesPanel — Field Configuration Side Panel in the Builder
- *
- * The right-hand panel that appears when a field card on the canvas is selected.
+ * PropertiesPanel — Field Configuration Side Panel in the Builder.
  * Provides controls to configure label, default value, options, grid config,
- * lookup config, and validation rules.
+ * lookup config, and validation rules for the currently selected field.
  */
 
 import { useFormStore } from '@/store/useFormStore';

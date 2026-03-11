@@ -19,35 +19,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * FileUploadController — REST Controller for File Upload and Serving
- *
- * What it does:
- * Handles the FILE field type used in forms. When a respondent uploads a file,
- * it is stored on the local filesystem under an {@code uploads/} folder in the
- * project root. The backend returns a relative URL that the frontend stores as
- * the submission value, and the file can later be downloaded via the serve
- * endpoint.
- *
- * Endpoints:
- * POST /api/upload — Accept a multipart file, save it with a UUID
- * filename, return {url, fileName}.
- * GET /api/files/{fileName} — Stream a previously uploaded file as a download.
- *
- * Application flow for a FILE field:
- * 1. Respondent selects a file on the public form page.
- * 2. Frontend sends a POST /api/upload request.
- * 3. This controller saves the file and returns
- * {@code "/api/files/<uuid>.ext"}.
- * 4. The frontend stores that URL as the field value and submits the form.
- * 5. On the responses page, the file URL is rendered as a Download link that
- * calls GET /api/files/{fileName}.
- *
- * Production note:
- * File storage on the local filesystem is suitable for development only. In
- * production, replace with cloud storage (e.g. AWS S3, Google Cloud Storage).
- *
- * CORS: explicitly set on this controller to align with the global WebConfig
- * setting.
+ * REST Controller for File Upload and Serving.
+ * Handles the FILE field type, saving uploads to the local filesystem
+ * and serving them for download.
  */
 @RestController
 @RequestMapping("/api")

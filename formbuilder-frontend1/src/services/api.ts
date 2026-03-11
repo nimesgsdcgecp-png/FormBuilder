@@ -1,27 +1,6 @@
 /**
- * api.ts — API Client Functions
- *
- * What it does:
- *   Centralises all HTTP calls from the frontend to the Spring Boot backend.
- *   Having a dedicated API layer means components never have raw fetch() calls
- *   inside them — if the backend URL or request shape changes, only this file
- *   needs to be updated.
- *
- * Base URL:
- *   All requests go to http://localhost:8080/api (dev backend). For production,
- *   replace this constant with an environment variable (e.g. process.env.NEXT_PUBLIC_API_URL).
- *
- * Functions:
- *   - saveForm()            — Creates (POST) or updates (PUT) a form based on whether
- *                             the schema already has an ID. Used by the builder's Save button.
- *   - deleteSubmission()    — Deletes a single submission row from the admin responses page.
- *   - deleteForm()          — Archives a form via DELETE /api/forms/{id}.
- *   - submitFormResponse()  — Submits a new form response from the public form page
- *                             (uses the form ID path, called from /forms/{id}/submissions).
- *
- * Note: The public form page uses the /api/forms/public/{token}/submissions endpoint
- * directly via fetch() to pass the token. submitFormResponse() is used from the
- * admin responses page "Edit" flow where the form ID is available.
+ * api.ts — API Client Functions.
+ * Centralises all HTTP calls from the frontend to the Spring Boot backend.
  */
 import { FormSchema } from '@/types/schema';
 
@@ -37,16 +16,10 @@ const API_BASE_URL = 'http://localhost:8080/api';
 
 /**
  * Saves a form to the backend.
- *
- * - If the schema has an {@code id} → PUT /api/forms/{id} (update existing).
- * - If the schema has no {@code id} → POST /api/forms (create new).
- *
- * Transforms the Zustand FormSchema into the shape expected by
- * CreateFormRequestDTO / UpdateFormRequestDTO (field validation is restructured,
- * and the local 'required' flag is moved out of the validation object).
+ * Creates (POST) if schema lacks an ID, otherwise updates (PUT) existing.
  *
  * @param schema The current form state from the Zustand store.
- * @returns The saved Form entity returned by the backend (includes generated ID on create).
+ * @returns The saved Form entity returned by the backend.
  */
 export const saveForm = async (schema: FormSchema) => {
   const payload = {

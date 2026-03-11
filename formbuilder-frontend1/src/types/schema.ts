@@ -1,30 +1,7 @@
 /**
- * schema.ts — Shared TypeScript Types for the Form Builder
- *
- * What it does:
- *   Single source of truth for all TypeScript types and interfaces used across the
- *   entire frontend application. Both the builder and the public form page import
- *   from this file.
- *
- * Why it matters:
- *   Keeping types centralised prevents drift between what the builder saves, what
- *   the API returns, and what the public form page renders.
- *
- * Key entities:
- *   - {@link FormSchema}       — the top-level form object held in the Zustand store.
- *   - {@link FormField}        — a single question/input on the form canvas.
- *   - {@link FormRule}         — an IF→THEN logic rule from the LogicPanel.
- *   - {@link ValidationRules}  — constraints applied both in the UI (visual feedback)
- *                                and enforced server-side by RuleEngineService.
- *
- * Type mirrors:
- *   - {@link FieldType}        — mirrors the Java {@code FieldType} enum (all 15 types).
- *   - {@link RuleOperator}     — mirrors the Java {@code RuleOperator} enum.
- *   - {@link ActionType}       — mirrors the Java {@code ActionType} enum.
- *   - {@link ConditionLogic}   — mirrors the Java {@code ConditionLogic} enum.
- *
- * Note: If a new field type, operator, or action is added to the backend enums, it
- * must also be added here to remain in sync.
+ * schema.ts — Shared TypeScript Types for the Form Builder.
+ * Single source of truth for all types and interfaces used across the frontend application.
+ * Note: FieldType, RuleOperator, ActionType, and ConditionLogic must remain in sync with backend Java enums.
  */
 
 /** All possible field input types. Must stay in sync with the Java FieldType enum. */
