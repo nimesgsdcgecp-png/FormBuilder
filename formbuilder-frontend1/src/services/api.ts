@@ -61,21 +61,32 @@ export const saveForm = async (schema: FormSchema) => {
       },
       logic: schema.rules || []
     },
-    fields: schema.fields.map((field) => ({
-      label: field.label,
-      columnName: field.columnName,
-      type: field.type,
-      required: field.validation?.required || false,
-      options: field.options,
-      validation: {
-        ...field.validation,
-        required: undefined, // 'required' lives at the top level in the backend DTO, not inside validation
-        minLength: field.validation?.minLength,
-        maxLength: field.validation?.maxLength,
-        pattern: field.validation?.pattern,
-      },
-      defaultValue: field.defaultValue
-    })),
+    fields: (() => {
+      const mapFields = (fields: any[]): any[] => {
+        return fields.map((field) => ({
+          label: field.label,
+          columnName: field.columnName,
+          type: field.type,
+          required: field.validation?.required || false,
+          options: field.options,
+          validation: {
+            ...field.validation,
+            required: undefined,
+            minLength: field.validation?.minLength,
+            maxLength: field.validation?.maxLength,
+            pattern: field.validation?.pattern,
+          },
+          defaultValue: field.defaultValue,
+          calculationFormula: field.calculationFormula,
+          helpText: field.helpText,
+          hidden: field.isHidden || false,
+          readOnly: field.isReadOnly || false,
+          disabled: field.isDisabled || false,
+          children: field.children ? mapFields(field.children) : undefined
+        }));
+      };
+      return mapFields(schema.fields);
+    })(),
   };
 
   // DEV: logs the rules being sent to the backend for debugging
@@ -103,16 +114,42 @@ export const saveForm = async (schema: FormSchema) => {
   return response.json();
 };
 
+export interface SubmissionsResponse {
+  content: Record<string, any>[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
 /**
- * Fetches the list of all submissions for a form.
+ * Fetches the list of submissions for a form with pagination, sorting, and filtering.
  *
- * @param formId  The internal form ID.
- * @returns List of submissions.
+ * @param formId   The internal form ID.
+ * @param page     Page number (starts at 0).
+ * @param size     Number of records per page.
+ * @param sortBy   Column to sort by.
+ * @param sortOrder 'ASC' or 'DESC'.
+ * @param filters  Key-value pairs for column filtering.
+ * @returns Paginated results.
  */
 export const getSubmissions = async (
-  formId: string
-) => {
-  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions`, {
+  formId: string,
+  page = 0,
+  size = 50,
+  sortBy = 'submitted_at',
+  sortOrder = 'DESC',
+  filters: Record<string, string> = {}
+): Promise<SubmissionsResponse> => {
+  const queryParams = new URLSearchParams({
+    page: page.toString(),
+    size: size.toString(),
+    sortBy,
+    sortOrder,
+    ...filters
+  });
+
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions?${queryParams}`, {
     method: 'GET',
     credentials: 'include',
   });

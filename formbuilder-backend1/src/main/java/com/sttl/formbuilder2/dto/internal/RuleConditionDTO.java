@@ -25,7 +25,8 @@ import lombok.Data;
  * (String/Number/Boolean).
  */
 @Data
-public class RuleConditionDTO {
+@lombok.EqualsAndHashCode(callSuper = true)
+public class RuleConditionDTO extends RuleConditionEntryDTO {
     private String field;
     private RuleOperator operator;
     private Object value; // Could be String, Integer, or Boolean

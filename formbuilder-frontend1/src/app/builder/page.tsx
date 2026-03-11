@@ -9,7 +9,7 @@
  *   - Right: PropertiesPanel (field properties editor — only in EDITOR tab)
  */
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext,
@@ -45,7 +45,7 @@ function BuilderContent() {
   const editFormId = searchParams.get('id');
 
   const {
-    schema, addField, reorderFields, setFormId, setTitle, setDescription,
+    schema, addField, insertField, reorderFields, setFormId, setTitle, setDescription,
     setFields, setRules, resetForm, setAllowEditResponse, isThemePanelOpen, setThemePanelOpen,
     setThemeColor, setThemeFont
   } = useFormStore();
@@ -56,6 +56,7 @@ function BuilderContent() {
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC'>('EDITOR');
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // 1. Check Auth first. If we are just creating a new form, we still need to be logged in.
@@ -77,9 +78,17 @@ function BuilderContent() {
     };
     checkAuth();
 
+    // Close profile dropdown on click outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+
     if (!editFormId) {
       resetForm();
-      return;
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
 
     fetch(`http://localhost:8080/api/forms/${editFormId}`, { credentials: 'include' })
@@ -118,32 +127,45 @@ function BuilderContent() {
         }
         setRules(parsedRules);
 
-        const mappedFields = data.versions[0].fields.map((f: any) => {
-          let parsedOptions: any = [];
-          if (f.options) {
-            if (typeof f.options === 'string') {
-              try { parsedOptions = JSON.parse(f.options); }
-              catch (e) { parsedOptions = f.options.split(',').map((s: string) => s.trim()); }
-            } else {
-              parsedOptions = f.options;
+        const mapFieldsRecursive = (fields: any[]): any[] => {
+          return fields.map((f: any) => {
+            let parsedOptions: any = [];
+            if (f.options) {
+              if (typeof f.options === 'string') {
+                try { parsedOptions = JSON.parse(f.options); }
+                catch (e) { parsedOptions = f.options.split(',').map((s: string) => s.trim()); }
+              } else {
+                parsedOptions = f.options;
+              }
             }
-          }
-          return {
-            id: f.id.toString(),
-            type: f.fieldType,
-            label: f.fieldLabel,
-            columnName: f.columnName,
-            defaultValue: f.defaultValue,
-            options: parsedOptions,
-            validation: { required: f.isMandatory, ...f.validationRules }
-          };
-        });
+            return {
+              id: f.id.toString(),
+              type: f.fieldType,
+              label: f.fieldLabel,
+              columnName: f.columnName,
+              defaultValue: f.defaultValue,
+              options: parsedOptions,
+              validation: { required: f.isMandatory, ...f.validationRules },
+              placeholder: f.placeholder || '',
+              calculationFormula: f.calculationFormula,
+              helpText: f.helpText,
+              isHidden: f.isHidden,
+              isReadOnly: f.isReadOnly,
+              isDisabled: f.isDisabled,
+              children: f.children ? mapFieldsRecursive(f.children) : (f.fieldType === 'SECTION_HEADER' ? [] : undefined)
+            };
+          });
+        };
+
+        const mappedFields = mapFieldsRecursive(data.versions[0].fields);
         setFields(mappedFields);
       })
       .catch(err => {
         console.error("Failed to load form:", err);
         toast.error("Failed to load form data");
       });
+
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editFormId, setFormId, setTitle, setDescription, setFields]);
 
   const sensors = useSensors(
@@ -199,6 +221,17 @@ function BuilderContent() {
     }
   };
 
+  const findParentField = (fields: any[], id: string): any | null => {
+    for (const f of fields) {
+      if (f.children?.some((c: any) => c.id === id)) return f;
+      if (f.children) {
+        const parent = findParentField(f.children, id);
+        if (parent) return parent;
+      }
+    }
+    return null;
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const activeData = active.data.current;
@@ -216,17 +249,49 @@ function BuilderContent() {
     setActiveSidebarItem(null);
     setActiveCanvasItemId(null);
     if (!over) return;
+
     const activeData = active.data.current;
+    const overData = over.data.current;
+
+    // Handle dropping new fields from sidebar
     if (activeData?.isSidebarBtn) {
-      if (over.id === 'canvas-droppable' || schema.fields.some(f => f.id === over.id)) {
+      if (over.id === 'sidebar-palette') return;
+
+      // 1. Drop into a section container header/dropzone
+      if (overData?.isSection) {
+        addField(activeData.type, overData.parentId);
+        return;
+      }
+
+      // 2. Drop over a specific field (potentially nested)
+      const parent = findParentField(schema.fields, over.id as string);
+      const targetList = parent ? parent.children : schema.fields;
+      const overIndex = targetList.findIndex((f: any) => f.id === over.id);
+
+      if (overIndex !== -1) {
+        insertField(activeData.type, overIndex, parent?.id);
+      } else if (over.id === 'canvas-droppable' || over.id === 'canvas-drop-bottom') {
         addField(activeData.type);
       }
       return;
     }
+
+    // Handle reordering existing fields
     if (active.id !== over.id) {
-      const oldIndex = schema.fields.findIndex((f) => f.id === active.id);
-      const newIndex = schema.fields.findIndex((f) => f.id === over.id);
-      reorderFields(arrayMove(schema.fields, oldIndex, newIndex));
+      const activeParent = findParentField(schema.fields, active.id as string);
+      const overParent = findParentField(schema.fields, over.id as string);
+
+      // Reordering within the same container
+      if (activeParent?.id === overParent?.id) {
+        const targetList = activeParent ? activeParent.children : schema.fields;
+        const oldIndex = targetList.findIndex((f: any) => f.id === active.id);
+        const newIndex = targetList.findIndex((f: any) => f.id === over.id);
+        reorderFields(arrayMove(targetList, oldIndex, newIndex), activeParent?.id);
+      } else {
+        // Moving between containers (Optional enhancement - for now just prevent or handle simply)
+        // If moving between containers, we'd need a more complex store action.
+        // For now, let's just handle it if it happens.
+      }
     }
   };
 
@@ -388,7 +453,7 @@ function BuilderContent() {
             </button>
 
             {username && (
-              <div className="relative border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }}>
+              <div className="relative border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }} ref={profileRef}>
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-sm transition-transform hover:scale-105 focus:outline-none focus:ring-2"

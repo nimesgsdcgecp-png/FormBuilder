@@ -17,6 +17,7 @@
  * Field types are grouped by category (basic, choice, special, grid, lookup).
  */
 
+import { useDroppable } from '@dnd-kit/core';
 import { FieldType } from '@/types/schema';
 import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, CalendarClock } from 'lucide-react';
 import { DraggableSidebarBtn } from './DraggableSidebarBtn';
@@ -47,6 +48,7 @@ export const FIELD_TYPES = [
   { type: 'TIME' as FieldType, label: 'Time', icon: Clock, category: 'special' },
   { type: 'RATING' as FieldType, label: 'Star Rating', icon: Star, category: 'special' },
   { type: 'SCALE' as FieldType, label: 'Linear Scale', icon: BarChartHorizontal, category: 'special' },
+  { type: 'CALCULATED' as FieldType, label: 'Calculated Field', icon: Hash, category: 'special' },
   { type: 'FILE' as FieldType, label: 'File Upload', icon: Upload, category: 'special' },
 
   // Grid types (require rows + cols configuration)
@@ -97,8 +99,13 @@ const GROUPS: FieldGroup[] = [
 ];
 
 export default function Sidebar() {
+  const { setNodeRef } = useDroppable({
+    id: 'sidebar-palette',
+  });
+
   return (
     <aside
+      ref={setNodeRef}
       className="w-64 flex flex-col h-full z-10 border-r shrink-0"
       style={{ background: 'var(--sidebar-bg)', borderColor: 'var(--sidebar-border)' }}
     >

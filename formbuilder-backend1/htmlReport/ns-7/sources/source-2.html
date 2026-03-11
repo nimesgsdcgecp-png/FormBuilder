@@ -1,0 +1,277 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > Form</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.entity</a>
+</div>
+
+<h1>Coverage Summary for Class: Form (com.sttl.formbuilder2.model.entity)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">Form</td>
+<td class="coverageStat">
+  <span class="percent">
+    80%
+  </span>
+  <span class="absValue">
+    (4/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    80%
+  </span>
+  <span class="absValue">
+    (4/5)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">Form$FormBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">Form$HibernateInstantiator</td>
+  </tr>
+  <tr>
+    <td class="name">Form$HibernateProxy</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    66.7%
+  </span>
+  <span class="absValue">
+    (4/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    66.7%
+  </span>
+  <span class="absValue">
+    (4/6)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.entity;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import jakarta.persistence.*;
+&nbsp;import lombok.*;
+&nbsp;import org.hibernate.annotations.CreationTimestamp;
+&nbsp;import org.hibernate.annotations.UpdateTimestamp;
+&nbsp;
+&nbsp;import java.time.Instant;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;import java.util.UUID;
+&nbsp;
+&nbsp;/**
+&nbsp; * Form — Core JPA Entity
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Represents a single form created by a builder user. Maps to the {@code forms}
+&nbsp; * table in PostgreSQL. This is the root aggregate for the entire form object
+&nbsp; * graph.
+&nbsp; *
+&nbsp; * Relationships:
+&nbsp; * - One Form → Many {@link FormVersion}s (the history of published snapshots).
+&nbsp; * The current live version is always {@code versions.get(0)} (ordered desc by
+&nbsp; * version number via {@code @OrderBy}).
+&nbsp; *
+&nbsp; * Key fields:
+&nbsp; * - {@code publicShareToken} — a UUID used in the public URL (/f/{token}).
+&nbsp; * Decouples the public-facing URL from the internal integer ID, preventing
+&nbsp; * enumeration attacks.
+&nbsp; * - {@code targetTableName} — the dynamic PostgreSQL table (e.g. &quot;sub_3_v1&quot;)
+&nbsp; * where this form&#39;s submissions are stored.
+&nbsp; * - {@code allowEditResponse} — whether respondents can edit their submission
+&nbsp; * after it has been submitted.
+&nbsp; * - {@code status} — DRAFT | PUBLISHED | ARCHIVED (soft-delete).
+&nbsp; *
+&nbsp; * Lombok annotations used:
+&nbsp; * {@code @Builder}, {@code @Getter}, {@code @Setter},
+&nbsp; * {@code @NoArgsConstructor},
+&nbsp; * {@code @AllArgsConstructor} eliminate boilerplate
+&nbsp; * getters/setters/constructors.
+&nbsp; */
+&nbsp;@Entity
+&nbsp;@Table(name = &quot;forms&quot;)
+<b class="fc">&nbsp;@Getter</b>
+<b class="fc">&nbsp;@Setter</b>
+<b class="fc">&nbsp;@NoArgsConstructor</b>
+<b class="nc">&nbsp;@AllArgsConstructor</b>
+<b class="pc">&nbsp;@Builder</b>
+&nbsp;public class Form {
+&nbsp;
+&nbsp;    @Id
+&nbsp;    @GeneratedValue(strategy = GenerationType.IDENTITY)
+&nbsp;    private Long id;
+&nbsp;
+&nbsp;    @Column(nullable = false)
+&nbsp;    private String title;
+&nbsp;
+&nbsp;    @Column(columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String description;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Lifecycle status — controls dashboard visibility and public accessibility.
+&nbsp;     */
+&nbsp;    @Enumerated(EnumType.STRING)
+&nbsp;    @Column(nullable = false)
+&nbsp;    @Builder.Default
+&nbsp;    private FormStatus status = FormStatus.DRAFT;
+&nbsp;
+&nbsp;    /** Auto-set on creation; never updated after that. */
+&nbsp;    @CreationTimestamp
+&nbsp;    @Column(name = &quot;created_at&quot;, updatable = false)
+&nbsp;    private Instant createdAt;
+&nbsp;
+&nbsp;    /** Auto-updated on every save by Hibernate. */
+&nbsp;    @UpdateTimestamp
+&nbsp;    @Column(name = &quot;updated_at&quot;)
+&nbsp;    private Instant updatedAt;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * The name of the dynamic PostgreSQL table that stores this form&#39;s submissions
+&nbsp;     * (e.g. &quot;sub_2_v1&quot;). Created by {@code DynamicTableService} when the form is
+&nbsp;     * first published.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;target_table_name&quot;)
+&nbsp;    private String targetTableName;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * UUID-based public token used in the shareable link (/f/{token}).
+&nbsp;     * Prevents guessing form IDs from the public URL.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;public_share_token&quot;, unique = true)
+&nbsp;    @Builder.Default
+&nbsp;    private String publicShareToken = UUID.randomUUID().toString();
+&nbsp;
+&nbsp;    /**
+&nbsp;     * When true, respondents see an &quot;Edit your response&quot; button after submission,
+&nbsp;     * allowing them to update their answers. Stored on the form so each form can
+&nbsp;     * independently enable or disable the feature.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;allow_edit_response&quot;, nullable = false)
+&nbsp;    @Builder.Default
+&nbsp;    private boolean allowEditResponse = false;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Ordered list of all published snapshots of this form. The most recently
+&nbsp;     * published version is always at index 0 (desc order by versionNumber).
+&nbsp;     * CascadeType.ALL ensures versions are persisted/deleted alongside the form.
+&nbsp;     */
+&nbsp;    @OneToMany(mappedBy = &quot;form&quot;, cascade = CascadeType.ALL, orphanRemoval = true)
+&nbsp;    @OrderBy(&quot;versionNumber DESC&quot;)
+&nbsp;    @Builder.Default
+&nbsp;    private List&lt;FormVersion&gt; versions = new ArrayList&lt;&gt;();
+&nbsp;
+&nbsp;    /**
+&nbsp;     * The user who created this form. Enables multi-tenancy/data isolation.
+&nbsp;     */
+&nbsp;    @ManyToOne
+&nbsp;    @JoinColumn(name = &quot;owner_id&quot;, nullable = true) // nullable true for now to handle legacy data without errors
+&nbsp;    private AppUser owner;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

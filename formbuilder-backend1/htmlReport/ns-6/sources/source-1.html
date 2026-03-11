@@ -1,0 +1,201 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormDetailResponseDTO</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.dto.response</a>
+</div>
+
+<h1>Coverage Summary for Class: FormDetailResponseDTO (com.sttl.formbuilder2.dto.response)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormDetailResponseDTO</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/106)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormDetailResponseDTO$FormDetailResponseDTOBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/106)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.response;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import lombok.Builder;
+&nbsp;import lombok.Data;
+&nbsp;
+&nbsp;import java.time.Instant;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormDetailResponseDTO — Full Form Response Including Schema and Versions
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Returned by:
+&nbsp; * - GET /api/forms/{id} — builder loads existing form for editing
+&nbsp; * - GET /api/forms/public/{token} — public form page loads the form to render
+&nbsp; *
+&nbsp; * Provides all data needed to reconstruct the builder state or render the
+&nbsp; * public form page, including the list of versions (each containing fields
+&nbsp; * and serialised logic rules).
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * FormController.getForm() / getPublicForm()
+&nbsp; * → FormService.toDetailDTO(form)
+&nbsp; * → ResponseEntity&lt;FormDetailResponseDTO&gt;
+&nbsp; * → Frontend: builder page restores state / public form page renders fields
+&nbsp; *
+&nbsp; * Key fields:
+&nbsp; * - {@code allowEditResponse} — used by the public page to show/hide the
+&nbsp; * &quot;Edit your response&quot; button after submission.
+&nbsp; * - {@code publicShareToken} — the UUID used in the shareable /f/{token} URL.
+&nbsp; * - {@code versions} — list of {@link FormVersionResponseDTO}s, with the
+&nbsp; * active version always at index 0.
+&nbsp; */
+<b class="pc">&nbsp;@Data</b>
+<b class="fc">&nbsp;@Builder</b>
+&nbsp;public class FormDetailResponseDTO {
+&nbsp;    private Long id;
+&nbsp;    private String title;
+&nbsp;    private String description;
+&nbsp;    private FormStatus status;
+&nbsp;    private Instant createdAt;
+&nbsp;    private Instant updatedAt;
+&nbsp;    private String targetTableName;
+&nbsp;    private String publicShareToken;
+&nbsp;    private boolean allowEditResponse;
+&nbsp;    private Long ownerId;
+&nbsp;    private String themeColor;
+&nbsp;    private String themeFont;
+&nbsp;    private List&lt;FormVersionResponseDTO&gt; versions;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

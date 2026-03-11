@@ -112,4 +112,39 @@ public class FormField {
     @Column(name = "field_options", columnDefinition = "TEXT")
     private String options;
 
+    /**
+     * Stores a formula (e.g., 'price * quantity') used to derive the value of this
+     * field.
+     * Evaluated in real-time on the frontend and validated on the backend.
+     */
+    @Column(name = "calculation_formula", columnDefinition = "TEXT")
+    private String calculationFormula;
+
+    /**
+     * The columnName of the parent field if this field is nested (e.g., inside a
+     * section).
+     * If null, the field is at the top level.
+     */
+    @Column(name = "parent_column_name", length = 64)
+    private String parentColumnName;
+
+    /**
+     * If true, this field exists in the database but is not shown to respondents
+     * on the public form page.
+     */
+    @Builder.Default
+    @Column(name = "is_hidden", nullable = false)
+    private Boolean isHidden = false;
+
+    @Builder.Default
+    @Column(name = "is_read_only", nullable = false)
+    private Boolean isReadOnly = false;
+
+    @Column(name = "help_text", columnDefinition = "TEXT")
+    private String helpText;
+
+    @Builder.Default
+    @Column(name = "is_disabled", nullable = false)
+    private Boolean isDisabled = false;
+
 }

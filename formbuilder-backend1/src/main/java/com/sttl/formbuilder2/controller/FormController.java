@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * FormController — REST Controller for Forms and Submissions
@@ -123,15 +124,21 @@ public class FormController {
     // Submission endpoints
     // ─────────────────────────────────────────────────────────
 
-    /**
-     * GET /api/forms/{id}/submissions
-     * Returns all rows from the form's dynamic submission table, ordered
-     * newest-first.
-     * Used by the responses admin page to populate the data table.
-     */
     @GetMapping("/{id}/submissions")
-    public ResponseEntity<List<Map<String, Object>>> getSubmissions(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(submissionService.getSubmissions(id));
+    public ResponseEntity<Map<String, Object>> getSubmissions(
+            @PathVariable("id") Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "submitted_at") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortOrder,
+            @RequestParam Map<String, String> allParams) {
+
+        // Filter out known pagination params to leave only custom column filters
+        Map<String, String> filters = allParams.entrySet().stream()
+                .filter(e -> !List.of("page", "size", "sortBy", "sortOrder").contains(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        return ResponseEntity.ok(submissionService.getSubmissions(id, page, size, sortBy, sortOrder, filters));
     }
 
     /**

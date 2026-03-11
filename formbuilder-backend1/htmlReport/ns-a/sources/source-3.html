@@ -1,0 +1,310 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > RuleEngineService</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
+</div>
+
+<h1>Coverage Summary for Class: RuleEngineService (com.sttl.formbuilder2.service)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RuleEngineService</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    42.9%
+  </span>
+  <span class="absValue">
+    (3/7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    4.9%
+  </span>
+  <span class="absValue">
+    (4/81)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    5.4%
+  </span>
+  <span class="absValue">
+    (3/56)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.dto.internal.FormRuleDTO;
+&nbsp;import com.sttl.formbuilder2.dto.internal.RuleConditionDTO;
+&nbsp;import com.sttl.formbuilder2.dto.internal.RuleActionDTO;
+&nbsp;import com.sttl.formbuilder2.dto.internal.RuleConditionEntryDTO;
+&nbsp;import com.sttl.formbuilder2.dto.internal.ConditionGroupDTO;
+&nbsp;import com.sttl.formbuilder2.model.enums.ConditionLogic;
+&nbsp;import org.springframework.http.HttpStatus;
+&nbsp;import org.springframework.stereotype.Service;
+&nbsp;import org.springframework.web.server.ResponseStatusException;
+&nbsp;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Map;
+&nbsp;
+&nbsp;/**
+&nbsp; * RuleEngineService — Server-Side Logic Rule Evaluation Engine
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Evaluates the IF→THEN logic rules attached to a form version when a
+&nbsp; * submission
+&nbsp; * is received. Called by {@code SubmissionService} with the deserialized rules
+&nbsp; * and the respondent&#39;s answers BEFORE the data is saved to the database.
+&nbsp; *
+&nbsp; * Two-phase evaluation:
+&nbsp; * 1. {@link #validateSubmission} — Pre-save validation. Throws HTTP 400
+&nbsp; * if a REQUIRE or VALIDATION_ERROR action is triggered, preventing the INSERT.
+&nbsp; * 2. {@link #executePostSubmissionWorkflows} — Post-save workflows (currently
+&nbsp; * logs
+&nbsp; * SEND_EMAIL actions to stdout; replace with JavaMailSender for production).
+&nbsp; *
+&nbsp; * Condition evaluation ({@link #evaluateCondition}):
+&nbsp; * Currently evaluates only the FIRST condition per rule (multi-condition AND/OR
+&nbsp; * support is planned via {@code FormRuleDTO.conditionLogic}). Comparisons are
+&nbsp; * case-insensitive strings; GREATER_THAN / LESS_THAN parse values as doubles.
+&nbsp; *
+&nbsp; * Key design decision — internal DTOs:
+&nbsp; * Uses {@code dto.internal.*} (FormRuleDTO, RuleConditionDTO, RuleActionDTO)
+&nbsp; * rather
+&nbsp; * than the {@code dto.request.*} equivalents because these objects are
+&nbsp; * deserialized
+&nbsp; * from JSON stored in the database — they are not HTTP request bodies.
+&nbsp; */
+&nbsp;@Service
+<b class="fc">&nbsp;public class RuleEngineService {</b>
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Validates a submission against all rules in the form&#39;s active version.
+&nbsp;     * Runs synchronously BEFORE the data is saved. Any triggered REQUIRE or
+&nbsp;     * VALIDATION_ERROR action causes an immediate HTTP 400 response.
+&nbsp;     *
+&nbsp;     * @param rules   The deserialized list of {@link FormRuleDTO}s from
+&nbsp;     *                {@code FormVersion.rules}.
+&nbsp;     * @param answers Map of {columnName: value} pairs submitted by the respondent.
+&nbsp;     * @throws ResponseStatusException HTTP 400 if a rule&#39;s action rejects the
+&nbsp;     *                                 submission.
+&nbsp;     */
+&nbsp;    public void validateSubmission(List&lt;FormRuleDTO&gt; rules, Map&lt;String, Object&gt; answers) {
+<b class="pc">&nbsp;        if (rules == null || rules.isEmpty())</b>
+&nbsp;            return;
+&nbsp;
+<b class="nc">&nbsp;        for (FormRuleDTO rule : rules) {</b>
+<b class="nc">&nbsp;            boolean isMatch = evaluateRule(rule, answers);</b>
+&nbsp;
+<b class="nc">&nbsp;            if (isMatch) {</b>
+<b class="nc">&nbsp;                for (RuleActionDTO action : rule.getActions()) {</b>
+<b class="nc">&nbsp;                    if (&quot;VALIDATION_ERROR&quot;.equals(action.getType().name())) {</b>
+<b class="nc">&nbsp;                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, action.getMessage());</b>
+<b class="nc">&nbsp;                    } else if (&quot;REQUIRE&quot;.equals(action.getType().name())) {</b>
+<b class="nc">&nbsp;                        Object targetValue = answers.get(action.getTargetField());</b>
+<b class="nc">&nbsp;                        if (targetValue == null || targetValue.toString().trim().isEmpty()) {</b>
+<b class="nc">&nbsp;                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,</b>
+<b class="nc">&nbsp;                                    &quot;Validation Error: &#39;&quot; + action.getTargetField() + &quot;&#39; is a required field.&quot;);</b>
+&nbsp;                        }
+&nbsp;                    }
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Helper to evaluate all conditions in a rule based on AND/OR logic.
+&nbsp;     */
+&nbsp;    private boolean evaluateRule(FormRuleDTO rule, Map&lt;String, Object&gt; answers) {
+<b class="nc">&nbsp;        List&lt;RuleConditionEntryDTO&gt; conditions = rule.getConditions();</b>
+<b class="nc">&nbsp;        if (conditions == null || conditions.isEmpty())</b>
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;
+<b class="nc">&nbsp;        ConditionLogic logic = rule.getConditionLogic() != null ? rule.getConditionLogic() : ConditionLogic.AND;</b>
+<b class="nc">&nbsp;        return evaluateEntries(conditions, logic, answers);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean evaluateEntries(List&lt;RuleConditionEntryDTO&gt; entries, ConditionLogic logic,
+&nbsp;            Map&lt;String, Object&gt; answers) {
+<b class="nc">&nbsp;        if (logic == ConditionLogic.OR) {</b>
+<b class="nc">&nbsp;            for (RuleConditionEntryDTO entry : entries) {</b>
+<b class="nc">&nbsp;                if (evaluateEntry(entry, answers))</b>
+<b class="nc">&nbsp;                    return true;</b>
+&nbsp;            }
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        } else {
+<b class="nc">&nbsp;            for (RuleConditionEntryDTO entry : entries) {</b>
+<b class="nc">&nbsp;                if (!evaluateEntry(entry, answers))</b>
+<b class="nc">&nbsp;                    return false;</b>
+&nbsp;            }
+<b class="nc">&nbsp;            return true;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean evaluateEntry(RuleConditionEntryDTO entry, Map&lt;String, Object&gt; answers) {
+<b class="nc">&nbsp;        if (entry instanceof RuleConditionDTO condition) {</b>
+<b class="nc">&nbsp;            return evaluateCondition(condition, answers);</b>
+<b class="nc">&nbsp;        } else if (entry instanceof ConditionGroupDTO group) {</b>
+<b class="nc">&nbsp;            return evaluateEntries(group.getConditions(), group.getLogic(), answers);</b>
+&nbsp;        }
+<b class="nc">&nbsp;        return false;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Executes post-submission workflow actions (e.g. SEND_EMAIL) AFTER the
+&nbsp;     * database
+&nbsp;     * save has already succeeded. Since this runs after the save, failures here do
+&nbsp;     * NOT roll back the submission.
+&nbsp;     *
+&nbsp;     * Current implementation: SEND_EMAIL is simulated by printing to stdout.
+&nbsp;     * In production, inject JavaMailSender and send a real email.
+&nbsp;     *
+&nbsp;     * @param rules   The deserialized list of {@link FormRuleDTO}s.
+&nbsp;     * @param answers The respondent&#39;s submitted answers.
+&nbsp;     */
+&nbsp;    public void executePostSubmissionWorkflows(List&lt;FormRuleDTO&gt; rules, Map&lt;String, Object&gt; answers) {
+<b class="pc">&nbsp;        if (rules == null || rules.isEmpty())</b>
+&nbsp;            return;
+&nbsp;
+<b class="nc">&nbsp;        for (FormRuleDTO rule : rules) {</b>
+<b class="nc">&nbsp;            if (evaluateRule(rule, answers)) {</b>
+<b class="nc">&nbsp;                for (RuleActionDTO action : rule.getActions()) {</b>
+<b class="nc">&nbsp;                    if (&quot;SEND_EMAIL&quot;.equals(action.getType().name())) {</b>
+<b class="nc">&nbsp;                        String emailAddress = action.getMessage();</b>
+<b class="nc">&nbsp;                        System.out.println(&quot;==================================================&quot;);</b>
+<b class="nc">&nbsp;                        System.out.println(&quot;🚀 WORKFLOW TRIGGERED: SEND_EMAIL&quot;);</b>
+<b class="nc">&nbsp;                        System.out.println(&quot;📧 TO: &quot; + emailAddress);</b>
+<b class="nc">&nbsp;                        System.out.println(&quot;📄 BODY: New submission received -&gt; &quot; + answers.toString());</b>
+<b class="nc">&nbsp;                        System.out.println(&quot;==================================================&quot;);</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Evaluates a single {@link RuleConditionDTO} against the respondent&#39;s answers.
+&nbsp;     *
+&nbsp;     * Comparison rules:
+&nbsp;     * - All values are trimmed and compared case-insensitively.
+&nbsp;     * - GREATER_THAN and LESS_THAN parse both sides as doubles; non-numeric text
+&nbsp;     * safely returns {@code false} (NumberFormatException is caught and swallowed).
+&nbsp;     * - A missing or blank answer always returns {@code false}.
+&nbsp;     *
+&nbsp;     * @param condition The condition to evaluate.
+&nbsp;     * @param answers   The full map of submitted {columnName: value} pairs.
+&nbsp;     * @return {@code true} if the condition matches, {@code false} otherwise.
+&nbsp;     */
+&nbsp;    private boolean evaluateCondition(RuleConditionDTO condition, Map&lt;String, Object&gt; answers) {
+<b class="nc">&nbsp;        Object userAnswerObj = answers.get(condition.getField());</b>
+<b class="nc">&nbsp;        if (userAnswerObj == null || userAnswerObj.toString().trim().isEmpty()) {</b>
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // Normalise both sides to lowercase strings for comparison
+<b class="nc">&nbsp;        String userAnswer = userAnswerObj.toString().trim().toLowerCase();</b>
+<b class="nc">&nbsp;        String ruleValue = condition.getValue() == null ? &quot;&quot; : condition.getValue().toString().trim().toLowerCase();</b>
+&nbsp;
+&nbsp;        try {
+<b class="nc">&nbsp;            switch (condition.getOperator().name()) {</b>
+&nbsp;                case &quot;EQUALS&quot;:
+<b class="nc">&nbsp;                    return userAnswer.equals(ruleValue);</b>
+&nbsp;                case &quot;NOT_EQUALS&quot;:
+<b class="nc">&nbsp;                    return !userAnswer.equals(ruleValue);</b>
+&nbsp;                case &quot;CONTAINS&quot;:
+<b class="nc">&nbsp;                    return userAnswer.contains(ruleValue);</b>
+&nbsp;                case &quot;GREATER_THAN&quot;:
+<b class="nc">&nbsp;                    return Double.parseDouble(userAnswer) &gt; Double.parseDouble(ruleValue);</b>
+&nbsp;                case &quot;LESS_THAN&quot;:
+<b class="nc">&nbsp;                    return Double.parseDouble(userAnswer) &lt; Double.parseDouble(ruleValue);</b>
+&nbsp;                default:
+<b class="nc">&nbsp;                    return false;</b>
+&nbsp;            }
+&nbsp;        } catch (NumberFormatException e) {
+&nbsp;            // GREATER_THAN / LESS_THAN applied to non-numeric text → condition fails safely
+<b class="nc">&nbsp;            return false;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

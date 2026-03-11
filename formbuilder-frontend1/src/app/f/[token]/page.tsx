@@ -45,23 +45,32 @@ function PublicFormContent() {
         const activeVersion = versions[0];
         setOwnerId(data.ownerId);
 
-        // Map backend fields to SchemaField
-        const mappedFields: SchemaField[] = (activeVersion.fields || []).map((f: any) => {
-          let parsedOptions = f.options;
-          if (typeof f.options === 'string') {
-            try { parsedOptions = JSON.parse(f.options); } catch (e) { }
-          }
-          return {
-            id: f.id.toString(),
-            type: f.fieldType,
-            label: f.fieldLabel,
-            columnName: f.columnName,
-            defaultValue: f.defaultValue,
-            options: parsedOptions,
-            validation: { required: f.isMandatory, ...f.validationRules },
-            placeholder: ''
-          };
-        });
+        const mapFieldsRecursive = (fields: any[]): SchemaField[] => {
+          return fields.map((f: any) => {
+            let parsedOptions = f.options;
+            if (typeof f.options === 'string') {
+              try { parsedOptions = JSON.parse(f.options); } catch (e) { }
+            }
+            return {
+              id: f.id.toString(),
+              type: f.fieldType,
+              label: f.fieldLabel,
+              columnName: f.columnName,
+              defaultValue: f.defaultValue,
+              options: parsedOptions,
+              validation: { required: f.isMandatory, ...f.validationRules },
+              placeholder: '',
+              calculationFormula: f.calculationFormula,
+              helpText: f.helpText,
+              isHidden: f.isHidden,
+              isReadOnly: f.isReadOnly,
+              isDisabled: f.isDisabled,
+              children: f.children ? mapFieldsRecursive(f.children) : (f.fieldType === 'SECTION_HEADER' ? [] : undefined)
+            };
+          });
+        };
+
+        const mappedFields = mapFieldsRecursive(activeVersion.fields || []);
 
         // Map backend rules
         let parsedRules = [];
@@ -106,22 +115,26 @@ function PublicFormContent() {
               const subDataLower: Record<string, any> = {};
               Object.keys(subData).forEach(k => subDataLower[k.toLowerCase()] = subData[k]);
 
-              mappedFields.forEach(f => {
-                const colLower = f.columnName.toLowerCase();
-                const val = subDataLower[colLower];
+              const mapAnswersRecursive = (fields: SchemaField[]) => {
+                fields.forEach(f => {
+                  const colLower = f.columnName.toLowerCase();
+                  const val = subDataLower[colLower];
 
-                if (val !== undefined && val !== null) {
-                  if (f.type === 'CHECKBOX_GROUP' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
-                    try {
-                      answers[f.columnName] = typeof val === 'string' ? JSON.parse(val) : val;
-                    } catch (e) {
+                  if (val !== undefined && val !== null) {
+                    if (f.type === 'CHECKBOX_GROUP' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
+                      try {
+                        answers[f.columnName] = typeof val === 'string' ? JSON.parse(val) : val;
+                      } catch (e) {
+                        answers[f.columnName] = val;
+                      }
+                    } else {
                       answers[f.columnName] = val;
                     }
-                  } else {
-                    answers[f.columnName] = val;
                   }
-                }
-              });
+                  if (f.children) mapAnswersRecursive(f.children);
+                });
+              };
+              mapAnswersRecursive(mappedFields);
 
               setInitialAnswers(answers);
             } else if (subRes.status === 403) {

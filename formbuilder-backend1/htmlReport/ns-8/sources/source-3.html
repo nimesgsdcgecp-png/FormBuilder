@@ -1,0 +1,169 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FieldType</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.enums</a>
+</div>
+
+<h1>Coverage Summary for Class: FieldType (com.sttl.formbuilder2.model.enums)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FieldType</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (21/21)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.enums;
+&nbsp;
+&nbsp;/**
+&nbsp; * FieldType — The Type of Input a Form Field Represents
+&nbsp; *
+&nbsp; * Each value maps to:
+&nbsp; * 1. An HTML input rendered on the public form page
+&nbsp; * ({@code /f/[token]/page.tsx}).
+&nbsp; * 2. A PostgreSQL column type in {@code DynamicTableService.mapToSqlType()}.
+&nbsp; * 3. A field card shown in the builder Sidebar.
+&nbsp; *
+&nbsp; * Basic:
+&nbsp; * TEXT — Single-line text input → VARCHAR(500)
+&nbsp; * NUMERIC — Number spinner → INTEGER
+&nbsp; * DATE — Date picker → DATE
+&nbsp; * BOOLEAN — Single checkbox (true/false) → BOOLEAN
+&nbsp; * TEXTAREA — Multi-line text area → TEXT
+&nbsp; *
+&nbsp; * Choice:
+&nbsp; * DROPDOWN — Select menu with predefined options → VARCHAR(500)
+&nbsp; * RADIO — Radio button group (single select) → VARCHAR(500)
+&nbsp; * CHECKBOX_GROUP— Multiple checkboxes (multi-select) → TEXT (JSON array)
+&nbsp; *
+&nbsp; * Special:
+&nbsp; * TIME — Time picker → TIME
+&nbsp; * RATING — Star rating widget → INTEGER
+&nbsp; * SCALE — Linear numeric scale → INTEGER
+&nbsp; * FILE — File upload → VARCHAR(500) (stores URL)
+&nbsp; *
+&nbsp; * Grid:
+&nbsp; * GRID_RADIO — Matrix of radio buttons → TEXT (JSON)
+&nbsp; * GRID_CHECK — Matrix of checkboxes → TEXT (JSON)
+&nbsp; *
+&nbsp; * Lookup:
+&nbsp; * LOOKUP — Populates choices from another published form&#39;s submission data
+&nbsp; * at runtime via {@code DynamicTableService.getColumnValues()}.
+&nbsp; * Stored as → VARCHAR(500)
+&nbsp; */
+<b class="fc">&nbsp;public enum FieldType {</b>
+<b class="fc">&nbsp;    TEXT,</b>
+<b class="fc">&nbsp;    NUMERIC,</b>
+<b class="fc">&nbsp;    DATE,</b>
+<b class="fc">&nbsp;    BOOLEAN,</b>
+<b class="fc">&nbsp;    TEXTAREA,</b>
+&nbsp;
+<b class="fc">&nbsp;    DROPDOWN,</b>
+<b class="fc">&nbsp;    RADIO,</b>
+<b class="fc">&nbsp;    CHECKBOX_GROUP,</b>
+&nbsp;
+<b class="fc">&nbsp;    TIME,</b>
+<b class="fc">&nbsp;    RATING,</b>
+<b class="fc">&nbsp;    SCALE,</b>
+&nbsp;
+<b class="fc">&nbsp;    FILE,</b>
+&nbsp;
+<b class="fc">&nbsp;    GRID_RADIO,</b>
+<b class="fc">&nbsp;    GRID_CHECK,</b>
+&nbsp;
+<b class="fc">&nbsp;    LOOKUP,</b>
+<b class="fc">&nbsp;    CALCULATED,</b>
+<b class="fc">&nbsp;    SECTION_HEADER,</b>
+<b class="fc">&nbsp;    INFO_LABEL,</b>
+<b class="fc">&nbsp;    PAGE_BREAK,</b>
+<b class="fc">&nbsp;    DATE_TIME,</b>
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

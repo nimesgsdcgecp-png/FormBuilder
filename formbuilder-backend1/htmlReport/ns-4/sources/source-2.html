@@ -1,0 +1,153 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormRuleDTO</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.dto.internal</a>
+</div>
+
+<h1>Coverage Summary for Class: FormRuleDTO (com.sttl.formbuilder2.dto.internal)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormRuleDTO</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/46)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.internal;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.ConditionLogic;
+&nbsp;import lombok.Data;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormRuleDTO — Internal Rule Representation for the Rule Engine
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Used exclusively by {@code SubmissionService} and {@code RuleEngineService}
+&nbsp; * to deserialize the JSON rules string stored in
+&nbsp; * {@link com.sttl.formbuilder2.model.entity.FormVersion#rules} into Java
+&nbsp; * objects
+&nbsp; * at submission time.
+&nbsp; *
+&nbsp; * Why it&#39;s in {@code dto.internal} (not {@code dto.request}):
+&nbsp; * The request-facing equivalent is
+&nbsp; * {@link com.sttl.formbuilder2.dto.request.FormRuleRequestDTO}
+&nbsp; * which is used when the builder saves a form. This DTO is used ONLY for
+&nbsp; * reading
+&nbsp; * rules back from the database — never for accepting HTTP input directly.
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * FormVersion.rules (JSON TEXT in DB)
+&nbsp; * → ObjectMapper.readValue(rules, List&lt;FormRuleDTO&gt;) in SubmissionService
+&nbsp; * → RuleEngineService.validateSubmission(rules, answers)
+&nbsp; * → RuleEngineService.executePostSubmissionWorkflows(rules, answers)
+&nbsp; */
+<b class="nc">&nbsp;@Data</b>
+&nbsp;public class FormRuleDTO {
+&nbsp;    private String id;
+&nbsp;    private String name;
+&nbsp;    private ConditionLogic conditionLogic;
+&nbsp;    private List&lt;RuleConditionEntryDTO&gt; conditions;
+&nbsp;    private List&lt;RuleActionDTO&gt; actions;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

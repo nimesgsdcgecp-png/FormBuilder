@@ -17,10 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * SubmissionService — Business Logic for Form Submissions
@@ -106,13 +104,15 @@ public class SubmissionService {
 
         boolean isDraft = "DRAFT".equalsIgnoreCase(status);
 
+        // Recalculate formulas for calculated fields
+        recalculateCalculatedFields(submissionData, activeVersion.getFields());
+
         // 2. Fire the Rule Engine before saving (Skip if DRAFT)
         if (!isDraft && activeVersion.getRules() != null && !activeVersion.getRules().equals("[]")) {
             try {
                 Object rawRules = objectMapper.readValue(activeVersion.getRules(), Object.class);
                 List<FormRuleDTO> rules;
-                if (rawRules instanceof Map) {
-                    Map<String, Object> rulesMap = (Map<String, Object>) rawRules;
+                if (rawRules instanceof Map<?, ?> rulesMap) {
                     rules = objectMapper.convertValue(rulesMap.get("logic"), new TypeReference<List<FormRuleDTO>>() {
                     });
                 } else {
@@ -189,21 +189,90 @@ public class SubmissionService {
     }
 
     /**
-     * Returns a list of all submission rows for a form.
-     *
-     * @param id The internal form ID.
-     * @return List containing the map representations of rows.
+     * Returns a paginated, sorted, and filtered list of submission rows.
      */
-    public List<Map<String, Object>> getSubmissions(Long id) {
+    public Map<String, Object> getSubmissions(Long id, int page, int size, String sortBy, String sortOrder, Map<String, String> filters) {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         String tableName = form.getTargetTableName();
+        
+        // 1. Validate sortBy column to prevent SQL injection
+        validateColumnName(sortBy, form);
+        String direction = "DESC".equalsIgnoreCase(sortOrder) ? "DESC" : "ASC";
 
-        // Return all rows, ordered securely by submitted_at DESC generally
-        String dataSql = "SELECT * FROM " + tableName + " ORDER BY \"submitted_at\" DESC";
+        // 2. Build WHERE clause from filters
+        StringBuilder whereClause = new StringBuilder(" WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        
+        if (filters != null) {
+            // Handle Global Search
+            String globalVal = filters.get("q");
+            if (globalVal != null && !globalVal.isBlank()) {
+                whereClause.append(" AND (");
+                List<String> searchable = new ArrayList<>(List.of("submission_id", "submission_status"));
+                searchable.addAll(form.getVersions().get(0).getFields().stream()
+                        .map(FormField::getColumnName)
+                        .collect(Collectors.toList()));
+                
+                for (int i = 0; i < searchable.size(); i++) {
+                    whereClause.append("CAST(").append(searchable.get(i)).append(" AS TEXT) ILIKE ?");
+                    args.add("%" + globalVal + "%");
+                    if (i < searchable.size() - 1) whereClause.append(" OR ");
+                }
+                whereClause.append(")");
+            }
 
-        return jdbcTemplate.queryForList(dataSql);
+            // Handle Specific Column Filters
+            for (Map.Entry<String, String> entry : filters.entrySet()) {
+                String col = entry.getKey();
+                String val = entry.getValue();
+                if ("q".equals(col)) continue;
+                
+                if (val != null && !val.isBlank()) {
+                    validateColumnName(col, form);
+                    whereClause.append(" AND CAST(").append(col).append(" AS TEXT) ILIKE ?");
+                    args.add("%" + val + "%");
+                }
+            }
+        }
+
+        // 3. Get total count for pagination metadata
+        String countSql = "SELECT COUNT(*) FROM " + tableName + whereClause;
+        Long total = jdbcTemplate.queryForObject(countSql, Long.class, args.toArray());
+        long totalCount = (total != null) ? total : 0L;
+
+        // 4. Fetch data with LIMIT and OFFSET
+        int offset = page * size;
+        String dataSql = "SELECT * FROM " + tableName + whereClause + 
+                         " ORDER BY \"" + sortBy + "\" " + direction + 
+                         " LIMIT ? OFFSET ?";
+        
+        List<Object> dataArgs = new ArrayList<>(args);
+        dataArgs.add(size);
+        dataArgs.add(offset);
+        
+        List<Map<String, Object>> content = jdbcTemplate.queryForList(dataSql, dataArgs.toArray());
+
+        return Map.of(
+            "content", content,
+            "totalElements", totalCount,
+            "totalPages", (int) Math.ceil((double) totalCount / size),
+            "size", size,
+            "number", page
+        );
+    }
+
+    private void validateColumnName(String columnName, Form form) {
+        List<String> systemCols = List.of("submitted_at", "submission_id", "submission_status", "id");
+        if (systemCols.contains(columnName)) return;
+
+        boolean isValid = form.getVersions().get(0).getFields().stream()
+                .anyMatch(f -> columnName.equals(f.getColumnName()));
+        
+        if (!isValid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid column name for dynamic query: " + columnName);
+        }
     }
 
     /**
@@ -242,6 +311,9 @@ public class SubmissionService {
         Form form = formRepository.findById(formId).orElseThrow(() -> new RuntimeException("Form not found"));
         FormVersion activeVersion = form.getVersions().get(0);
         String tableName = form.getTargetTableName();
+
+        // Recalculate formulas for calculated fields
+        recalculateCalculatedFields(submissionData, activeVersion.getFields());
 
         StringBuilder sql = new StringBuilder("UPDATE " + tableName + " SET ");
         List<Object> arguments = new ArrayList<>();
@@ -395,5 +467,123 @@ public class SubmissionService {
 
         // 3. Perform the update
         return updateSubmission(form.getId(), submissionId, submissionData, status);
+    }
+
+    /**
+     * Server-side evaluation of calculation formulas to ensure data integrity.
+     */
+    private void recalculateCalculatedFields(Map<String, Object> data, List<FormField> fields) {
+        for (FormField field : fields) {
+            String formula = field.getCalculationFormula();
+            if (formula != null && !formula.isBlank()) {
+                try {
+                    String evaluatedFormula = formula;
+                    // Replace variables with values from data
+                    for (FormField dep : fields) {
+                        if (dep.getColumnName() != null && formula.contains(dep.getColumnName())) {
+                            Object val = data.getOrDefault(dep.getColumnName(), 0);
+                            double numVal = 0;
+                            if (val instanceof Number)
+                                numVal = ((Number) val).doubleValue();
+                            else if (val instanceof String) {
+                                try {
+                                    numVal = Double.parseDouble((String) val);
+                                } catch (Exception ignored) {
+                                }
+                            }
+                            // Replace whole word to avoid partial matching
+                            evaluatedFormula = evaluatedFormula.replaceAll("\\b" + dep.getColumnName() + "\\b",
+                                    String.valueOf(numVal));
+                        }
+                    }
+
+                    // Sanitize and evaluate
+                    if (evaluatedFormula.matches("[0-9+\\-*/().\\s]+")) {
+                        double result = SimpleMathEvaluator.evaluate(evaluatedFormula);
+                        data.put(field.getColumnName(), Math.round(result * 100.0) / 100.0);
+                    }
+                } catch (Exception e) {
+                    System.err.println(
+                            "Backend calculation failed for field " + field.getColumnName() + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * A very basic math evaluator for +, -, *, / and parentheses.
+     */
+    private static class SimpleMathEvaluator {
+        public static double evaluate(String expression) {
+            return new Object() {
+                int pos = -1, ch;
+
+                void nextChar() {
+                    ch = (++pos < expression.length()) ? expression.charAt(pos) : -1;
+                }
+
+                boolean eat(int charToEat) {
+                    while (ch == ' ')
+                        nextChar();
+                    if (ch == charToEat) {
+                        nextChar();
+                        return true;
+                    }
+                    return false;
+                }
+
+                double parse() {
+                    nextChar();
+                    double x = parseExpression();
+                    if (pos < expression.length())
+                        throw new RuntimeException("Unexpected: " + (char) ch);
+                    return x;
+                }
+
+                double parseExpression() {
+                    double x = parseTerm();
+                    for (;;) {
+                        if (eat('+'))
+                            x += parseTerm(); // addition
+                        else if (eat('-'))
+                            x -= parseTerm(); // subtraction
+                        else
+                            return x;
+                    }
+                }
+
+                double parseTerm() {
+                    double x = parseFactor();
+                    for (;;) {
+                        if (eat('*'))
+                            x *= parseFactor(); // multiplication
+                        else if (eat('/'))
+                            x /= parseFactor(); // division
+                        else
+                            return x;
+                    }
+                }
+
+                double parseFactor() {
+                    if (eat('+'))
+                        return parseFactor(); // unary plus
+                    if (eat('-'))
+                        return -parseFactor(); // unary minus
+                    double x;
+                    int startPos = this.pos;
+                    if (eat('(')) { // parentheses
+                        x = parseExpression();
+                        eat(')');
+                    } else if ((ch >= '0' && ch <= '9') || ch == '.') { // numbers
+                        while ((ch >= '0' && ch <= '9') || ch == '.')
+                            nextChar();
+                        x = Double.parseDouble(expression.substring(startPos, this.pos));
+                    } else {
+                        throw new RuntimeException("Unexpected: " + (char) ch);
+                    }
+                    return x;
+                }
+            }.parse();
+        }
     }
 }

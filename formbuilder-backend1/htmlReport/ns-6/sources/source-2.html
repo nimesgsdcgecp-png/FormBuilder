@@ -1,0 +1,202 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormFieldResponseDTO</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.dto.response</a>
+</div>
+
+<h1>Coverage Summary for Class: FormFieldResponseDTO (com.sttl.formbuilder2.dto.response)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormFieldResponseDTO</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/94)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormFieldResponseDTO$FormFieldResponseDTOBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/94)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.response;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.FieldType;
+&nbsp;import lombok.Builder;
+&nbsp;import lombok.Data;
+&nbsp;
+&nbsp;import java.util.Map;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormFieldResponseDTO — A Single Field as Returned in an API Response
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Represents the serialised view of a
+&nbsp; * {@link com.sttl.formbuilder2.model.entity.FormField}
+&nbsp; * entity, embedded inside a {@link FormVersionResponseDTO}. Consumed by both
+&nbsp; * the
+&nbsp; * builder (to reload existing fields) and the public form page (to render
+&nbsp; * inputs).
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * FormService.toDetailDTO() maps each FormField entity → FormFieldResponseDTO
+&nbsp; * → embedded in FormVersionResponseDTO → embedded in FormDetailResponseDTO
+&nbsp; * → consumed by:
+&nbsp; * - Builder page: restores the canvas field list
+&nbsp; * - Public page: renders each field as the correct HTML input type
+&nbsp; * - Responses page: builds table column headers
+&nbsp; *
+&nbsp; * Key fields:
+&nbsp; * - {@code fieldType} — determines how the field is rendered (TEXT, DATE, etc.)
+&nbsp; * - {@code columnName} — SQL column name; used as the key when building the
+&nbsp; * submission JSON payload.
+&nbsp; * - {@code validationRules} — deserialized JSONB constraints (required, min,
+&nbsp; * max, etc.)
+&nbsp; * - {@code options} — choices for Dropdown/Radio, grid config, or lookup
+&nbsp; * config.
+&nbsp; */
+<b class="pc">&nbsp;@Data</b>
+<b class="fc">&nbsp;@Builder</b>
+&nbsp;public class FormFieldResponseDTO {
+&nbsp;    private Long id;
+&nbsp;    private String fieldLabel;
+&nbsp;    private String columnName;
+&nbsp;    private FieldType fieldType;
+&nbsp;    private Boolean isMandatory;
+&nbsp;    private String defaultValue;
+&nbsp;    private Object options;
+&nbsp;    private Map&lt;String, Object&gt; validationRules;
+&nbsp;    private Integer ordinalPosition;
+&nbsp;    private String calculationFormula;
+&nbsp;    private Boolean isHidden;
+&nbsp;    private java.util.List&lt;FormFieldResponseDTO&gt; children;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

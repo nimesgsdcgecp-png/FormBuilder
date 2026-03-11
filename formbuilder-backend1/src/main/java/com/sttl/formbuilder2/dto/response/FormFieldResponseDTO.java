@@ -46,4 +46,10 @@ public class FormFieldResponseDTO {
     private Object options;
     private Map<String, Object> validationRules;
     private Integer ordinalPosition;
+    private String calculationFormula;
+    private String helpText;
+    private Boolean isHidden;
+    private Boolean isReadOnly;
+    private Boolean isDisabled;
+    private java.util.List<FormFieldResponseDTO> children;
 }

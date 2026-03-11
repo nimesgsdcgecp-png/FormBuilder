@@ -57,13 +57,92 @@ interface FormState {
   setAllowEditResponse: (allow: boolean) => void;
 
   // Field actions — called from Canvas, SortableField, PropertiesPanel
-  addField: (type: FieldType) => void;
+  addField: (type: FieldType, parentId?: string | null) => void;
+  insertField: (type: FieldType, index: number, parentId?: string | null) => void;
   removeField: (id: string) => void;
   updateField: (id: string, updates: Partial<FormField>) => void;
   selectField: (id: string | null) => void;
-  reorderFields: (newOrder: FormField[]) => void;
+  reorderFields: (newOrder: FormField[], parentId?: string | null) => void;
   setThemePanelOpen: (isOpen: boolean) => void;
 }
+
+/** Recursive helper to update a field within a tree of fields */
+const updateFieldInTree = (fields: FormField[], id: string, updates: Partial<FormField>): FormField[] => {
+  return fields.map(field => {
+    if (field.id === id) {
+      return { ...field, ...updates };
+    }
+    if (field.children && field.children.length > 0) {
+      return { ...field, children: updateFieldInTree(field.children, id, updates) };
+    }
+    return field;
+  });
+};
+
+/** Recursive helper to find a field in a tree */
+const findFieldInTree = (fields: FormField[], id: string): FormField | undefined => {
+  for (const field of fields) {
+    if (field.id === id) return field;
+    if (field.children) {
+      const found = findFieldInTree(field.children, id);
+      if (found) return found;
+    }
+  }
+  return undefined;
+};
+
+/** Recursive helper to remove a field from a tree */
+const removeFieldFromTree = (fields: FormField[], id: string): FormField[] => {
+  return fields
+    .filter(f => f.id !== id)
+    .map(f => ({
+      ...f,
+      children: f.children ? removeFieldFromTree(f.children, id) : undefined
+    }));
+};
+
+/** Recursive helper to insert a field into a tree at a specific parent */
+const insertFieldIntoTree = (fields: FormField[], newField: FormField, index: number, parentId?: string | null): FormField[] => {
+  if (!parentId) {
+    const newFields = [...fields];
+    newFields.splice(index, 0, newField);
+    return newFields;
+  }
+  return fields.map(field => {
+    if (field.id === parentId) {
+      const newChildren = [...(field.children || [])];
+      newChildren.splice(index, 0, newField);
+      return { ...field, children: newChildren };
+    }
+    if (field.children) {
+      return { ...field, children: insertFieldIntoTree(field.children, newField, index, parentId) };
+    }
+    return field;
+  });
+};
+
+/** Recursive helper to apply reorder to a specific container in the tree */
+const reorderInTree = (fields: FormField[], newOrder: FormField[], parentId?: string | null): FormField[] => {
+  if (!parentId) return newOrder;
+  return fields.map(field => {
+    if (field.id === parentId) {
+      return { ...field, children: newOrder };
+    }
+    if (field.children) {
+      return { ...field, children: reorderInTree(field.children, newOrder, parentId) };
+    }
+    return field;
+  });
+};
+
+/** Recursive helper to find all field columnNames in a tree */
+const getAllColumnNames = (fields: FormField[], names: string[] = []) => {
+  fields.forEach(f => {
+    names.push(f.columnName);
+    if (f.children) getAllColumnNames(f.children, names);
+  });
+  return names;
+};
 
 export const useFormStore = create<FormState>((set) => ({
 
@@ -144,24 +223,48 @@ export const useFormStore = create<FormState>((set) => ({
     set((state) => ({ schema: { ...state.schema, themeFont: font } })),
 
   /**
-   * Adds a new field of the given type to the end of the field list.
-   * A UUID is generated for the client-side ID (replaced by the DB ID on reload).
-   * A placeholder columnName uses the current timestamp to be unique enough
-   * before the user types a label.
-   * Automatically selects the new field so the PropertiesPanel opens immediately.
+   * Adds a new field of the given type to the end of the field list or a parent's children.
    */
-  addField: (type) =>
+  addField: (type, parentId = null) =>
     set((state) => {
       const newField: FormField = {
         id: uuidv4(),
         type,
         label: `New ${type} Field`,
-        columnName: `field_${Date.now()}`, // Placeholder — replaced when user edits the label
+        columnName: `field_${Date.now()}`,
         validation: { required: false },
+        children: type === 'SECTION_HEADER' ? [] : undefined,
       };
+
+      const updatedFields = insertFieldIntoTree(state.schema.fields, newField,
+        parentId ? (findFieldInTree(state.schema.fields, parentId)?.children?.length || 0) : state.schema.fields.length,
+        parentId);
+
       return {
-        schema: { ...state.schema, fields: [...state.schema.fields, newField] },
-        selectedFieldId: newField.id  // Auto-select the new field
+        schema: { ...state.schema, fields: updatedFields },
+        selectedFieldId: newField.id
+      };
+    }),
+
+  /**
+   * Inserts a new field of the given type at a specific index within a parent.
+   */
+  insertField: (type, index, parentId = null) =>
+    set((state) => {
+      const newField: FormField = {
+        id: uuidv4(),
+        type,
+        label: `New ${type} Field`,
+        columnName: `field_${Date.now()}`,
+        validation: { required: false },
+        children: type === 'SECTION_HEADER' ? [] : undefined,
+      };
+
+      const updatedFields = insertFieldIntoTree(state.schema.fields, newField, index, parentId);
+
+      return {
+        schema: { ...state.schema, fields: updatedFields },
+        selectedFieldId: newField.id
       };
     }),
 
@@ -170,42 +273,34 @@ export const useFormStore = create<FormState>((set) => ({
     set((state) => ({
       schema: {
         ...state.schema,
-        fields: state.schema.fields.filter((f) => f.id !== id),
+        fields: removeFieldFromTree(state.schema.fields, id),
       },
       selectedFieldId: null,
     })),
 
   /**
-   * Updates a field with partial changes. Two important side effects:
-   *
-   *   1. columnName sync: If the label is being changed, automatically re-derives
-   *      the columnName using the same algorithm as the backend
-   *      (lowercase → replace non-alphanums with "_" → strip leading/trailing "_").
-   *
-   *   2. Rules cascade: If the columnName changed, scans ALL existing rules and
-   *      replaces the old columnName in conditions and actions with the new one.
-   *      This prevents "ghost references" in rules after a field rename.
+   * Updates a field with partial changes. Handles recursive search and rules cascade.
    */
   updateField: (id, updates) => set((state) => {
-    const fieldToUpdate = state.schema.fields.find(f => f.id === id);
+    const fieldToUpdate = findFieldInTree(state.schema.fields, id);
     if (!fieldToUpdate) return state;
 
     const oldColumnName = fieldToUpdate.columnName;
     let newColumnName = oldColumnName;
 
-    // Sync columnName with label (matches backend FormService.mapFields() logic)
     if (updates.label !== undefined) {
       newColumnName = updates.label
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')  // Replace spaces/special chars with underscores
-        .replace(/(^_|_$)/g, '');      // Remove leading/trailing underscores
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/(^_|_$)/g, '');
     }
 
-    const updatedFields = state.schema.fields.map(field =>
-      field.id === id ? { ...field, ...updates, columnName: newColumnName || field.columnName } : field
-    );
+    let updatedFields = updateFieldInTree(state.schema.fields, id, {
+      ...updates,
+      columnName: newColumnName || fieldToUpdate.columnName
+    });
 
-    // Auto-update any rules that reference the old columnName
+    // Rules cascade
     let updatedRules = state.schema.rules || [];
     if (newColumnName && oldColumnName && newColumnName !== oldColumnName) {
       updatedRules = updatedRules.map(rule => {
@@ -217,6 +312,24 @@ export const useFormStore = create<FormState>((set) => ({
         );
         return { ...rule, conditions: newConditions, actions: newActions };
       });
+
+      // Recursive formula update
+      const updateFormulas = (fields: FormField[]): FormField[] => {
+        return fields.map(f => {
+          let updatedF = { ...f };
+          if (f.calculationFormula) {
+            updatedF.calculationFormula = f.calculationFormula.replaceAll(
+              new RegExp(`\\b${oldColumnName}\\b`, 'g'),
+              newColumnName
+            );
+          }
+          if (f.children) {
+            updatedF.children = updateFormulas(f.children);
+          }
+          return updatedF;
+        });
+      };
+      updatedFields = updateFormulas(updatedFields);
     }
 
     return {
@@ -228,13 +341,18 @@ export const useFormStore = create<FormState>((set) => ({
     };
   }),
 
-  /** Sets or clears the selected field. The PropertiesPanel reads this to know what to display. */
+  /** Sets or clears the selected field. */
   selectField: (id) => set({ selectedFieldId: id, isThemePanelOpen: false }),
 
   /** Toggle theme panel */
-  setThemePanelOpen: (isOpen) => set({ isThemePanelOpen: isOpen, selectedFieldId: isOpen ? null : null }),
+  setThemePanelOpen: (isOpen) => set({ isThemePanelOpen: isOpen, selectedFieldId: null }),
 
-  /** Replaces the entire field list with a reordered copy — called after @dnd-kit/sortable's arrayMove. */
-  reorderFields: (newOrder) =>
-    set((state) => ({ schema: { ...state.schema, fields: newOrder } })),
+  /** Replaces the entire field list or children of a parent with a reordered copy. */
+  reorderFields: (newOrder, parentId = null) =>
+    set((state) => ({
+      schema: {
+        ...state.schema,
+        fields: reorderInTree(state.schema.fields, newOrder, parentId),
+      },
+    })),
 }));

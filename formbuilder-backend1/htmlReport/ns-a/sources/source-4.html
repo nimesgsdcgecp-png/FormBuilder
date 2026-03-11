@@ -1,0 +1,740 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > SubmissionService</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
+</div>
+
+<h1>Coverage Summary for Class: SubmissionService (com.sttl.formbuilder2.service)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">SubmissionService</td>
+<td class="coverageStat">
+  <span class="percent">
+    46.2%
+  </span>
+  <span class="absValue">
+    (6/13)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    20.9%
+  </span>
+  <span class="absValue">
+    (18/86)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    38.7%
+  </span>
+  <span class="absValue">
+    (53/137)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">SubmissionService$$SpringCGLIB$$0</td>
+  </tr>
+  <tr>
+    <td class="name">SubmissionService$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">SubmissionService$2</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">SubmissionService$SimpleMathEvaluator</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/2)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">SubmissionService$SimpleMathEvaluator$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/34)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/40)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    30.4%
+  </span>
+  <span class="absValue">
+    (7/23)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    15%
+  </span>
+  <span class="absValue">
+    (18/120)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    29.8%
+  </span>
+  <span class="absValue">
+    (54/181)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.core.type.TypeReference;
+&nbsp;import com.fasterxml.jackson.databind.ObjectMapper;
+&nbsp;import com.sttl.formbuilder2.dto.internal.FormRuleDTO;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormField;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormVersion;
+&nbsp;import com.sttl.formbuilder2.repository.FormRepository;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.jdbc.core.JdbcTemplate;
+&nbsp;import org.springframework.stereotype.Service;
+&nbsp;import org.springframework.transaction.annotation.Transactional;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import org.springframework.http.HttpStatus;
+&nbsp;import org.springframework.security.core.context.SecurityContextHolder;
+&nbsp;import org.springframework.web.server.ResponseStatusException;
+&nbsp;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Map;
+&nbsp;import java.util.UUID;
+&nbsp;
+&nbsp;/**
+&nbsp; * SubmissionService — Business Logic for Form Submissions
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Handles the full lifecycle of a form submission: inserting, reading,
+&nbsp; * updating,
+&nbsp; * and deleting rows in the dynamic submission tables managed by
+&nbsp; * {@code DynamicTableService}. Also integrates the rule engine before inserting
+&nbsp; * new submissions.
+&nbsp; *
+&nbsp; * Key design decisions:
+&nbsp; * - Uses {@code JdbcTemplate} directly (not JPA) because the submission tables
+&nbsp; * have dynamic schemas that vary per form — JPA requires compile-time entity
+&nbsp; * definitions, which is incompatible with runtime DDL.
+&nbsp; * - The rule engine is invoked BEFORE the INSERT. Validation errors from the
+&nbsp; * engine
+&nbsp; * throw a {@code ResponseStatusException} (HTTP 400) which propagates up and
+&nbsp; * prevents the data from being saved.
+&nbsp; * - Complex values (lists, maps from multi-select / grid fields) are serialised
+&nbsp; * to JSON strings via Jackson&#39;s {@code ObjectMapper} before insertion, since
+&nbsp; * submission table columns are all simple SQL types.
+&nbsp; *
+&nbsp; * Dependencies:
+&nbsp; * - {@code FormRepository} — to load form metadata (table name, field
+&nbsp; * definitions).
+&nbsp; * - {@code JdbcTemplate} — for raw SQL DML against dynamic submission tables.
+&nbsp; * - {@code ObjectMapper} — for deserialising stored rules JSON and serialising
+&nbsp; * complex field values (e.g. checkbox arrays).
+&nbsp; * - {@code RuleEngineService} — validates and executes post-submission
+&nbsp; * workflows.
+&nbsp; */
+&nbsp;@Service
+<b class="fc">&nbsp;@RequiredArgsConstructor</b>
+&nbsp;public class SubmissionService {
+&nbsp;
+&nbsp;    private final FormRepository formRepository;
+&nbsp;    private final JdbcTemplate jdbcTemplate;
+&nbsp;    private final ObjectMapper objectMapper; // For rule JSON deserialisation and complex value serialisation
+&nbsp;    private final RuleEngineService ruleEngineService;
+&nbsp;    private final UserRepository userRepository;
+&nbsp;
+&nbsp;    private AppUser getCurrentUser() {
+&nbsp;        try {
+<b class="nc">&nbsp;            String username = SecurityContextHolder.getContext().getAuthentication().getName();</b>
+<b class="nc">&nbsp;            return userRepository.findByUsername(username).orElse(null);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return null;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    private boolean isOwner(Form form) {
+<b class="nc">&nbsp;        AppUser user = getCurrentUser();</b>
+<b class="nc">&nbsp;        return user != null &amp;&amp; form.getOwner() != null &amp;&amp; form.getOwner().getId().equals(user.getId());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Inserts a new submission row into the form&#39;s dynamic submission table.
+&nbsp;     *
+&nbsp;     * Steps:
+&nbsp;     * 1. Load the form and its active version (index 0 = latest published version).
+&nbsp;     * 2. If the version has logic rules, deserialise them and run the rule engine:
+&nbsp;     * - {@code validateSubmission} throws HTTP 400 if a REQUIRE or VALIDATION_ERROR
+&nbsp;     * action is triggered, blocking the save.
+&nbsp;     * - {@code executePostSubmissionWorkflows} runs AFTER the (eventual) save
+&nbsp;     * trigger (e.g. SEND_EMAIL).
+&nbsp;     * 3. Build the INSERT SQL dynamically using only the columns defined in the
+&nbsp;     * current form version. Unknown keys in {@code submissionData} are ignored.
+&nbsp;     * 4. Serialise complex values (List/Map from checkboxes/grids) to JSON strings.
+&nbsp;     * 5. Execute INSERT … RETURNING submission_id to get the generated UUID.
+&nbsp;     *
+&nbsp;     * @param formId         The internal form ID.
+&nbsp;     * @param submissionData Map of {columnName: value} pairs from the respondent.
+&nbsp;     * @return The UUID of the newly created submission row.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public UUID submitData(Long formId, Map&lt;String, Object&gt; submissionData, String status) {
+&nbsp;        // 1. Fetch Form Metadata
+<b class="fc">&nbsp;        Form form = formRepository.findById(formId)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="fc">&nbsp;        FormVersion activeVersion = form.getVersions().get(0);</b>
+&nbsp;
+<b class="fc">&nbsp;        boolean isDraft = &quot;DRAFT&quot;.equalsIgnoreCase(status);</b>
+&nbsp;
+&nbsp;        // Recalculate formulas for calculated fields
+<b class="fc">&nbsp;        recalculateCalculatedFields(submissionData, activeVersion.getFields());</b>
+&nbsp;
+&nbsp;        // 2. Fire the Rule Engine before saving (Skip if DRAFT)
+<b class="pc">&nbsp;        if (!isDraft &amp;&amp; activeVersion.getRules() != null &amp;&amp; !activeVersion.getRules().equals(&quot;[]&quot;)) {</b>
+&nbsp;            try {
+<b class="fc">&nbsp;                Object rawRules = objectMapper.readValue(activeVersion.getRules(), Object.class);</b>
+&nbsp;                List&lt;FormRuleDTO&gt; rules;
+<b class="pc">&nbsp;                if (rawRules instanceof Map&lt;?, ?&gt; rulesMap) {</b>
+<b class="fc">&nbsp;                    rules = objectMapper.convertValue(rulesMap.get(&quot;logic&quot;), new TypeReference&lt;List&lt;FormRuleDTO&gt;&gt;() {</b>
+&nbsp;                    });
+&nbsp;                } else {
+<b class="nc">&nbsp;                    rules = objectMapper.convertValue(rawRules, new TypeReference&lt;List&lt;FormRuleDTO&gt;&gt;() {</b>
+&nbsp;                    });
+&nbsp;                }
+&nbsp;
+&nbsp;                // Validate — throws HTTP 400 on REQUIRE / VALIDATION_ERROR violations
+<b class="fc">&nbsp;                ruleEngineService.validateSubmission(rules, submissionData);</b>
+&nbsp;                // Post-submission workflows (e.g. SEND_EMAIL) — only reached if validation
+&nbsp;                // passed
+<b class="fc">&nbsp;                ruleEngineService.executePostSubmissionWorkflows(rules, submissionData);</b>
+&nbsp;            } catch (ResponseStatusException e) {
+&nbsp;                // Let validation errors propagate to block the save
+&nbsp;                throw e;
+&nbsp;            } catch (Exception e) {
+&nbsp;                // Only swallow JSON parsing failures, not rule violations
+<b class="nc">&nbsp;                System.err.println(&quot;Failed to parse rules from DB: &quot; + e.getMessage());</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        String tableName = form.getTargetTableName();</b>
+&nbsp;
+<b class="fc">&nbsp;        StringBuilder sql = new StringBuilder(&quot;INSERT INTO &quot; + tableName + &quot; (&quot;);</b>
+<b class="fc">&nbsp;        StringBuilder placeholders = new StringBuilder(&quot; VALUES (&quot;);</b>
+<b class="fc">&nbsp;        List&lt;Object&gt; arguments = new ArrayList&lt;&gt;();</b>
+&nbsp;
+<b class="fc">&nbsp;        boolean hasData = false;</b>
+&nbsp;
+&nbsp;        // Add status column
+<b class="fc">&nbsp;        sql.append(&quot;submission_status, &quot;);</b>
+<b class="fc">&nbsp;        placeholders.append(&quot;?, &quot;);</b>
+<b class="pc">&nbsp;        arguments.add(status != null ? status.toUpperCase() : &quot;FINAL&quot;);</b>
+&nbsp;
+&nbsp;        // 3. Loop through defined fields and build the INSERT statement
+<b class="fc">&nbsp;        for (FormField field : activeVersion.getFields()) {</b>
+<b class="fc">&nbsp;            String colName = field.getColumnName();</b>
+&nbsp;
+<b class="pc">&nbsp;            if (submissionData.containsKey(colName)) {</b>
+<b class="fc">&nbsp;                sql.append(colName).append(&quot;, &quot;);</b>
+<b class="fc">&nbsp;                placeholders.append(&quot;?, &quot;);</b>
+&nbsp;
+<b class="fc">&nbsp;                Object rawValue = submissionData.get(colName);</b>
+&nbsp;
+&nbsp;                // 4. Serialise List/Map/Array values (multi-select, grid) to a JSON string
+<b class="pc">&nbsp;                if (rawValue instanceof List || rawValue instanceof Map || rawValue instanceof Object[]) {</b>
+&nbsp;                    try {
+<b class="nc">&nbsp;                        arguments.add(objectMapper.writeValueAsString(rawValue));</b>
+&nbsp;                    } catch (Exception e) {
+<b class="nc">&nbsp;                        arguments.add(&quot;[]&quot;); // Fallback if conversion fails</b>
+&nbsp;                    }
+&nbsp;                } else {
+<b class="fc">&nbsp;                    arguments.add(rawValue);</b>
+&nbsp;                }
+&nbsp;
+<b class="fc">&nbsp;                hasData = true;</b>
+&nbsp;
+<b class="pc">&nbsp;            } else if (field.getIsMandatory() &amp;&amp; !isDraft) {</b>
+<b class="nc">&nbsp;                throw new RuntimeException(&quot;Missing required field: &quot; + field.getFieldLabel());</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="pc">&nbsp;        if (!hasData) {</b>
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;No data provided to submit!&quot;);</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // Remove trailing comma+space from both clauses
+<b class="fc">&nbsp;        sql.setLength(sql.length() - 2);</b>
+<b class="fc">&nbsp;        placeholders.setLength(placeholders.length() - 2);</b>
+&nbsp;
+&nbsp;        // 5. Execute and return the generated UUID
+<b class="fc">&nbsp;        sql.append(&quot;)&quot;).append(placeholders).append(&quot;) RETURNING submission_id&quot;);</b>
+<b class="fc">&nbsp;        return jdbcTemplate.queryForObject(sql.toString(), UUID.class, arguments.toArray());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Returns a list of all submission rows for a form.
+&nbsp;     *
+&nbsp;     * @param id The internal form ID.
+&nbsp;     * @return List containing the map representations of rows.
+&nbsp;     */
+&nbsp;    public List&lt;Map&lt;String, Object&gt;&gt; getSubmissions(Long id) {
+<b class="fc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="fc">&nbsp;        String tableName = form.getTargetTableName();</b>
+&nbsp;
+&nbsp;        // Return all rows, ordered securely by submitted_at DESC generally
+<b class="fc">&nbsp;        String dataSql = &quot;SELECT * FROM &quot; + tableName + &quot; ORDER BY \&quot;submitted_at\&quot; DESC&quot;;</b>
+&nbsp;
+<b class="fc">&nbsp;        return jdbcTemplate.queryForList(dataSql);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Retrieves a single submission row by its UUID.
+&nbsp;     * Used by the public form page when a respondent clicks &quot;Edit your response&quot;
+&nbsp;     * to pre-fill their previous answers.
+&nbsp;     *
+&nbsp;     * @param formId       The internal form ID (used to resolve the table name).
+&nbsp;     * @param submissionId The UUID of the submission to fetch.
+&nbsp;     * @return A single row as a map: {columnName → value}.
+&nbsp;     */
+&nbsp;    public Map&lt;String, Object&gt; getSubmissionById(Long formId, UUID submissionId) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(formId).orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+<b class="nc">&nbsp;        String tableName = form.getTargetTableName();</b>
+<b class="nc">&nbsp;        String sql = &quot;SELECT * FROM &quot; + tableName + &quot; WHERE submission_id = CAST(? AS UUID)&quot;;</b>
+&nbsp;
+&nbsp;        try {
+<b class="nc">&nbsp;            return jdbcTemplate.queryForMap(sql, submissionId);</b>
+&nbsp;        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+<b class="nc">&nbsp;            System.err.println(&quot;Draft not found in table &quot; + tableName + &quot; for ID: &quot; + submissionId);</b>
+<b class="nc">&nbsp;            return null; // Controller will handle null</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Updates an existing submission row with new values from the respondent.
+&nbsp;     * Only columns present in the current form version are included in the UPDATE
+&nbsp;     * statement. Complex values (arrays/objects) are serialised to JSON strings.
+&nbsp;     *
+&nbsp;     * @param formId         The internal form ID.
+&nbsp;     * @param submissionId   The UUID of the submission to update.
+&nbsp;     * @param submissionData Map of {columnName: newValue} pairs.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public UUID updateSubmission(Long formId, UUID submissionId, Map&lt;String, Object&gt; submissionData, String status) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(formId).orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+<b class="nc">&nbsp;        FormVersion activeVersion = form.getVersions().get(0);</b>
+<b class="nc">&nbsp;        String tableName = form.getTargetTableName();</b>
+&nbsp;
+&nbsp;        // Recalculate formulas for calculated fields
+<b class="nc">&nbsp;        recalculateCalculatedFields(submissionData, activeVersion.getFields());</b>
+&nbsp;
+<b class="nc">&nbsp;        StringBuilder sql = new StringBuilder(&quot;UPDATE &quot; + tableName + &quot; SET &quot;);</b>
+<b class="nc">&nbsp;        List&lt;Object&gt; arguments = new ArrayList&lt;&gt;();</b>
+&nbsp;
+<b class="nc">&nbsp;        if (status != null) {</b>
+<b class="nc">&nbsp;            sql.append(&quot;submission_status = ?, &quot;);</b>
+<b class="nc">&nbsp;            arguments.add(status.toUpperCase());</b>
+&nbsp;        }
+&nbsp;
+<b class="nc">&nbsp;        for (FormField field : activeVersion.getFields()) {</b>
+<b class="nc">&nbsp;            String colName = field.getColumnName();</b>
+<b class="nc">&nbsp;            if (submissionData.containsKey(colName)) {</b>
+<b class="nc">&nbsp;                sql.append(colName).append(&quot; = ?, &quot;);</b>
+<b class="nc">&nbsp;                Object rawValue = submissionData.get(colName);</b>
+&nbsp;
+&nbsp;                // Serialise complex values (checkboxes, grids) to JSON strings
+<b class="nc">&nbsp;                if (rawValue instanceof List || rawValue instanceof Map || rawValue instanceof Object[]) {</b>
+&nbsp;                    try {
+<b class="nc">&nbsp;                        arguments.add(objectMapper.writeValueAsString(rawValue));</b>
+&nbsp;                    } catch (Exception e) {
+<b class="nc">&nbsp;                        arguments.add(&quot;[]&quot;);</b>
+&nbsp;                    }
+&nbsp;                } else {
+<b class="nc">&nbsp;                    arguments.add(rawValue);</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="nc">&nbsp;        if (arguments.isEmpty())</b>
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;No data provided to update!&quot;);</b>
+&nbsp;
+&nbsp;        // Remove trailing &quot;, &quot; and append the WHERE clause
+<b class="nc">&nbsp;        sql.setLength(sql.length() - 2);</b>
+<b class="nc">&nbsp;        sql.append(&quot; WHERE submission_id = CAST(? AS UUID)&quot;);</b>
+<b class="nc">&nbsp;        arguments.add(submissionId);</b>
+&nbsp;
+<b class="nc">&nbsp;        jdbcTemplate.update(sql.toString(), arguments.toArray());</b>
+<b class="nc">&nbsp;        return submissionId;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Hard-deletes a submission row from the dynamic table.
+&nbsp;     * Used by the admin responses page. This action is irreversible.
+&nbsp;     *
+&nbsp;     * @param formId       The internal form ID.
+&nbsp;     * @param submissionId The UUID of the row to delete.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public void deleteSubmission(Long formId, UUID submissionId) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(formId)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="nc">&nbsp;        String tableName = form.getTargetTableName();</b>
+<b class="nc">&nbsp;        String sql = &quot;DELETE FROM &quot; + tableName + &quot; WHERE submission_id = ?&quot;;</b>
+&nbsp;
+<b class="nc">&nbsp;        jdbcTemplate.update(sql, submissionId);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Hard-deletes multiple submission rows in a single batch.
+&nbsp;     * Use a parameterized IN clause for performance.
+&nbsp;     *
+&nbsp;     * @param formId        The internal form ID.
+&nbsp;     * @param submissionIds List of UUIDs to delete.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public void deleteSubmissionsBulk(Long formId, List&lt;UUID&gt; submissionIds) {
+<b class="pc">&nbsp;        if (submissionIds == null || submissionIds.isEmpty())</b>
+&nbsp;            return;
+&nbsp;
+<b class="fc">&nbsp;        Form form = formRepository.findById(formId)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="fc">&nbsp;        String tableName = form.getTargetTableName();</b>
+&nbsp;
+&nbsp;        // Dynamically build &#39;IN (?, ?, ...)&#39; placeholders
+<b class="fc">&nbsp;        String placeholders = String.join(&quot;,&quot;, submissionIds.stream().map(id -&gt; &quot;?&quot;).toList());</b>
+<b class="fc">&nbsp;        String sql = &quot;DELETE FROM &quot; + tableName + &quot; WHERE submission_id IN (&quot; + placeholders + &quot;)&quot;;</b>
+&nbsp;
+<b class="fc">&nbsp;        jdbcTemplate.update(sql, submissionIds.toArray());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Accepts a submission from a public respondent identified by their share token
+&nbsp;     * (used by the public form page, no authentication required).
+&nbsp;     * Resolves the token to an internal form ID and delegates to
+&nbsp;     * {@link #submitData}.
+&nbsp;     *
+&nbsp;     * @param token          The UUID share token from the public URL.
+&nbsp;     * @param submissionData Map of {columnName: value} pairs from the respondent.
+&nbsp;     * @return The generated submission UUID.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public UUID submitDataByToken(String token, Map&lt;String, Object&gt; submissionData, String status) {
+&nbsp;        // 1. Resolve the token to the internal Form
+<b class="fc">&nbsp;        Form form = formRepository.findByPublicShareToken(token)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found or link is invalid.&quot;));</b>
+&nbsp;
+&nbsp;        // 2. Re-use the standard submission logic (rule engine, column mapping, etc.)
+<b class="fc">&nbsp;        return submitData(form.getId(), submissionData, status);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Publicly retrieve a submission for editing via its form token.
+&nbsp;     */
+&nbsp;    public Map&lt;String, Object&gt; getSubmissionByToken(String token, UUID submissionId) {
+<b class="nc">&nbsp;        Form form = formRepository.findByPublicShareToken(token)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found or link is invalid.&quot;));</b>
+&nbsp;
+<b class="nc">&nbsp;        Map&lt;String, Object&gt; submission = getSubmissionById(form.getId(), submissionId);</b>
+<b class="nc">&nbsp;        if (submission == null)</b>
+<b class="nc">&nbsp;            return null;</b>
+&nbsp;
+&nbsp;        // Extract status for logic check
+<b class="nc">&nbsp;        String status = (String) submission.get(&quot;submission_status&quot;);</b>
+<b class="nc">&nbsp;        boolean isDraft = &quot;DRAFT&quot;.equalsIgnoreCase(status);</b>
+&nbsp;
+&nbsp;        // Logic:
+&nbsp;        // 1. If it&#39;s a DRAFT, allow access (so respondents can resume work).
+&nbsp;        // 2. Otherwise, only allow if form.isAllowEditResponse() is true OR user is the
+&nbsp;        // owner.
+<b class="nc">&nbsp;        if (!isDraft &amp;&amp; !form.isAllowEditResponse() &amp;&amp; !isOwner(form)) {</b>
+<b class="nc">&nbsp;            throw new ResponseStatusException(HttpStatus.FORBIDDEN, &quot;Editing is disabled for this form.&quot;);</b>
+&nbsp;        }
+&nbsp;
+<b class="nc">&nbsp;        return submission;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Publicly update a submission for editing via its form token.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public UUID updateSubmissionByToken(String token, UUID submissionId, Map&lt;String, Object&gt; submissionData,
+&nbsp;            String status) {
+&nbsp;        // 1. Resolve token
+<b class="nc">&nbsp;        Form form = formRepository.findByPublicShareToken(token)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found or link is invalid.&quot;));</b>
+&nbsp;
+&nbsp;        // 2. Security Check: Only allow update if DRAFT or allowEditResponse is true
+<b class="nc">&nbsp;        Map&lt;String, Object&gt; current = getSubmissionById(form.getId(), submissionId);</b>
+<b class="nc">&nbsp;        if (current == null)</b>
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;Submission not found.&quot;);</b>
+&nbsp;
+<b class="nc">&nbsp;        String currentStatus = (String) current.get(&quot;submission_status&quot;);</b>
+<b class="nc">&nbsp;        boolean isDraft = &quot;DRAFT&quot;.equalsIgnoreCase(currentStatus);</b>
+&nbsp;
+<b class="nc">&nbsp;        if (!isDraft &amp;&amp; !form.isAllowEditResponse() &amp;&amp; !isOwner(form)) {</b>
+<b class="nc">&nbsp;            throw new ResponseStatusException(HttpStatus.FORBIDDEN,</b>
+<b class="nc">&nbsp;                    &quot;This submission has already been finalized and cannot be edited.&quot;);</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        // 3. Perform the update
+<b class="nc">&nbsp;        return updateSubmission(form.getId(), submissionId, submissionData, status);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Server-side evaluation of calculation formulas to ensure data integrity.
+&nbsp;     */
+&nbsp;    private void recalculateCalculatedFields(Map&lt;String, Object&gt; data, List&lt;FormField&gt; fields) {
+<b class="fc">&nbsp;        for (FormField field : fields) {</b>
+<b class="fc">&nbsp;            String formula = field.getCalculationFormula();</b>
+<b class="pc">&nbsp;            if (formula != null &amp;&amp; !formula.isBlank()) {</b>
+&nbsp;                try {
+<b class="nc">&nbsp;                    String evaluatedFormula = formula;</b>
+&nbsp;                    // Replace variables with values from data
+<b class="nc">&nbsp;                    for (FormField dep : fields) {</b>
+<b class="nc">&nbsp;                        if (dep.getColumnName() != null &amp;&amp; formula.contains(dep.getColumnName())) {</b>
+<b class="nc">&nbsp;                            Object val = data.getOrDefault(dep.getColumnName(), 0);</b>
+<b class="nc">&nbsp;                            double numVal = 0;</b>
+<b class="nc">&nbsp;                            if (val instanceof Number)</b>
+<b class="nc">&nbsp;                                numVal = ((Number) val).doubleValue();</b>
+<b class="nc">&nbsp;                            else if (val instanceof String) {</b>
+&nbsp;                                try {
+<b class="nc">&nbsp;                                    numVal = Double.parseDouble((String) val);</b>
+&nbsp;                                } catch (Exception ignored) {
+&nbsp;                                }
+&nbsp;                            }
+&nbsp;                            // Replace whole word to avoid partial matching
+<b class="nc">&nbsp;                            evaluatedFormula = evaluatedFormula.replaceAll(&quot;\\b&quot; + dep.getColumnName() + &quot;\\b&quot;,</b>
+<b class="nc">&nbsp;                                    String.valueOf(numVal));</b>
+&nbsp;                        }
+&nbsp;                    }
+&nbsp;
+&nbsp;                    // Sanitize and evaluate
+<b class="nc">&nbsp;                    if (evaluatedFormula.matches(&quot;[0-9+\\-*/().\\s]+&quot;)) {</b>
+<b class="nc">&nbsp;                        double result = SimpleMathEvaluator.evaluate(evaluatedFormula);</b>
+<b class="nc">&nbsp;                        data.put(field.getColumnName(), Math.round(result * 100.0) / 100.0);</b>
+&nbsp;                    }
+&nbsp;                } catch (Exception e) {
+<b class="nc">&nbsp;                    System.err.println(</b>
+<b class="nc">&nbsp;                            &quot;Backend calculation failed for field &quot; + field.getColumnName() + &quot;: &quot; + e.getMessage());</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * A very basic math evaluator for +, -, *, / and parentheses.
+&nbsp;     */
+&nbsp;    private static class SimpleMathEvaluator {
+&nbsp;        public static double evaluate(String expression) {
+<b class="nc">&nbsp;            return new Object() {</b>
+<b class="nc">&nbsp;                int pos = -1, ch;</b>
+&nbsp;
+&nbsp;                void nextChar() {
+<b class="nc">&nbsp;                    ch = (++pos &lt; expression.length()) ? expression.charAt(pos) : -1;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                boolean eat(int charToEat) {
+<b class="nc">&nbsp;                    while (ch == &#39; &#39;)</b>
+<b class="nc">&nbsp;                        nextChar();</b>
+<b class="nc">&nbsp;                    if (ch == charToEat) {</b>
+<b class="nc">&nbsp;                        nextChar();</b>
+<b class="nc">&nbsp;                        return true;</b>
+&nbsp;                    }
+<b class="nc">&nbsp;                    return false;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                double parse() {
+<b class="nc">&nbsp;                    nextChar();</b>
+<b class="nc">&nbsp;                    double x = parseExpression();</b>
+<b class="nc">&nbsp;                    if (pos &lt; expression.length())</b>
+<b class="nc">&nbsp;                        throw new RuntimeException(&quot;Unexpected: &quot; + (char) ch);</b>
+<b class="nc">&nbsp;                    return x;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseExpression() {
+<b class="nc">&nbsp;                    double x = parseTerm();</b>
+&nbsp;                    for (;;) {
+<b class="nc">&nbsp;                        if (eat(&#39;+&#39;))</b>
+<b class="nc">&nbsp;                            x += parseTerm(); // addition</b>
+<b class="nc">&nbsp;                        else if (eat(&#39;-&#39;))</b>
+<b class="nc">&nbsp;                            x -= parseTerm(); // subtraction</b>
+&nbsp;                        else
+<b class="nc">&nbsp;                            return x;</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseTerm() {
+<b class="nc">&nbsp;                    double x = parseFactor();</b>
+&nbsp;                    for (;;) {
+<b class="nc">&nbsp;                        if (eat(&#39;*&#39;))</b>
+<b class="nc">&nbsp;                            x *= parseFactor(); // multiplication</b>
+<b class="nc">&nbsp;                        else if (eat(&#39;/&#39;))</b>
+<b class="nc">&nbsp;                            x /= parseFactor(); // division</b>
+&nbsp;                        else
+<b class="nc">&nbsp;                            return x;</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseFactor() {
+<b class="nc">&nbsp;                    if (eat(&#39;+&#39;))</b>
+<b class="nc">&nbsp;                        return parseFactor(); // unary plus</b>
+<b class="nc">&nbsp;                    if (eat(&#39;-&#39;))</b>
+<b class="nc">&nbsp;                        return -parseFactor(); // unary minus</b>
+&nbsp;                    double x;
+<b class="nc">&nbsp;                    int startPos = this.pos;</b>
+<b class="nc">&nbsp;                    if (eat(&#39;(&#39;)) { // parentheses</b>
+<b class="nc">&nbsp;                        x = parseExpression();</b>
+<b class="nc">&nbsp;                        eat(&#39;)&#39;);</b>
+<b class="nc">&nbsp;                    } else if ((ch &gt;= &#39;0&#39; &amp;&amp; ch &lt;= &#39;9&#39;) || ch == &#39;.&#39;) { // numbers</b>
+<b class="nc">&nbsp;                        while ((ch &gt;= &#39;0&#39; &amp;&amp; ch &lt;= &#39;9&#39;) || ch == &#39;.&#39;)</b>
+<b class="nc">&nbsp;                            nextChar();</b>
+<b class="nc">&nbsp;                        x = Double.parseDouble(expression.substring(startPos, this.pos));</b>
+&nbsp;                    } else {
+<b class="nc">&nbsp;                        throw new RuntimeException(&quot;Unexpected: &quot; + (char) ch);</b>
+&nbsp;                    }
+<b class="nc">&nbsp;                    return x;</b>
+&nbsp;                }
+<b class="nc">&nbsp;            }.parse();</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

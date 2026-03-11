@@ -43,4 +43,10 @@ public class FieldDefinitionRequestDTO {
     private Object options;
     private Map<String, Object> validation;
     private String defaultValue;
+    private String calculationFormula;
+    private String helpText;
+    private boolean hidden;
+    private boolean readOnly;
+    private boolean disabled;
+    private java.util.List<FieldDefinitionRequestDTO> children;
 }

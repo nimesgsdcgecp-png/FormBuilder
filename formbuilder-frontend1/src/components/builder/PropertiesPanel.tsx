@@ -9,7 +9,7 @@
  */
 
 import { useFormStore } from '@/store/useFormStore';
-import { Plus, Trash2, Settings2, Divide } from 'lucide-react';
+import { Plus, Trash2, Settings2, Divide, Hash } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 /** Reusable section header for properties panel sections */
@@ -78,7 +78,19 @@ export default function PropertiesPanel() {
       .catch(console.error);
   }, []);
 
-  const selectedField = schema.fields.find((f) => f.id === selectedFieldId);
+  const findFieldRecursive = (fields: any[], id: string | null): any | undefined => {
+    if (!id) return undefined;
+    for (const f of fields) {
+      if (f.id === id) return f;
+      if (f.children) {
+        const found = findFieldRecursive(f.children, id);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+
+  const selectedField = findFieldRecursive(schema.fields, selectedFieldId);
 
   useEffect(() => {
     if (selectedField?.type === 'LOOKUP') {
@@ -230,6 +242,20 @@ export default function PropertiesPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-4 pt-2">
+        {selectedField.type === 'CALCULATED' && (
+          <div className="p-4 rounded-xl border mb-2 flex flex-col items-center text-center gap-3"
+            style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}>
+              <Hash size={20} />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Calculated Field</h3>
+              <p className="text-[11px] mt-1 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                This field derives its value from other fields using a formula.
+              </p>
+            </div>
+          </div>
+        )}
         {selectedField.type === 'PAGE_BREAK' && (
           <div className="p-4 rounded-xl border mb-2 flex flex-col items-center text-center gap-3"
             style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
@@ -271,6 +297,22 @@ export default function PropertiesPanel() {
           )}
         </div>
 
+        {/* Help Text Input */}
+        {selectedField.type !== 'PAGE_BREAK' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              Help Text / Instructions
+            </label>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none"
+              style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)', minHeight: '60px' }}
+              value={selectedField.helpText || ''}
+              onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })}
+              placeholder="Provide extra context for respondents..."
+            />
+          </div>
+        )}
+
         {/* Placeholder / Description Input */}
         {selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
           <div>
@@ -298,6 +340,52 @@ export default function PropertiesPanel() {
             className="font-mono text-xs"
           />
         </div>
+
+        {/* Calculation Formula */}
+        {(selectedField.type === 'CALCULATED' || selectedField.type === 'NUMERIC') && (
+          <div>
+            <SectionHeader label="Calculation" color="#f59e0b" />
+            <div className="mt-2">
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Formula
+              </label>
+              <textarea
+                className="w-full px-3 py-2 rounded-lg border text-sm transition-all focus:outline-none font-mono"
+                style={{ background: 'var(--input-bg)', borderColor: 'var(--input-border)', color: 'var(--text-primary)', minHeight: '60px' }}
+                placeholder="e.g. price * quantity"
+                value={selectedField.calculationFormula || ''}
+                onChange={(e) => updateField(selectedField.id, { calculationFormula: e.target.value })}
+              />
+              <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-faint)' }}>
+                Use column names as variables. Supported: +, -, *, /, ( )
+              </p>
+            </div>
+
+            {/* Helper: List available variables */}
+            <div className="mt-3 p-3 rounded-lg border" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Available Variables</p>
+              <div className="flex flex-wrap gap-1.5">
+                {schema.fields
+                  .filter(f => f.columnName && f.id !== selectedFieldId && (f.type === 'NUMERIC' || f.type === 'CALCULATED' || f.type === 'SCALE' || f.type === 'RATING'))
+                  .map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => {
+                        const current = selectedField.calculationFormula || '';
+                        updateField(selectedField.id, { calculationFormula: current + ' ' + f.columnName });
+                      }}
+                      className="px-2 py-0.5 rounded border text-[10px] font-mono transition-colors"
+                      style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+                    >
+                      {f.columnName}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Default Value */}
         {selectedField.type !== 'SECTION_HEADER' && selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
@@ -433,12 +521,12 @@ export default function PropertiesPanel() {
             </div>
           </div>
         )}
-
         {/* Lookup Manager */}
         {selectedField.type === 'LOOKUP' && (
           <div>
             <SectionHeader label="Linked Database" color="#ec4899" />
             <div className="space-y-3">
+
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>Source Form</label>
                 <PanelSelect
@@ -483,20 +571,104 @@ export default function PropertiesPanel() {
         {selectedField.type !== 'SECTION_HEADER' && selectedField.type !== 'INFO_LABEL' && selectedField.type !== 'PAGE_BREAK' && (
           <div>
             <SectionHeader label="Validation" color="#3b82f6" />
-            <div className="space-y-3">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedField.validation?.required || false}
-                  onChange={(e) =>
-                    updateField(selectedField.id, {
-                      validation: { ...selectedField.validation, required: e.target.checked }
-                    })
-                  }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                />
-                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Required Field</span>
-              </label>
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider opacity-50 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                Field Behavior & Visibility
+              </h3>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {/* Required Toggle */}
+                <label className="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" 
+                       style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+                  <div className="pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.validation.required}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          validation: { ...selectedField.validation, required: e.target.checked },
+                        })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Required Field</span>
+                    <span className="text-[11px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Respondent must provide an answer to submit the form.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Hidden Toggle */}
+                <label className="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" 
+                       style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+                  <div className="pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.isHidden || false}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          isHidden: e.target.checked
+                        })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Hidden Field</span>
+                    <span className="text-[11px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Exists in database but is invisible to the user. Useful for metadata.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Read-only Toggle */}
+                <label className="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" 
+                       style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+                  <div className="pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.isReadOnly || false}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          isReadOnly: e.target.checked
+                        })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Read-only</span>
+                    <span className="text-[11px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Visible but cannot be edited. Good for pre-filled or calculated values.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Disabled Toggle */}
+                <label className="flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" 
+                       style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+                  <div className="pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedField.isDisabled || false}
+                      onChange={(e) =>
+                        updateField(selectedField.id, {
+                          isDisabled: e.target.checked
+                        })
+                      }
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Disabled</span>
+                    <span className="text-[11px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      Grayed out and non-interactive. Clearly indicates an inactive field.
+                    </span>
+                  </div>
+                </label>
+              </div>
 
               {(selectedField.type === 'NUMERIC' || selectedField.type === 'SCALE') && (
                 <div className="grid grid-cols-2 gap-2">

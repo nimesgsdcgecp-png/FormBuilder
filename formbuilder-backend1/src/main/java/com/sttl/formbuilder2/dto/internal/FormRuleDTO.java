@@ -32,6 +32,6 @@ public class FormRuleDTO {
     private String id;
     private String name;
     private ConditionLogic conditionLogic;
-    private List<RuleConditionDTO> conditions;
+    private List<RuleConditionEntryDTO> conditions;
     private List<RuleActionDTO> actions;
 }

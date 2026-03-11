@@ -1,26 +1,18 @@
-// src/components/builder/SortableField.tsx
-
-/**
- * SortableField — A Draggable / Sortable Field Card on the Builder Canvas
- *
- * What it does:
- *   Renders a single field card on the canvas that can be:
- *     1. Clicked → selects the field and opens its settings in the PropertiesPanel.
- *     2. Dragged → reorders the field by dragging the grip handle up or down.
- *     3. Deleted → removes the field from the canvas via the trash button.
- *
- * Field type icons are color-coded to match the sidebar category palette.
- */
-import { useSortable } from '@dnd-kit/sortable';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide } from 'lucide-react';
+import { GripVertical, Trash2, Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { FormField } from '@/types/schema';
+import React, { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
+
+import { useFormStore } from '@/store/useFormStore';
 
 interface SortableFieldProps {
   field: FormField;
   onRemove: (id: string) => void;
   onSelect: (id: string) => void;
-  isSelected: boolean;
+  isSelected?: boolean;
+  isNested?: boolean;
 }
 
 /** Map each FieldType to its icon and category color */
@@ -40,110 +32,157 @@ const FIELD_TYPE_META: Record<string, { icon: any; iconColor: string; iconBg: st
   GRID_RADIO: { icon: Grid3X3, iconColor: '#10b981', iconBg: '#ecfdf5', label: 'Choice Grid' },
   GRID_CHECK: { icon: Table, iconColor: '#10b981', iconBg: '#ecfdf5', label: 'Checkbox Grid' },
   LOOKUP: { icon: Link2, iconColor: '#ec4899', iconBg: '#fdf2f8', label: 'Linked Data' },
-  SECTION_HEADER: { icon: Heading, iconColor: '#64748b', iconBg: '#f1f5f9', label: 'Section Header' },
+  SECTION_HEADER: { icon: Heading, iconColor: '#64748b', iconBg: '#f1f5f9', label: 'Section' },
   INFO_LABEL: { icon: Info, iconColor: '#64748b', iconBg: '#f1f5f9', label: 'Info / Label' },
   PAGE_BREAK: { icon: Divide, iconColor: '#ec4899', iconBg: '#fdf2f8', label: 'Page Break' },
 };
 
-export function SortableField({ field, onRemove, onSelect, isSelected }: SortableFieldProps) {
+export function SortableField({ field, onRemove, onSelect, isNested = false }: SortableFieldProps) {
+  const selectedFieldId = useFormStore(state => state.selectedFieldId);
+  const isSelected = selectedFieldId === field.id;
+  const [isExpanded, setIsExpanded] = useState(true);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
+  const { setNodeRef: setSectionDropRef, isOver: isSectionOver } = useDroppable({
+    id: `section-${field.id}`,
+    data: { isSection: true, parentId: field.id }
+  });
 
   const meta = FIELD_TYPE_META[field.type] || FIELD_TYPE_META.TEXT;
   const FieldIcon = meta.icon;
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const isSection = field.type === 'SECTION_HEADER';
+
   return (
     <div
       ref={setNodeRef}
-      className="relative flex items-center gap-3 p-4 mb-2 rounded-xl border cursor-pointer transition-all duration-150 group"
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        background: 'var(--card-bg)',
-        borderColor: isSelected ? 'var(--accent)' : 'var(--card-border)',
-        boxShadow: isSelected
-          ? '0 0 0 3px var(--accent-muted)'
-          : 'var(--card-shadow)',
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(field.id);
-      }}
+      style={style}
+      className={`group/field ${isNested ? 'ml-4' : ''}`}
     >
-      {/* Grip Handle */}
       <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing shrink-0 transition-colors"
-        style={{ color: 'var(--text-faint)' }}
-        onClick={(e) => e.stopPropagation()}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'}
-      >
-        <GripVertical size={18} />
-      </div>
-
-      {field.type === 'PAGE_BREAK' ? (
-        <div className="flex-1 flex items-center gap-4 py-2">
-          <div className="h-0.5 flex-1 rounded-full opacity-20" style={{ background: 'var(--accent)' }} />
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest"
-            style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--accent)' }}>
-            <Divide size={12} />
-            Page End / New Step
-          </div>
-          <div className="h-0.5 flex-1 rounded-full opacity-20" style={{ background: 'var(--accent)' }} />
-        </div>
-      ) : (
-        <>
-          {/* Field Type Icon */}
-          <div
-            className="p-2 rounded-lg shrink-0"
-            style={{ background: meta.iconBg }}
-          >
-            <FieldIcon size={16} style={{ color: meta.iconColor }} />
-          </div>
-
-          {/* Field content preview */}
-          <div className="flex-1 min-w-0 pointer-events-none">
-            <div className="flex items-center gap-2">
-              <label
-                className="text-sm font-semibold truncate"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {field.label || 'Untitled Field'}
-              </label>
-              {field.validation.required && (
-                <span className="text-red-500 text-xs font-bold shrink-0">*</span>
-              )}
-            </div>
-            <div className="text-[11px] mt-0.5 font-medium" style={{ color: 'var(--text-faint)' }}>
-              {meta.label}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Delete Button */}
-      <button
+        className={`relative flex items-center gap-3 p-4 mb-2 rounded-xl border cursor-pointer transition-all duration-150 ${isSelected ? 'shadow-md scale-[1.01]' : 'shadow-sm'}`}
+        style={{
+          background: 'var(--card-bg)',
+          borderColor: isSelected ? 'var(--accent)' : 'var(--card-border)',
+          boxShadow: isSelected
+            ? '0 0 0 3px var(--accent-muted)'
+            : 'var(--card-shadow)',
+        }}
         onClick={(e) => {
           e.stopPropagation();
-          onRemove(field.id);
-        }}
-        className="p-2 rounded-lg transition-all shrink-0 opacity-0 group-hover:opacity-100"
-        style={{ color: 'var(--text-faint)' }}
-        onMouseEnter={e => {
-          const el = e.currentTarget as HTMLElement;
-          el.style.background = '#fee2e2';
-          el.style.color = '#dc2626';
-          el.style.opacity = '1';
-        }}
-        onMouseLeave={e => {
-          const el = e.currentTarget as HTMLElement;
-          el.style.background = 'transparent';
-          el.style.color = 'var(--text-faint)';
+          onSelect(field.id);
         }}
       >
-        <Trash2 size={16} />
-      </button>
+        {/* Grip Handle */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+          style={{ color: 'var(--text-faint)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={18} />
+        </div>
+
+        {field.type === 'PAGE_BREAK' ? (
+          <div className="flex-1 flex items-center gap-4 py-2">
+            <div className="h-0.5 flex-1 rounded-full opacity-20" style={{ background: 'var(--accent)' }} />
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest"
+              style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--accent)' }}>
+              <Divide size={12} />
+              Page End / New Step
+            </div>
+            <div className="h-0.5 flex-1 rounded-full opacity-20" style={{ background: 'var(--accent)' }} />
+          </div>
+        ) : (
+          <>
+            {/* Collapse/Expand for Sections */}
+            {isSection && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="p-1 rounded hover:bg-gray-100 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            )}
+
+            {/* Field Type Icon */}
+            <div
+              className="p-2 rounded-lg shrink-0"
+              style={{ background: meta.iconBg }}
+            >
+              <FieldIcon size={16} style={{ color: meta.iconColor }} />
+            </div>
+
+            {/* Field content preview */}
+            <div className="flex-1 min-w-0 pointer-events-none">
+              <div className="flex items-center gap-2">
+                <label
+                  className={`text-sm font-semibold truncate ${isSection ? 'text-base' : ''}`}
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {field.label || 'Untitled Field'}
+                </label>
+                {field.validation.required && (
+                  <span className="text-red-500 text-xs font-bold shrink-0">*</span>
+                )}
+              </div>
+              <div className="text-[11px] mt-0.5 font-medium" style={{ color: 'var(--text-faint)' }}>
+                {meta.label}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Delete Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(field.id);
+          }}
+          className="p-2 rounded-lg transition-all shrink-0 opacity-0 group-hover/field:opacity-100 hover:bg-red-50 hover:text-red-600"
+          style={{ color: 'var(--text-faint)' }}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      {/* Children Container (for Sections) */}
+      {isSection && isExpanded && (
+        <div
+          ref={setSectionDropRef}
+          className={`ml-8 mt-1 mb-4 p-4 rounded-xl border-2 border-dashed transition-all min-h-[50px] ${isSectionOver ? 'border-accent bg-accent-subtle ring-4 ring-accent-muted' : 'border-transparent bg-gray-50/50'}`}
+        >
+          <SortableContext items={field.children?.map(c => c.id) || []} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {field.children && field.children.length > 0 ? (
+                field.children.map(child => (
+                  <SortableField
+                    key={child.id}
+                    field={child}
+                    onRemove={onRemove}
+                    onSelect={onSelect}
+                    isNested={true}
+                  />
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 opacity-30">
+                  <Plus size={20} className="mb-1" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Drop fields here</span>
+                </div>
+              )}
+            </div>
+          </SortableContext>
+        </div>
+      )}
     </div>
   );
 }

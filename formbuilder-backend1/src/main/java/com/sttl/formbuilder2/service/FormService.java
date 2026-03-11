@@ -292,49 +292,58 @@ public class FormService {
      * - Serialises the {@code options} object to a JSON string for TEXT storage.
      */
     private List<FormField> mapFields(List<FieldDefinitionRequestDTO> fieldDTOs, FormVersion version) {
-        List<FormField> formFields = new ArrayList<>();
-        int ordinal = 0;
-        for (FieldDefinitionRequestDTO fieldDTO : fieldDTOs) {
-            FormField field = new FormField();
-            field.setFormVersion(version);
-            field.setFieldLabel(fieldDTO.getLabel());
-            field.setFieldType(fieldDTO.getType());
-            field.setIsMandatory(fieldDTO.isRequired());
-            field.setValidationRules(fieldDTO.getValidation());
-            field.setDefaultValue(fieldDTO.getDefaultValue());
-            field.setOrdinalPosition(ordinal++);
+        List<FormField> allEntities = new ArrayList<>();
+        flattenAndMapFields(fieldDTOs, version, null, allEntities);
+        return allEntities;
+    }
 
-            if (fieldDTO.getOptions() != null) {
+    private void flattenAndMapFields(List<FieldDefinitionRequestDTO> dtos, FormVersion version, String parentColumnName,
+            List<FormField> allEntities) {
+        if (dtos == null)
+            return;
+        for (FieldDefinitionRequestDTO dto : dtos) {
+            FormField entity = new FormField();
+            entity.setFormVersion(version);
+            entity.setFieldLabel(dto.getLabel());
+            entity.setFieldType(dto.getType());
+            entity.setIsMandatory(dto.isRequired());
+            entity.setValidationRules(dto.getValidation());
+            entity.setDefaultValue(dto.getDefaultValue());
+            entity.setCalculationFormula(dto.getCalculationFormula());
+            entity.setHelpText(dto.getHelpText());
+            entity.setIsHidden(dto.isHidden());
+            entity.setIsReadOnly(dto.isReadOnly());
+            entity.setIsDisabled(dto.isDisabled());
+            entity.setParentColumnName(parentColumnName);
+            entity.setOrdinalPosition(allEntities.size());
+
+            if (dto.getOptions() != null) {
                 try {
-                    field.setOptions(objectMapper.writeValueAsString(fieldDTO.getOptions()));
+                    entity.setOptions(objectMapper.writeValueAsString(dto.getOptions()));
                 } catch (Exception e) {
-                    field.setOptions("[]");
+                    entity.setOptions("[]");
                 }
             }
 
-            // Derive SQL column name: prefer the frontend-provided name, else generate from
-            // label
-            String colName = fieldDTO.getColumnName();
+            String colName = dto.getColumnName();
             if (colName == null || colName.trim().isEmpty()) {
-                colName = fieldDTO.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+                colName = dto.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
             }
-
-            // Ensure column name is not too long (max 64 per @Column in FormField)
-            if (colName.length() > 60) {
-                // Truncate and add a hash to keep it short and unique-ish
-                colName = colName.substring(0, 50) + "_" + Integer.toHexString(colName.hashCode()).substring(0, 4);
+            if (colName.length() > 64) {
+                colName = colName.substring(0, 60) + "_" + Integer.toHexString(colName.hashCode()).substring(0, 3);
             }
-
-            // Fallback for empty labels (e.g. user just added a field)
             if (colName.isEmpty() || colName.equals("_")) {
-                colName = fieldDTO.getType().name().toLowerCase() + "_" + System.nanoTime() % 10000;
+                colName = dto.getType().name().toLowerCase() + "_" + System.nanoTime() % 10000;
             }
+            entity.setColumnName(colName);
 
-            field.setColumnName(colName);
+            allEntities.add(entity);
 
-            formFields.add(field);
+            // Recursively process children
+            if (dto.getChildren() != null && !dto.getChildren().isEmpty()) {
+                flattenAndMapFields(dto.getChildren(), version, colName, allEntities);
+            }
         }
-        return formFields;
     }
 
     /**
@@ -385,18 +394,16 @@ public class FormService {
         List<FormVersionResponseDTO> versionDTOs = form.getVersions().stream().map(version -> {
 
             // Safely parse field options from stored JSON back to Java objects
-            List<FormFieldResponseDTO> fieldDTOs = version.getFields().stream().map(field -> {
+            // 1. Map all entities to DTOs first (flat list)
+            List<FormFieldResponseDTO> allFieldDTOs = version.getFields().stream().map(field -> {
                 Object parsedOptions = null;
                 if (field.getOptions() != null && !field.getOptions().isBlank() && !field.getOptions().equals("[]")) {
                     try {
                         parsedOptions = objectMapper.readValue(field.getOptions(), Object.class);
                     } catch (Exception e) {
-                        // Legacy data: plain comma-separated string like "Yes,No"
-                        // Return as-is; frontend handles the split gracefully.
                         parsedOptions = field.getOptions();
                     }
                 }
-
                 return FormFieldResponseDTO.builder()
                         .id(field.getId())
                         .fieldLabel(field.getFieldLabel())
@@ -407,8 +414,33 @@ public class FormService {
                         .validationRules(field.getValidationRules())
                         .ordinalPosition(field.getOrdinalPosition())
                         .options(parsedOptions)
+                        .calculationFormula(field.getCalculationFormula())
+                        .helpText(field.getHelpText())
+                        .isHidden(field.getIsHidden())
+                        .isReadOnly(field.getIsReadOnly())
+                        .isDisabled(field.getIsDisabled())
+                        .children(new ArrayList<>())
                         .build();
             }).collect(Collectors.toList());
+
+            // 2. Reconstruct tree structure
+            List<FormFieldResponseDTO> rootFields = new ArrayList<>();
+            java.util.Map<String, FormFieldResponseDTO> dtoMap = allFieldDTOs.stream()
+                    .collect(Collectors.toMap(FormFieldResponseDTO::getColumnName, dto -> dto));
+
+            for (FormField entity : version.getFields()) {
+                FormFieldResponseDTO dto = dtoMap.get(entity.getColumnName());
+                if (entity.getParentColumnName() == null) {
+                    rootFields.add(dto);
+                } else {
+                    FormFieldResponseDTO parentDto = dtoMap.get(entity.getParentColumnName());
+                    if (parentDto != null) {
+                        parentDto.getChildren().add(dto);
+                    } else {
+                        rootFields.add(dto); // Fallback: if parent not found, treat as root
+                    }
+                }
+            }
 
             // Safely parse rules from stored JSON string back to an object for the frontend
             Object parsedRules = null;
@@ -416,7 +448,7 @@ public class FormService {
                 try {
                     parsedRules = objectMapper.readValue(version.getRules(), Object.class);
                 } catch (Exception e) {
-                    parsedRules = version.getRules(); // Return raw string as last-resort fallback
+                    parsedRules = version.getRules();
                 }
             }
 
@@ -425,7 +457,7 @@ public class FormService {
                     .versionNumber(version.getVersionNumber())
                     .changeLog(version.getChangeLog())
                     .rules(parsedRules)
-                    .fields(fieldDTOs)
+                    .fields(rootFields)
                     .build();
         }).collect(Collectors.toList());
 

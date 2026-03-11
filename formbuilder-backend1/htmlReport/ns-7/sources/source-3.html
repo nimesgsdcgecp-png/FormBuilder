@@ -1,0 +1,275 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormField</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.entity</a>
+</div>
+
+<h1>Coverage Summary for Class: FormField (com.sttl.formbuilder2.model.entity)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormField</td>
+<td class="coverageStat">
+  <span class="percent">
+    60%
+  </span>
+  <span class="absValue">
+    (3/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    60%
+  </span>
+  <span class="absValue">
+    (3/5)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormField$FormFieldBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">FormField$HibernateInstantiator</td>
+  </tr>
+  <tr>
+    <td class="name">FormField$HibernateProxy</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    50%
+  </span>
+  <span class="absValue">
+    (3/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    50%
+  </span>
+  <span class="absValue">
+    (3/6)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.entity;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.annotation.JsonIgnore;
+&nbsp;import com.sttl.formbuilder2.model.enums.FieldType;
+&nbsp;import jakarta.persistence.*;
+&nbsp;import lombok.*;
+&nbsp;import org.hibernate.annotations.JdbcTypeCode;
+&nbsp;import org.hibernate.type.SqlTypes;
+&nbsp;
+&nbsp;import java.util.Map;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormField — A Single Field within a {@link FormVersion}
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Represents one question/input on a form — e.g. a text box, dropdown, or date
+&nbsp; * picker. Maps to the {@code form_fields} table.
+&nbsp; *
+&nbsp; * Relationships:
+&nbsp; * - Many FormFields → one parent {@link FormVersion} (owned side).
+&nbsp; * - {@code @JsonIgnore} on the back-reference prevents infinite serialisation
+&nbsp; * loops when Jackson writes a FormVersion containing its fields.
+&nbsp; *
+&nbsp; * Key fields:
+&nbsp; * - {@code fieldType} — determines which HTML input is rendered on the
+&nbsp; * public form page and which SQL column type is used in the submissions table.
+&nbsp; * - {@code columnName} — the SQL column name auto-generated from the label
+&nbsp; * (e.g. &quot;First Name&quot; → &quot;first_name&quot;). Must be unique per version.
+&nbsp; * - {@code ordinalPosition} — the display order of this field on the form.
+&nbsp; * - {@code validationRules} — stored as JSONB (requires Hibernate&#39;s
+&nbsp; * JdbcTypeCode
+&nbsp; * annotation). Contains keys like {@code required}, {@code min}, {@code max},
+&nbsp; * {@code minLength}, {@code maxLength}, {@code pattern}.
+&nbsp; * - {@code options} — serialised JSON string for choice-based fields:
+&nbsp; * Dropdown/Radio — {@code [&quot;Option A&quot;,&quot;Option B&quot;]}
+&nbsp; * Grid — {@code {&quot;rows&quot;:[...],&quot;cols&quot;:[...]}}
+&nbsp; * Lookup — {@code {&quot;formId&quot;:&quot;3&quot;,&quot;columnName&quot;:&quot;city&quot;}}
+&nbsp; * - {@code defaultValue} — pre-fills the field for the respondent; stored as
+&nbsp; * a String regardless of field type.
+&nbsp; */
+&nbsp;@Entity
+&nbsp;@Table(name = &quot;form_fields&quot;, uniqueConstraints = {
+&nbsp;        @UniqueConstraint(columnNames = { &quot;form_version_id&quot;, &quot;columnName&quot; })
+&nbsp;})
+<b class="fc">&nbsp;@Getter</b>
+<b class="fc">&nbsp;@Setter</b>
+<b class="fc">&nbsp;@NoArgsConstructor</b>
+<b class="nc">&nbsp;@AllArgsConstructor</b>
+<b class="nc">&nbsp;@Builder</b>
+&nbsp;public class FormField {
+&nbsp;
+&nbsp;    @Id
+&nbsp;    @GeneratedValue(strategy = GenerationType.IDENTITY)
+&nbsp;    private Long id;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Back-reference to the owning version — hidden from JSON to prevent cycles.
+&nbsp;     */
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;form_version_id&quot;, nullable = false)
+&nbsp;    @JsonIgnore
+&nbsp;    private FormVersion formVersion;
+&nbsp;
+&nbsp;    /** Human-readable label shown to the respondent (e.g. &quot;Your Email Address&quot;). */
+&nbsp;    @Column(nullable = false, columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String fieldLabel;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Auto-generated snake_case SQL column name used in the dynamic submissions
+&nbsp;     * table and in logic-rule conditions (e.g. &quot;your_email_address&quot;).
+&nbsp;     * Unique within a version to prevent duplicate columns.
+&nbsp;     */
+&nbsp;    @Column(nullable = false, length = 64)
+&nbsp;    private String columnName;
+&nbsp;
+&nbsp;    /** Determines the HTML input type and the PostgreSQL column type. */
+&nbsp;    @Enumerated(EnumType.STRING)
+&nbsp;    @Column(nullable = false)
+&nbsp;    private FieldType fieldType;
+&nbsp;
+&nbsp;    /** If true, the submission is rejected if this field is left blank. */
+&nbsp;    @Column(nullable = false)
+&nbsp;    private Boolean isMandatory;
+&nbsp;
+&nbsp;    /** Display position on the form canvas — lower numbers appear first. */
+&nbsp;    @Column(nullable = false)
+&nbsp;    private Integer ordinalPosition;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Pre-filled value shown to respondents; stored as String for all field types.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;default_value&quot;)
+&nbsp;    private String defaultValue;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * JSON validation constraints stored in PostgreSQL JSONB format.
+&nbsp;     * Hibernate&#39;s {@code @JdbcTypeCode(SqlTypes.JSON)} handles the
+&nbsp;     * serialisation/deserialisation automatically.
+&nbsp;     * Example keys: required, min, max, minLength, maxLength, pattern.
+&nbsp;     */
+&nbsp;    @JdbcTypeCode(SqlTypes.JSON)
+&nbsp;    @Column(name = &quot;validation_rules&quot;, columnDefinition = &quot;jsonb&quot;)
+&nbsp;    private Map&lt;String, Object&gt; validationRules;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Stores option data as a JSON string (TEXT column) for choice-based fields.
+&nbsp;     * Examples:
+&nbsp;     * Dropdown/Radio/Checkboxes — {@code [&quot;Option A&quot;,&quot;Option B&quot;]}
+&nbsp;     * Grid fields — {@code {&quot;rows&quot;:[&quot;Row1&quot;],&quot;cols&quot;:[&quot;Col1&quot;]}}
+&nbsp;     * Lookup field — {@code {&quot;formId&quot;:&quot;3&quot;,&quot;columnName&quot;:&quot;city&quot;}}
+&nbsp;     */
+&nbsp;    @Column(name = &quot;field_options&quot;, columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String options;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Stores a formula (e.g., &#39;price * quantity&#39;) used to derive the value of this
+&nbsp;     * field.
+&nbsp;     * Evaluated in real-time on the frontend and validated on the backend.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;calculation_formula&quot;, columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String calculationFormula;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * The columnName of the parent field if this field is nested (e.g., inside a
+&nbsp;     * section).
+&nbsp;     * If null, the field is at the top level.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;parent_column_name&quot;, length = 64)
+&nbsp;    private String parentColumnName;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * If true, this field exists in the database but is not shown to respondents
+&nbsp;     * on the public form page.
+&nbsp;     */
+&nbsp;    @Builder.Default
+&nbsp;    @Column(name = &quot;is_hidden&quot;, nullable = false)
+&nbsp;    private Boolean isHidden = false;
+&nbsp;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

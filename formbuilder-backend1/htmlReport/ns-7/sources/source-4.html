@@ -1,0 +1,251 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormVersion</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.entity</a>
+</div>
+
+<h1>Coverage Summary for Class: FormVersion (com.sttl.formbuilder2.model.entity)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormVersion</td>
+<td class="coverageStat">
+  <span class="percent">
+    80%
+  </span>
+  <span class="absValue">
+    (4/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    80%
+  </span>
+  <span class="absValue">
+    (4/5)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormVersion$FormVersionBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">FormVersion$HibernateInstantiator</td>
+  </tr>
+  <tr>
+    <td class="name">FormVersion$HibernateProxy</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    66.7%
+  </span>
+  <span class="absValue">
+    (4/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    66.7%
+  </span>
+  <span class="absValue">
+    (4/6)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.entity;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.annotation.JsonIgnore;
+&nbsp;import jakarta.persistence.*;
+&nbsp;import lombok.*;
+&nbsp;import org.hibernate.annotations.CreationTimestamp;
+&nbsp;
+&nbsp;import java.time.Instant;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormVersion — Snapshot of a Form&#39;s Schema at the Time of Publishing
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Every time a form is published (or re-published with changes), a new version
+&nbsp; * snapshot is created. This gives the application a rudimentary form-versioning
+&nbsp; * capability — submissions can always be traced back to the exact schema that
+&nbsp; * was active when they were collected.
+&nbsp; *
+&nbsp; * Maps to the {@code form_versions} table.
+&nbsp; *
+&nbsp; * Relationships:
+&nbsp; * - Many FormVersions → one parent {@link Form} (owned side).
+&nbsp; * - One FormVersion → Many {@link FormField}s (the field list for this
+&nbsp; * snapshot).
+&nbsp; *
+&nbsp; * Key fields:
+&nbsp; * - {@code versionNumber} — monotonically increasing integer per form.
+&nbsp; * - {@code rules} — JSON array of logic rules (serialized {@code FormRuleDTO}
+&nbsp; * objects) stored as TEXT. Deserialized by {@code SubmissionService} at runtime
+&nbsp; * using Jackson.
+&nbsp; * - {@code fields} — the ordered list of {@link FormField}s that make up the
+&nbsp; * schema for this version.
+&nbsp; *
+&nbsp; * Note: {@code @JsonIgnore} on the {@code form} back-reference prevents
+&nbsp; * infinite
+&nbsp; * recursion when Jackson serialises a FormVersion that is nested inside a Form.
+&nbsp; */
+&nbsp;@Entity
+&nbsp;@Table(name = &quot;form_versions&quot;, uniqueConstraints = {
+&nbsp;        @UniqueConstraint(columnNames = { &quot;form_id&quot;, &quot;versionNumber&quot; })
+&nbsp;})
+<b class="fc">&nbsp;@Getter</b>
+<b class="fc">&nbsp;@Setter</b>
+<b class="fc">&nbsp;@NoArgsConstructor</b>
+<b class="nc">&nbsp;@AllArgsConstructor</b>
+<b class="pc">&nbsp;@Builder</b>
+&nbsp;public class FormVersion {
+&nbsp;
+&nbsp;    @Id
+&nbsp;    @GeneratedValue(strategy = GenerationType.IDENTITY)
+&nbsp;    private Long id;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Back-reference to the parent form. Hidden from JSON output to avoid cycles.
+&nbsp;     */
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;form_id&quot;, nullable = false)
+&nbsp;    @JsonIgnore
+&nbsp;    private Form form;
+&nbsp;
+&nbsp;    /** Monotonically increasing version counter scoped to the parent form. */
+&nbsp;    @Column(nullable = false)
+&nbsp;    private Integer versionNumber;
+&nbsp;
+&nbsp;    /** Optional human-readable description of what changed in this version. */
+&nbsp;    @Column(columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String changeLog;
+&nbsp;
+&nbsp;    /** Timestamp set automatically when the version row is first inserted. */
+&nbsp;    @CreationTimestamp
+&nbsp;    @Column(name = &quot;created_at&quot;, updatable = false)
+&nbsp;    private Instant createdAt;
+&nbsp;
+&nbsp;    /**
+&nbsp;     * List of fields belonging to this version, ordered by their display position.
+&nbsp;     * Cascade ALL + orphanRemoval means adding/removing fields here automatically
+&nbsp;     * syncs to the {@code form_fields} table.
+&nbsp;     */
+&nbsp;    @OneToMany(mappedBy = &quot;formVersion&quot;, cascade = CascadeType.ALL, orphanRemoval = true)
+&nbsp;    @OrderBy(&quot;ordinalPosition ASC&quot;)
+&nbsp;    @Builder.Default
+&nbsp;    private List&lt;FormField&gt; fields = new ArrayList&lt;&gt;();
+&nbsp;
+&nbsp;    /**
+&nbsp;     * JSON array of {@code FormRuleDTO} objects stored as a TEXT column.
+&nbsp;     * Example: {@code [{&quot;id&quot;:&quot;...&quot;,&quot;name&quot;:&quot;Rule
+&nbsp;     * 1&quot;,&quot;conditions&quot;:[...],&quot;actions&quot;:[...]}]}
+&nbsp;     * Deserialized by {@code SubmissionService} using Jackson&#39;s ObjectMapper before
+&nbsp;     * being handed to {@code RuleEngineService} for evaluation.
+&nbsp;     */
+&nbsp;    @Column(name = &quot;rules&quot;, columnDefinition = &quot;TEXT&quot;)
+&nbsp;    private String rules;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

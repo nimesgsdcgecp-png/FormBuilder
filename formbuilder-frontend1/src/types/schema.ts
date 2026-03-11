@@ -31,13 +31,13 @@
 export type FieldType = 'TEXT' | 'NUMERIC' | 'DATE' | 'BOOLEAN' | 'TEXTAREA'
   | 'DROPDOWN' | 'RADIO' | 'CHECKBOX_GROUP'
   | 'TIME' | 'RATING' | 'SCALE' | 'FILE' | 'GRID_RADIO' | 'GRID_CHECK' | 'LOOKUP'
-  | 'SECTION_HEADER' | 'INFO_LABEL' | 'PAGE_BREAK' | 'DATE_TIME';
+  | 'CALCULATED' | 'SECTION_HEADER' | 'INFO_LABEL' | 'PAGE_BREAK' | 'DATE_TIME';
 
 /** Comparison operators for rule conditions. Mirrors the Java RuleOperator enum. */
 export type RuleOperator = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN' | 'CONTAINS';
 
 /** Effects that a rule can trigger. Mirrors the Java ActionType enum. */
-export type ActionType = 'SHOW' | 'HIDE' | 'REQUIRE' | 'VALIDATION_ERROR' | 'SEND_EMAIL';
+export type ActionType = 'SHOW' | 'HIDE' | 'REQUIRE' | 'ENABLE' | 'DISABLE' | 'VALIDATION_ERROR' | 'SEND_EMAIL';
 
 /** How multiple conditions within one rule are combined. Mirrors Java ConditionLogic enum. */
 export type ConditionLogic = 'AND' | 'OR';
@@ -67,11 +67,20 @@ export interface RuleAction {
  * A complete IF→THEN logic rule configured in the LogicPanel.
  * Serialised to JSON and stored in FormVersion.rules on the backend.
  */
+/** A group of conditions that can be nested. */
+export interface ConditionGroup {
+  type: 'group';
+  id: string;
+  logic: ConditionLogic;
+  conditions: (RuleCondition | ConditionGroup)[];
+}
+
+/** A single logic rule: IF [conditions] THEN [actions]. */
 export interface FormRule {
   id: string;
-  name: string;               // Human-readable label (e.g. "Show GitHub for Engineers")
+  name: string;               // Human-readable label (e.g., "Show GitHub for Engineers")
   conditionLogic: ConditionLogic;
-  conditions: RuleCondition[];
+  conditions: (RuleCondition | ConditionGroup)[];
   actions: RuleAction[];
 }
 
@@ -108,6 +117,12 @@ export interface FormField {
   options?: string | string[] | { rows: string[]; cols: string[] } | { formId: string; columnName: string };
   validation: ValidationRules;
   columnName: string; // Auto-derived snake_case SQL column name (e.g., "first_name")
+  calculationFormula?: string;
+  helpText?: string;
+  isHidden?: boolean;
+  isReadOnly?: boolean;
+  isDisabled?: boolean;
+  children?: FormField[];
 }
 
 /**

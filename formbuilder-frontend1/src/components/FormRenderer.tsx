@@ -36,19 +36,27 @@ export default function FormRenderer({
     // Initialize answers from schema defaults if not provided
     useEffect(() => {
         const defaultAnswers: Record<string, any> = { ...initialAnswers };
-        schema.fields.forEach(field => {
-            if (defaultAnswers[field.columnName] === undefined) {
-                if (field.defaultValue) {
-                    if (field.type === 'BOOLEAN') defaultAnswers[field.columnName] = field.defaultValue === 'true';
-                    else if (field.type === 'NUMERIC') defaultAnswers[field.columnName] = Number(field.defaultValue);
-                    else defaultAnswers[field.columnName] = field.defaultValue;
-                } else if (field.type === 'CHECKBOX_GROUP') {
-                    defaultAnswers[field.columnName] = [];
-                } else if (field.type === 'GRID_RADIO' || field.type === 'GRID_CHECK') {
-                    defaultAnswers[field.columnName] = {};
+
+        const processFields = (fields: FormField[]) => {
+            fields.forEach(field => {
+                if (defaultAnswers[field.columnName] === undefined) {
+                    if (field.defaultValue) {
+                        if (field.type === 'BOOLEAN') defaultAnswers[field.columnName] = field.defaultValue === 'true';
+                        else if (field.type === 'NUMERIC') defaultAnswers[field.columnName] = Number(field.defaultValue);
+                        else defaultAnswers[field.columnName] = field.defaultValue;
+                    } else if (field.type === 'CHECKBOX_GROUP') {
+                        defaultAnswers[field.columnName] = [];
+                    } else if (field.type === 'GRID_RADIO' || field.type === 'GRID_CHECK') {
+                        defaultAnswers[field.columnName] = {};
+                    }
                 }
-            }
-        });
+                if (field.children && field.children.length > 0) {
+                    processFields(field.children);
+                }
+            });
+        };
+
+        processFields(schema.fields);
 
         // Deep compare or just set if drastically different to avoid loops
         setAnswers(prev => {
@@ -59,7 +67,17 @@ export default function FormRenderer({
 
     // Handle Lookup Fields
     useEffect(() => {
-        const lookups = schema.fields.filter(f => f.type === 'LOOKUP' && f.options && typeof f.options === 'object' && 'formId' in f.options);
+        const getAllFields = (fields: FormField[], collected: FormField[] = []) => {
+            fields.forEach(f => {
+                collected.push(f);
+                if (f.children) getAllFields(f.children, collected);
+            });
+            return collected;
+        };
+
+        const allFields = getAllFields(schema.fields);
+        const lookups = allFields.filter(f => f.type === 'LOOKUP' && f.options && typeof f.options === 'object' && 'formId' in f.options);
+
         if (lookups.length > 0) {
             Promise.all(
                 lookups.map(f => {
@@ -81,45 +99,136 @@ export default function FormRenderer({
         setAnswers(prev => ({ ...prev, [columnName]: value }));
     };
 
+    // --- Calculation Engine ---
+    useEffect(() => {
+        const getAllFields = (fields: FormField[], collected: FormField[] = []) => {
+            fields.forEach(f => {
+                collected.push(f);
+                if (f.children) getAllFields(f.children, collected);
+            });
+            return collected;
+        };
+
+        const allFields = getAllFields(schema.fields);
+        const calculatedFields = allFields.filter(f => !!f.calculationFormula);
+
+        if (calculatedFields.length === 0) {
+            if (allFields.length > 0) {
+                console.debug("Calculation Engine: No formulas to evaluate.");
+            }
+            return;
+        }
+
+        let hasUpdates = false;
+        const newAnswers = { ...answers };
+
+        calculatedFields.forEach(field => {
+            try {
+                let formula = field.calculationFormula || "";
+                if (!formula.trim()) return;
+
+                // Identify all dependencies
+                allFields.forEach(dep => {
+                    if (dep.columnName && formula.includes(dep.columnName)) {
+                        const rawVal = answers[dep.columnName];
+                        const val = (rawVal === undefined || rawVal === null || rawVal === '') ? 0 : Number(rawVal);
+                        const regex = new RegExp(`\\b${dep.columnName}\\b`, 'g');
+                        formula = formula.replace(regex, isNaN(val) ? '0' : val.toString());
+                    }
+                });
+
+                if (/^[0-9+\-*/().\s]*$/.test(formula)) {
+                    // eslint-disable-next-line no-eval
+                    const result = Number(eval(formula));
+                    if (!isNaN(result) && isFinite(result)) {
+                        const rounded = Math.round(result * 100) / 100;
+                        if (newAnswers[field.columnName] !== rounded) {
+                            newAnswers[field.columnName] = rounded;
+                            hasUpdates = true;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error(`Calculation failed for ${field.columnName}:`, e);
+            }
+        });
+
+        if (hasUpdates) {
+            setAnswers(newAnswers);
+        }
+    }, [answers, schema.fields]);
+
     const evaluateRules = () => {
-        let visibleCols = new Set(schema.fields.map(f => f.columnName));
+        const getAllFields = (fields: FormField[], collected: FormField[] = []) => {
+            fields.forEach(f => {
+                collected.push(f);
+                if (f.children) getAllFields(f.children, collected);
+            });
+            return collected;
+        };
+
+        const allFields = getAllFields(schema.fields);
+        let visibleCols = new Set(allFields.map(f => f.columnName));
+        let disabledCols = new Set<string>();
+        let enabledByRuleCols = new Set<string>();
+        let disabledByRuleCols = new Set<string>();
+        let readOnlyCols = new Set<string>();
         let dynamicallyRequiredCols = new Set<string>();
         let customErrors: string[] = [];
 
         const rules = schema.rules || [];
 
-        // First pass: identify fields that are hidden by default (targeted by a SHOW action)
+        // First pass: identify fields that are hidden or disabled by default
         rules.forEach(rule => {
             rule.actions.forEach((action) => {
                 if (action.type === 'SHOW' && action.targetField) {
                     visibleCols.delete(action.targetField);
+                } else if (action.type === 'ENABLE' && action.targetField) {
+                    disabledCols.add(action.targetField);
                 }
             });
         });
 
-        // Second pass: evaluate conditions
+        // Initialize with static field-level flags
+        allFields.forEach(f => {
+            if (f.isDisabled) disabledCols.add(f.columnName);
+            if (f.isReadOnly) readOnlyCols.add(f.columnName);
+        });
+
+        // Second pass: evaluate recursive conditions
         rules.forEach(rule => {
-            const condition = rule.conditions[0]; // Assuming single condition for now as per current UI
-            if (!condition) return;
+            if (!rule.conditions || rule.conditions.length === 0) return;
 
-            const userAnswer = answers[condition.field];
-            let isMatch = false;
+            const evaluateEntry = (entry: any): boolean => {
+                if (entry.type === 'condition') {
+                    const userAnswer = answers[entry.field];
+                    if (userAnswer === undefined || userAnswer === "" || userAnswer === null) return false;
 
-            if (userAnswer !== undefined && userAnswer !== "" && userAnswer !== null) {
-                const strVal1 = String(userAnswer).toLowerCase().trim();
-                const strVal2 = String(condition.value).toLowerCase().trim();
-                const numVal1 = Number(strVal1);
-                const numVal2 = Number(strVal2);
-                const isNumeric = !isNaN(numVal1) && !isNaN(numVal2) && strVal1 !== "" && strVal2 !== "";
+                    const strVal1 = String(userAnswer).toLowerCase().trim();
+                    const strVal2 = String(entry.value).toLowerCase().trim();
+                    const numVal1 = Number(strVal1);
+                    const numVal2 = Number(strVal2);
+                    const isNumeric = !isNaN(numVal1) && !isNaN(numVal2) && strVal1 !== "" && strVal2 !== "";
 
-                switch (condition.operator) {
-                    case 'EQUALS': isMatch = isNumeric ? numVal1 === numVal2 : strVal1 === strVal2; break;
-                    case 'NOT_EQUALS': isMatch = isNumeric ? numVal1 !== numVal2 : strVal1 !== strVal2; break;
-                    case 'GREATER_THAN': isMatch = isNumeric ? numVal1 > numVal2 : (strVal1 > strVal2); break;
-                    case 'LESS_THAN': isMatch = isNumeric ? numVal1 < numVal2 : (strVal1 < strVal2); break;
-                    case 'CONTAINS': isMatch = strVal1.includes(strVal2); break;
+                    switch (entry.operator) {
+                        case 'EQUALS': return isNumeric ? numVal1 === numVal2 : strVal1 === strVal2;
+                        case 'NOT_EQUALS': return isNumeric ? numVal1 !== numVal2 : strVal1 !== strVal2;
+                        case 'GREATER_THAN': return isNumeric ? numVal1 > numVal2 : (strVal1 > strVal2);
+                        case 'LESS_THAN': return isNumeric ? numVal1 < numVal2 : (strVal1 < strVal2);
+                        case 'CONTAINS': return strVal1.includes(strVal2);
+                        default: return false;
+                    }
+                } else if (entry.type === 'group') {
+                    const logic = entry.logic || 'AND';
+                    const results = entry.conditions.map((subEntry: any) => evaluateEntry(subEntry));
+                    return logic === 'OR' ? results.some(r => r === true) : results.every(r => r === true);
                 }
-            }
+                return false;
+            };
+
+            const ruleLogic = rule.conditionLogic || 'AND';
+            const ruleResults = rule.conditions.map(entry => evaluateEntry(entry));
+            const isMatch = ruleLogic === 'OR' ? ruleResults.some(r => r === true) : ruleResults.every(r => r === true);
 
             if (isMatch) {
                 rule.actions.forEach((action) => {
@@ -127,6 +236,12 @@ export default function FormRenderer({
                         visibleCols.add(action.targetField);
                     } else if (action.type === 'HIDE' && action.targetField) {
                         visibleCols.delete(action.targetField);
+                    } else if (action.type === 'ENABLE' && action.targetField) {
+                        disabledCols.delete(action.targetField);
+                        enabledByRuleCols.add(action.targetField);
+                    } else if (action.type === 'DISABLE' && action.targetField) {
+                        disabledCols.add(action.targetField);
+                        disabledByRuleCols.add(action.targetField);
                     } else if (action.type === 'REQUIRE' && action.targetField) {
                         dynamicallyRequiredCols.add(action.targetField);
                     } else if (action.type === 'VALIDATION_ERROR' && action.message) {
@@ -148,17 +263,22 @@ export default function FormRenderer({
             }
         });
 
-        // Filter out empty pages (can happen if rules hide all fields in a page)
+        // Filter out empty pages
         const activePages = pages.filter(p => p.length > 0);
 
         return {
             pages: activePages.length > 0 ? activePages : [[]],
+            disabledCols,
+            enabledByRuleCols,
+            disabledByRuleCols,
             dynamicallyRequiredCols,
-            customErrors
+            customErrors,
+            visibleCols,
+            readOnlyCols
         };
     };
 
-    const { pages, dynamicallyRequiredCols, customErrors } = evaluateRules();
+    const { pages, disabledCols, enabledByRuleCols, disabledByRuleCols, dynamicallyRequiredCols, customErrors, visibleCols, readOnlyCols } = evaluateRules();
 
     // Safety check: if rules hide pages dynamically, ensure we don't end up on an out-of-bounds step
     if (currentStep >= pages.length && pages.length > 0) {
@@ -240,6 +360,79 @@ export default function FormRenderer({
     // Calculate progress percentage
     const progress = pages.length > 1 ? ((safeCurrentStep + 1) / pages.length) * 100 : 100;
 
+    const renderFieldNode = (field: FormField) => {
+        if (!visibleCols.has(field.columnName) || field.isHidden) return null;
+
+        if (field.type === 'SECTION_HEADER') {
+            return (
+                <div key={field.id} className="pt-8 mb-6">
+                    <div className="pb-2 border-b-2 mb-6" style={{ borderColor: 'var(--border)' }}>
+                        <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{field.label}</h2>
+                        {field.placeholder && (
+                            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{field.placeholder}</p>
+                        )}
+                    </div>
+                    <div className="space-y-7 pl-4 border-l-2 ml-1" style={{ borderColor: 'var(--border)' }}>
+                        {field.children?.map(child => renderFieldNode(child))}
+                    </div>
+                </div>
+            );
+        }
+
+        if (field.type === 'INFO_LABEL') {
+            return (
+                <div key={field.id} className="p-4 rounded-xl flex gap-3 italic mb-4" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
+                    <Info size={18} className="shrink-0 mt-0.5 opacity-70" />
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {field.label}
+                    </div>
+                </div>
+            );
+        }
+
+        if (field.type === 'PAGE_BREAK') return null;
+
+        const isDynamicallyRequired = dynamicallyRequiredCols.has(field.columnName);
+        const isEffectivelyRequired = field.validation.required || isDynamicallyRequired;
+
+        return (
+            <div key={field.id} className="transition-all duration-300 ease-in-out mb-6">
+                <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    <div className="flex items-center gap-2">
+                        {field.label} {isEffectivelyRequired && <span className="text-red-500">*</span>}
+                        {enabledByRuleCols.has(field.columnName) && (
+                            <span className="text-[10px] font-normal italic opacity-70" style={{ color: 'var(--text-muted)' }}>
+                                (enabled by rule)
+                            </span>
+                        )}
+                        {disabledByRuleCols.has(field.columnName) && (
+                            <span className="text-[10px] font-normal italic opacity-70" style={{ color: 'var(--text-muted)' }}>
+                                (disabled by rule)
+                            </span>
+                        )}
+                    </div>
+                    {field.helpText && (
+                        <p className="text-[11px] font-normal mt-1 leading-relaxed opacity-80" style={{ color: 'var(--text-muted)' }}>
+                            {field.helpText}
+                        </p>
+                    )}
+                </label>
+                {renderInput(
+                    field,
+                    answers[field.columnName],
+                    handleInputChange,
+                    lookupData[field.columnName] || [],
+                    isPreview,
+                    disabledCols.has(field.columnName),
+                    readOnlyCols.has(field.columnName)
+                )}
+                {field.type === 'NUMERIC' && field.validation?.min && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>Minimum value: {field.validation.min}</p>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div
             className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border font-sans transition-all"
@@ -290,47 +483,10 @@ export default function FormRenderer({
                 )}
             </div>
 
-            <form onSubmit={handleSubmit} className="px-8 py-8 space-y-7">
-                {currentPageFields.map((field) => {
-                    if (field.type === 'SECTION_HEADER') {
-                        return (
-                            <div key={field.id} className="pt-8 pb-2 border-b-2 mb-4" style={{ borderColor: 'var(--border)' }}>
-                                <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{field.label}</h2>
-                                {field.placeholder && (
-                                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{field.placeholder}</p>
-                                )}
-                            </div>
-                        );
-                    }
-
-                    if (field.type === 'INFO_LABEL') {
-                        return (
-                            <div key={field.id} className="p-4 rounded-xl flex gap-3 italic" style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}>
-                                <Info size={18} className="shrink-0 mt-0.5 opacity-70" />
-                                <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                                    {field.label}
-                                </div>
-                            </div>
-                        );
-                    }
-
-                    if (field.type === 'PAGE_BREAK') return null;
-
-                    const isDynamicallyRequired = dynamicallyRequiredCols.has(field.columnName);
-                    const isEffectivelyRequired = field.validation.required || isDynamicallyRequired;
-
-                    return (
-                        <div key={field.id} className="transition-all duration-300 ease-in-out">
-                            <label className="block text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                                {field.label} {isEffectivelyRequired && <span className="text-red-500">*</span>}
-                            </label>
-                            {renderInput(field, answers[field.columnName], handleInputChange, lookupData[field.columnName] || [], isPreview)}
-                            {field.type === 'NUMERIC' && field.validation?.min && (
-                                <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>Minimum value: {field.validation.min}</p>
-                            )}
-                        </div>
-                    );
-                })}
+            <form onSubmit={handleSubmit} className="px-8 py-8">
+                <div className="space-y-1">
+                    {currentPageFields.map((field) => renderFieldNode(field))}
+                </div>
 
                 {customErrors.length > 0 && (
                     <div className="border-l-4 p-4 rounded-r-lg" style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
@@ -421,20 +577,23 @@ function renderInput(
     value: any,
     onChange: (key: string, val: any) => void,
     lookupOptions: string[] = [],
-    isPreview: boolean = false
+    isPreview: boolean = false,
+    isDisabled: boolean = false,
+    isReadOnly: boolean = false
 ) {
     const commonProps = {
         id: field.columnName,
         name: field.columnName,
         required: field.validation.required,
-        disabled: false,
+        disabled: isDisabled,
+        readOnly: isReadOnly,
         style: {
             background: 'var(--input-bg)',
             borderColor: 'var(--input-border)',
             color: 'var(--text-primary)',
         } as React.CSSProperties,
         className: "block w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2",
-        value: value || '',
+        value: (value !== undefined && value !== null) ? value : '',
         onChange: (e: any) => onChange(field.columnName, e.target.value),
         minLength: field.validation?.minLength,
         maxLength: field.validation?.maxLength,
@@ -484,6 +643,7 @@ function renderInput(
                         name={field.columnName}
                         type="checkbox"
                         checked={!!value}
+                        disabled={isDisabled}
                         onChange={(e) => onChange(field.columnName, e.target.checked)}
                         className="focus:ring-black h-5 w-5 text-black border-gray-300 rounded"
                     />
@@ -513,6 +673,7 @@ function renderInput(
                                 name={field.columnName}
                                 value={opt}
                                 checked={value === opt}
+                                disabled={isDisabled}
                                 onChange={(e) => onChange(field.columnName, e.target.value)}
                                 className="w-4 h-4 text-black focus:ring-black"
                             />
@@ -538,6 +699,7 @@ function renderInput(
                             <input
                                 type="checkbox"
                                 checked={currentValues.includes(opt)}
+                                disabled={isDisabled}
                                 onChange={(e) => handleCheck(opt, e.target.checked)}
                                 className="w-4 h-4 text-black focus:ring-black rounded"
                             />
@@ -554,6 +716,7 @@ function renderInput(
                         <button
                             key={star}
                             type="button"
+                            disabled={isDisabled}
                             onClick={() => onChange(field.columnName, star)}
                             className={`text-2xl focus:outline-none transition-colors ${(value || 0) >= star ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-200'
                                 }`}
@@ -581,6 +744,7 @@ function renderInput(
                                     name={field.columnName}
                                     value={num}
                                     checked={Number(value) === num}
+                                    disabled={isDisabled}
                                     onChange={(e) => onChange(field.columnName, Number(e.target.value))}
                                     className="w-5 h-5 text-black border-gray-300 focus:ring-black"
                                 />
@@ -637,6 +801,7 @@ function renderInput(
                                                     type={isRadio ? "radio" : "checkbox"}
                                                     name={`${field.columnName}-${row}`}
                                                     checked={isSelected}
+                                                    disabled={isDisabled}
                                                     onChange={(e) => handleGridChange(row, col, !isRadio, e.target.checked)}
                                                     className={`w-4 h-4 text-black focus:ring-black border-gray-300 ${!isRadio ? 'rounded' : ''}`}
                                                 />
@@ -751,6 +916,24 @@ function renderInput(
                         <option key={idx} value={opt}>{opt}</option>
                     ))}
                 </select>
+            );
+
+        case 'CALCULATED':
+            return (
+                <div className="relative">
+                    <input
+                        type="text"
+                        {...commonProps}
+                        readOnly={true}
+                        value={value !== undefined && value !== null ? value : ''}
+                        style={{ ...commonProps.style, background: 'var(--bg-muted)', cursor: 'not-allowed' }}
+                        className={commonProps.className + " font-bold text-lg"}
+                        placeholder="Waiting for calculation..."
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-faint)' }}>
+                        Derived
+                    </div>
+                </div>
             );
 
         case 'SECTION_HEADER':

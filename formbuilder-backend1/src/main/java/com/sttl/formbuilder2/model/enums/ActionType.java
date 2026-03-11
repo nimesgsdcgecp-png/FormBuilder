@@ -20,6 +20,8 @@ public enum ActionType {
     SHOW,
     HIDE,
     REQUIRE,
+    ENABLE,
+    DISABLE,
     VALIDATION_ERROR,
     SEND_EMAIL,
 }

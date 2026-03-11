@@ -10,10 +10,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown } from 'lucide-react';
-import { deleteSubmission, deleteSubmissionsBulk } from '@/services/api';
+import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List } from 'lucide-react';
+import { deleteSubmission, deleteSubmissionsBulk, getSubmissions } from '@/services/api';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
+import SubmissionDetailDrawer from '@/components/SubmissionDetailDrawer';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -31,58 +32,94 @@ export default function ResponsesPage() {
 
   const [headers, setHeaders] = useState<FormHeader[]>([]);
   const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [publicToken, setPublicToken] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Sorting, Filtering & Pagination States
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' | null }>({ key: 'submitted_at', direction: 'desc' });
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'submitted_at', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [debouncedColumnFilters, setDebouncedColumnFilters] = useState<Record<string, string>>({});
 
-  // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Detail Drawer State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+
+  // View Mode (Grid vs Table)
+  const [viewMode, setViewMode] = useState<'TABLE' | 'GRID'>('TABLE');
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
+  const [showColumnConfig, setShowColumnConfig] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Debounce column filters
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedColumnFilters(columnFilters);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [columnFilters]);
+  
+  const fetchData = async (signal?: AbortSignal) => {
     if (!formId) return;
+    setIsFetching(true);
+    try {
+      // 1. Fetch Form Meta (to get headers)
+      const formRes = await fetch(`http://localhost:8080/api/forms/${formId}`, { 
+        credentials: 'include',
+        signal 
+      });
+      
+      if (formRes.status === 401) {
+        router.push('/login');
+        return;
+      }
+      if (!formRes.ok) throw new Error('Failed to fetch form data');
 
-    const fetchData = async () => {
-      try {
-        const formRes = await fetch(`http://localhost:8080/api/forms/${formId}`, { credentials: 'include' });
-        if (formRes.status === 401) {
-          router.push('/login');
-          return;
-        }
-        if (!formRes.ok) throw new Error('Failed to fetch form data');
+      const formData = await formRes.json();
+      setFormTitle(formData.title);
+      setPublicToken(formData.publicShareToken);
 
-        const formData = await formRes.json();
-        setFormTitle(formData.title);
-        setPublicToken(formData.publicShareToken);
+      const activeVersion = formData.versions?.[0];
+      const currentFields = activeVersion?.fields || [];
+      const currentFieldNames = new Set(currentFields.map((f: any) => f.columnName));
 
-        const activeVersion = formData.versions?.[0];
-        if (!activeVersion) {
-          setLoading(false);
-          return;
-        }
+      // 2. Fetch Submissions with Pagination, Sorting, and Filtering
+      const response = await getSubmissions(
+        formId,
+        currentPage - 1, // Backend is 0-indexed
+        pageSize,
+        sortConfig.key || 'submitted_at',
+        sortConfig.direction?.toUpperCase() || 'DESC',
+        { ...debouncedColumnFilters, ...(debouncedSearchTerm ? { 'q': debouncedSearchTerm } : {}) }
+      );
 
-        const currentFields = activeVersion.fields || [];
-        const currentFieldNames = new Set(currentFields.map((f: any) => f.columnName));
+      setData(response.content);
+      setTotalElements(response.totalElements);
+      setTotalPages(response.totalPages);
 
-        const dataRes = await fetch(`http://localhost:8080/api/forms/${formId}/submissions`, { credentials: 'include' });
-        if (dataRes.status === 401) {
-          router.push('/login');
-          return;
-        }
-        if (!dataRes.ok) throw new Error('Failed to fetch submissions');
-
-        const dataRows = await dataRes.json();
-        setData(dataRows);
-
+      // 3. Build Headers (Only if empty or formId changes)
+      if (headers.length === 0) {
         let ghostHeaders: FormHeader[] = [];
-        if (dataRows.length > 0) {
-          const allDbKeys = Object.keys(dataRows[0]);
+        if (response.content.length > 0) {
+          const allDbKeys = Object.keys(response.content[0]);
           const ghostKeys = allDbKeys.filter(key =>
             key !== 'submission_id' && key !== 'submitted_at' && key !== 'submission_status' && !currentFieldNames.has(key)
           );
@@ -99,25 +136,101 @@ export default function ResponsesPage() {
         }));
 
         setHeaders([...standardHeaders, ...formHeaders, ...ghostHeaders]);
-      } catch (error) {
-        console.error("Error loading responses:", error);
-        toast.error("Failed to load response data");
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error: any) {
+      if (error.name === 'AbortError') return;
+      console.error("Error loading responses:", error);
+      toast.error("Failed to load response data");
+    } finally {
+      setIsFetching(false);
+      setIsInitialLoading(false);
+    }
+  };
 
-    fetchData();
-  }, [formId, router]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm]);
+
+  // Reset headers when form changes
+  useEffect(() => {
+    setHeaders([]);
+    setCurrentPage(1);
+  }, [formId]);
+
+
+  // Sync visible columns when headers are initially loaded
+  useEffect(() => {
+    if (headers.length > 0 && visibleColumns.size === 0) {
+      setVisibleColumns(new Set(headers.map(h => h.key)));
+    }
+  }, [headers]);
 
   const formatLabel = (key: string) =>
     key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
+  const formatCellValue = (value: any, type?: string) => {
+    if (value === null || value === undefined) return <span className="text-[var(--text-faint)] italic">—</span>;
+
+    if (type === 'FILE' && value) {
+      return (
+        <a
+          href={`http://localhost:8080${value}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors hover:bg-[var(--accent)] hover:text-white"
+          style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
+        >
+          <Download size={10} /> FILE
+        </a>
+      );
+    }
+
+    if (typeof value === 'boolean') {
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+          value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+        }`}>
+          {value ? 'Yes' : 'No'}
+        </span>
+      );
+    }
+
+    // JSON Formatting for complex fields
+    if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return (
+            <div className="flex gap-1 overflow-hidden" title={parsed.join(', ')}>
+              {parsed.slice(0, 2).map((p, i) => (
+                <span key={i} className="px-1.5 py-0.5 rounded bg-[var(--bg-muted)] text-[10px] border border-[var(--border)]">
+                  {String(p)}
+                </span>
+              ))}
+              {parsed.length > 2 && <span className="text-[10px] text-[var(--text-faint)]">+{parsed.length - 2}</span>}
+            </div>
+          );
+        }
+      } catch (e) {}
+    }
+
+    const str = String(value);
+    if (str.length > 30) {
+      return <span title={str}>{str.substring(0, 27)}...</span>;
+    }
+
+    return str;
+  };
+
   // --- Export Logic ---
 
   const prepareExportData = () => {
-    const exportData = sortedData.length > 0 ? sortedData : data;
-    return exportData.map((row, idx) => {
+    // Use data consistently as it represents the filtered set from server
+    if (data.length === 0) return [];
+    
+    return data.map((row, idx) => {
       const exportRow: any = {};
       headers.forEach(header => {
         if (header.key === 'serial_no') {
@@ -133,11 +246,17 @@ export default function ResponsesPage() {
   };
 
   const downloadCSV = () => {
-    if (data.length === 0) return;
     const exportRows = prepareExportData();
+    if (exportRows.length === 0) {
+      toast.info("No data available to export");
+      return;
+    }
     const csvHeaders = headers.map(h => h.label).join(',');
     const csvContent = exportRows.map(row =>
-      headers.map(h => `"${row[h.label]}"`).join(',')
+      headers.map(h => {
+        const val = row[h.label];
+        return `"${String(val).replace(/"/g, '""')}"`;
+      }).join(',')
     ).join('\n');
 
     const blob = new Blob([csvHeaders + '\n' + csvContent], { type: 'text/csv' });
@@ -150,8 +269,11 @@ export default function ResponsesPage() {
   };
 
   const downloadXLSX = () => {
-    if (data.length === 0) return;
     const exportRows = prepareExportData();
+    if (exportRows.length === 0) {
+      toast.info("No data available to export");
+      return;
+    }
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Responses");
@@ -160,9 +282,12 @@ export default function ResponsesPage() {
   };
 
   const downloadPDF = () => {
-    if (data.length === 0) return;
-    const doc = new jsPDF('landscape');
     const exportRows = prepareExportData();
+    if (exportRows.length === 0) {
+      toast.info("No data available to export");
+      return;
+    }
+    const doc = new jsPDF('landscape');
     const tableHeaders = headers.map(h => h.label);
     const tableData = exportRows.map(row => headers.map(h => row[h.label]));
 
@@ -211,54 +336,20 @@ export default function ResponsesPage() {
   };
 
   // --- Data Processing Logic ---
-
-  // 1. Filter
-  const filteredData = data.filter(row => {
-    if (!searchTerm) return true;
-    return Object.values(row).some(val =>
-      String(val).toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
-
-  // 2. Sort
-  const sortedData = [...filteredData].sort((a, b) => {
-    if (!sortConfig.key || !sortConfig.direction) return 0;
-
-    const aVal = a[sortConfig.key];
-    const bVal = b[sortConfig.key];
-
-    if (aVal === bVal) return 0;
-
-    const direction = sortConfig.direction === 'asc' ? 1 : -1;
-
-    if (sortConfig.key === 'submitted_at') {
-      return (new Date(aVal).getTime() - new Date(bVal).getTime()) * direction;
-    }
-
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return (aVal - bVal) * direction;
-    }
-
-    return String(aVal).localeCompare(String(bVal)) * direction;
-  });
-
-  // 3. Paginate
-  const totalPages = Math.ceil(sortedData.length / pageSize);
-  const paginatedData = sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedData = data;
 
   const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' | null = 'asc';
+    let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
-    } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
-      direction = null;
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1); // Reset to first page
   };
 
   const getSortIcon = (key: string) => {
-    if (sortConfig.key !== key || !sortConfig.direction) return <ArrowUpDown size={14} className="opacity-30" />;
-    return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+    if (sortConfig.key !== key) return <ArrowUpDown size={14} className="opacity-30" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />;
   };
 
   // Selection helpers
@@ -280,334 +371,605 @@ export default function ResponsesPage() {
     setSelectedIds(newSelected);
   };
 
-  if (loading) {
+  if (isInitialLoading && headers.length === 0) {
     return (
-      <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-base)', color: 'var(--text-muted)' }}>
-        Loading data...
+      <div className="flex items-center justify-center h-screen" style={{ background: '#f8fafc', color: '#64748b' }}>
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCcw size={32} className="animate-spin text-blue-500" />
+          <p className="text-sm font-bold uppercase tracking-widest opacity-50">Initializing Dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      {/* ── Header ── */}
+    <div className="min-h-screen font-sans" style={{ background: '#f8fafc' }}>
+      {/* ── SaaS Header ── */}
       <header
-        className="sticky top-0 z-10 border-b"
-        style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}
+        className="sticky top-0 z-40 border-b backdrop-blur-md"
+        style={{ background: 'rgba(255, 255, 255, 0.8)', borderColor: '#e2e8f0' }}
       >
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-[1600px] mx-auto px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-6">
             <button
               onClick={() => router.push('/')}
-              className="p-2 rounded-lg transition-all"
-              style={{ color: 'var(--text-muted)' }}
+              className="p-2.5 rounded-xl transition-all hover:bg-slate-100 group"
+              style={{ color: '#64748b' }} 
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
             </button>
-            <div className="w-px h-5" style={{ background: 'var(--border)' }} />
             <div>
-              <h1 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{formTitle}</h1>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{filteredData.length} records found</p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Responses Page</span>
+                <span className="text-slate-200 font-light">/</span>
+                <h1 className="text-xl font-extrabold tracking-tight" style={{ color: '#0f172a' }}>{formTitle}</h1>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase tracking-wider border border-emerald-100/50">Live</span>
+              </div>
+              <p className="text-xs font-medium" style={{ color: '#64748b' }}>
+                Total Submissions: <span className="text-slate-900 font-bold">{totalElements}</span>
+                {searchTerm && <> • Matches: <span className="text-blue-600 font-bold">{totalElements}</span></>}
+              </p>
             </div>
           </div>
 
-          <div className="flex-1 max-w-md mx-8">
-            <div className="relative group">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors"
-                style={{ color: searchTerm ? 'var(--accent)' : 'var(--text-faint)' }}
-              />
-              <input
-                type="text"
-                placeholder="Search responses..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-10 pr-4 py-2 rounded-xl text-sm border transition-all focus:outline-none focus:ring-2"
-                style={{
-                  background: 'var(--bg-muted)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <ThemeToggle />
+            
             <a
               href={`/f/${publicToken}`}
               target="_blank"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-95"
-              style={{ background: '#3b82f6' }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
+              style={{ background: '#2563eb' }} 
             >
-              <Plus size={14} /> New
+              <Plus size={16} /> New Record
             </a>
+          </div>
+        </div>
+      </header>
 
-            {/* Export Dropdown */}
+      {/* ── SaaS Toolbar ── */}
+      <div className="max-w-[1600px] mx-auto px-8 py-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6">
+          <div className="relative group w-full md:w-96">
+            <Search
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
+              style={{ color: searchTerm ? '#2563eb' : '#94a3b8' }}
+            />
+            <input
+              type="text"
+              placeholder="Search all columns (Global Search)..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-12 pr-4 py-3 rounded-xl text-sm border-0 bg-slate-50 transition-all focus:ring-2 focus:ring-blue-500/20 focus:bg-white"
+              style={{ color: '#0f172a' }}
+            />
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            {/* Advanced Filters */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFilterPanel(!showFilterPanel)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                  Object.keys(columnFilters).length > 0 || showFilterPanel ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'
+                } hover:border-blue-400`}
+              >
+                <Filter size={16} /> 
+                <span className="hidden lg:inline">Filters</span>
+                {Object.keys(columnFilters).length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white text-blue-600 text-[10px]">{Object.keys(columnFilters).length}</span>
+                )}
+              </button>
+
+              {showFilterPanel && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowFilterPanel(false)} />
+                  <div className="absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Advanced Filtering</span>
+                        <span className="text-[9px] text-slate-400">Match specific column values</span>
+                      </div>
+                      <button 
+                        onClick={() => { setColumnFilters({}); setCurrentPage(1); }} 
+                        className="text-[10px] font-bold text-blue-600 hover:underline"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                      {headers.filter(h => h.key !== 'serial_no').map(header => (
+                        <div key={header.key} className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{header.label}</label>
+                          <input
+                            type="text"
+                            placeholder={`Filter ${header.label}...`}
+                            value={columnFilters[header.key] || ''}
+                            onChange={(e) => {
+                              const newVal = e.target.value;
+                              setColumnFilters(prev => {
+                                const updated = { ...prev };
+                                if (newVal) updated[header.key] = newVal;
+                                else delete updated[header.key];
+                                return updated;
+                              });
+                              setCurrentPage(1);
+                            }}
+                            className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* View Toggle */}
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2 shadow-inner">
+              <button
+                onClick={() => setViewMode('TABLE')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'TABLE' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}
+                title="Table View"
+              >
+                <List size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('GRID')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}
+                title="Grid View"
+              >
+                <LayoutGrid size={18} />
+              </button>
+            </div>
+
+            {/* Column Config */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnConfig(!showColumnConfig)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                  showColumnConfig ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600'
+                } hover:border-slate-300`}
+              >
+                <Settings2 size={16} /> 
+                <span className="hidden lg:inline">Columns</span>
+              </button>
+
+              {showColumnConfig && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowColumnConfig(false)} />
+                  <div className="absolute right-0 mt-3 w-72 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Layout Settings</span>
+                      <button onClick={() => setVisibleColumns(new Set(headers.map(h => h.key)))} className="text-[10px] font-bold text-blue-600 hover:underline">Reset</button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                      {headers.map(header => (
+                        <label key={header.key} className="flex items-center justify-between cursor-pointer group">
+                          <span className="text-xs font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{header.label}</span>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
+                            checked={visibleColumns.has(header.key)}
+                            onChange={() => {
+                              const newVisible = new Set(visibleColumns);
+                              if (newVisible.has(header.key)) {
+                                if (newVisible.size > 1) newVisible.delete(header.key);
+                                else toast.error("At least one column must be visible");
+                              } else {
+                                newVisible.add(header.key);
+                              }
+                              setVisibleColumns(newVisible);
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Export */}
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:brightness-110 active:scale-95"
-                style={{ background: '#10b981' }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 transition-all hover:border-slate-300"
               >
-                <Download size={14} /> Export <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                <Download size={16} /> 
+                <span className="hidden lg:inline">Export</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showExportMenu && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
-                  <div
-                    className="absolute right-0 mt-2 w-48 rounded-xl shadow-2xl border z-30 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                    style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
-                  >
-                    <button
-                      onClick={downloadXLSX}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium transition-colors hover:bg-[var(--bg-muted)]"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      <FileSpreadsheet size={16} className="text-green-500" /> Excel (.xlsx)
-                    </button>
-                    <button
-                      onClick={downloadCSV}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium transition-colors hover:bg-[var(--bg-muted)]"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      <FileText size={16} className="text-blue-500" /> CSV (.csv)
-                    </button>
-                    <button
-                      onClick={downloadPDF}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium transition-colors hover:bg-[var(--bg-muted)]"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      <FileText size={16} className="text-red-500" /> PDF (.pdf)
-                    </button>
+                  <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-2">
+                       <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
+                      </button>
+                      <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
+                      </button>
+                      <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                        <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
             </div>
           </div>
         </div>
-      </header>
 
-      {/* ── Data Table ── */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div
-          className="rounded-xl border overflow-hidden"
-          style={{
-            background: 'var(--card-bg)',
-            borderColor: 'var(--card-border)',
-            boxShadow: 'var(--card-shadow)',
-          }}
-        >
-          <div className="overflow-x-auto">
-            <table className="min-w-full" style={{ borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
-                  <th className="sticky top-0 px-5 py-3 text-left w-10">
-                    <button
-                      onClick={toggleSelectAll}
-                      className="p-1 rounded transition-colors group"
-                      style={{ color: selectedIds.size > 0 ? 'var(--accent)' : 'var(--text-faint)' }}
-                    >
-                      {selectedIds.size > 0 && selectedIds.size === paginatedData.length ? (
-                        <CheckSquare size={16} />
-                      ) : (
-                        <Square size={16} className="group-hover:text-primary" />
-                      )}
-                    </button>
-                  </th>
-                  {headers.map((header) => (
-                    <th
-                      key={header.key}
-                      onClick={() => handleSort(header.key)}
-                      className="sticky top-0 px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer group"
-                      style={{ color: 'var(--text-faint)', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}
-                    >
-                      <div className="flex items-center gap-1.5 transition-colors group-hover:text-primary">
-                        {header.label}
-                        {getSortIcon(header.key)}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="sticky top-0 px-5 py-3 text-right text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-faint)', background: 'var(--bg-muted)', borderBottom: '1px solid var(--border)' }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={headers.length + 2}
-                      className="px-6 py-16 text-center text-sm"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedData.map((row, idx) => {
-                    const globalIdx = (currentPage - 1) * pageSize + idx;
-                    const isSelected = selectedIds.has(row.submission_id);
-                    return (
-                      <tr
-                        key={row.submission_id}
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          background: isSelected ? 'var(--accent-subtle)' : (idx % 2 === 0 ? 'var(--card-bg)' : 'var(--bg-muted)')
-                        }}
-                      >
-                        <td className="px-5 py-3.5">
-                          <button
-                            onClick={() => toggleSelect(row.submission_id)}
-                            className="p-1 rounded transition-colors"
-                            style={{ color: isSelected ? 'var(--accent)' : 'var(--text-faint)' }}
-                          >
-                            {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                          </button>
-                        </td>
-                        {headers.map((header) => (
-                          <td
-                            key={`${row.submission_id}-${header.key}`}
-                            className="px-5 py-3.5 text-sm whitespace-nowrap max-w-xs truncate"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            {header.key === 'serial_no' ? (
-                              <span style={{ color: 'var(--text-muted)' }}>{globalIdx + 1}</span>
-                            ) : header.key === 'submitted_at' ? (
-                              <span style={{ color: 'var(--text-muted)' }}>{new Date(row[header.key]).toLocaleString()}</span>
-                            ) : header.key === 'submission_status' ? (
-                              <span
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border"
-                                style={{
-                                  background: row[header.key] === 'DRAFT' ? 'rgba(107, 114, 128, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                                  color: row[header.key] === 'DRAFT' ? '#6b7280' : '#10b981',
-                                  borderColor: row[header.key] === 'DRAFT' ? 'rgba(107, 114, 128, 0.2)' : 'rgba(16, 185, 129, 0.2)'
-                                }}
-                              >
-                                {row[header.key] || 'FINAL'}
-                              </span>
-                            ) : header.type === 'FILE' && row[header.key] ? (
-                              <a
-                                href={`http://localhost:8080${row[header.key]}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors"
-                                style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
-                              >
-                                <Download size={12} /> Download
-                              </a>
-                            ) : (
-                              row[header.key]?.toString() || <span style={{ color: 'var(--text-faint)' }}>—</span>
-                            )}
-                          </td>
-                        ))}
-                        <td className="px-5 py-3.5 whitespace-nowrap text-right">
-                          <div className="flex justify-end gap-2">
-                            <a
-                              href={`/f/${publicToken}?edit=${row.submission_id}`}
-                              className="p-1.5 rounded-lg transition-all"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              <Edit size={15} />
-                            </a>
-                            <button
-                              onClick={() => handleDelete(row.submission_id)}
-                              className="p-1.5 rounded-lg transition-all"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        {/* Active Filter Chips */}
+        {(Object.keys(columnFilters).length > 0 || searchTerm) && (
+          <div className="flex flex-wrap items-center gap-2 mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-2">Applied Filters:</span>
+            
+            {searchTerm && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-bold">
+                <Search size={12} />
+                <span>Global: {searchTerm}</span>
+                <button onClick={() => setSearchTerm('')} className="hover:text-blue-900 transition-colors ml-1">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {Object.entries(columnFilters).map(([key, value]) => {
+              const header = headers.find(h => h.key === key);
+              return (
+                <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold shadow-sm">
+                  <Filter size={12} className="text-slate-400" />
+                  <span className="text-slate-500 font-medium">{header?.label || key}:</span>
+                  <span className="text-slate-900">{value}</span>
+                  <button 
+                    onClick={() => {
+                      setColumnFilters(prev => {
+                        const updated = { ...prev };
+                        delete updated[key];
+                        return updated;
+                      });
+                    }}
+                    className="hover:text-red-500 transition-colors ml-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              );
+            })}
+
+            {(Object.keys(columnFilters).length + (searchTerm ? 1 : 0)) > 1 && (
+              <button 
+                onClick={() => { setColumnFilters({}); setSearchTerm(''); setCurrentPage(1); }}
+                className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-all ml-2 flex items-center gap-1 group"
+              >
+                <RefreshCcw size={10} className="group-hover:rotate-180 transition-transform duration-500" />
+                Clear All
+              </button>
+            )}
           </div>
+        )}
 
-          {/* ── Pagination Footer ── */}
-          {sortedData.length > 0 && (
-            <div className="px-6 py-4 border-t flex items-center justify-between gap-4 flex-wrap" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-3">
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Show:</span>
+        {/* ── View Rendering ── */}
+        <div className={`transition-all duration-300 ${isFetching ? 'opacity-40 grayscale-[0.5] pointer-events-none' : 'opacity-100'}`}>
+          {viewMode === 'TABLE' ? (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
+              <table className="w-full border-separate border-spacing-0">
+                <thead>
+                  <tr className="bg-slate-50/50">
+                    <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b border-slate-200 bg-slate-50/50">
+                      <button
+                        onClick={toggleSelectAll}
+                        className={`p-2 rounded-lg transition-all ${selectedIds.size === paginatedData.length && paginatedData.length > 0 ? 'text-blue-600' : 'text-slate-300'}`}
+                      >
+                        {selectedIds.size === paginatedData.length && paginatedData.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
+                      </button>
+                    </th>
+                    {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
+                      <th
+                        key={header.key}
+                        onClick={() => handleSort(header.key)}
+                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 cursor-pointer hover:bg-slate-100/50 transition-colors z-20 bg-inherit"
+                      >
+                        <div className="flex items-center gap-2">
+                          {header.label}
+                          {sortConfig.key === header.key ? (
+                            sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />
+                          ) : (
+                            <ArrowUpDown size={12} className="text-slate-300 opacity-0 group-hover:opacity-100" />
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                    <th className="sticky top-0 right-0 px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 z-30 bg-slate-50/50">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedData.length === 0 ? (
+                    <tr>
+                      <td colSpan={visibleColumns.size + 2} className="px-6 py-24 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300">
+                            <Search size={32} />
+                          </div>
+                          <p className="text-sm font-medium text-slate-500">
+                            {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedData.map((row, idx) => {
+                      const globalIdx = (currentPage - 1) * pageSize + idx;
+                      const isSelected = selectedIds.has(row.submission_id);
+                      return (
+                        <tr
+                          key={row.submission_id}
+                          className="group/row transition-colors hover:bg-slate-50/50"
+                          style={{ background: isSelected ? '#f1f5f9' : 'white' }} 
+                        >
+                          <td className="px-6 py-4 border-b border-slate-100">
+                            <button
+                              onClick={() => toggleSelect(row.submission_id)}
+                              className="p-2 rounded-lg transition-all"
+                              style={{ color: isSelected ? '#2563eb' : '#cbd5e1' }}
+                            >
+                              {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                            </button>
+                          </td>
+                          {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
+                            <td
+                              key={`${row.submission_id}-${header.key}`}
+                              className="px-6 py-4 text-sm border-b border-slate-100 whitespace-nowrap"
+                              style={{ color: '#334155' }} 
+                            >
+                              {header.key === 'serial_no' ? (
+                                <span className="font-mono text-slate-400">{globalIdx + 1}</span>
+                              ) : header.key === 'submitted_at' ? (
+                                <span className="text-slate-500">{new Date(row[header.key]).toLocaleString()}</span>
+                              ) : header.key === 'submission_status' ? (
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                    row[header.key] === 'DRAFT' 
+                                      ? 'bg-slate-100 text-slate-600 border-slate-200' 
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  }`}
+                                >
+                                  {row[header.key] || 'FINAL'}
+                                </span>
+                              ) : (
+                                <div className="max-w-[200px] truncate">
+                                  {formatCellValue(row[header.key], header.type)}
+                                </div>
+                              )}
+                            </td>
+                          ))}
+                          <td className="px-6 py-4 border-b border-slate-100 text-right sticky right-0 z-10 bg-inherit">
+                            <div className="flex justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  setSelectedSubmission(row);
+                                  setIsDrawerOpen(true);
+                                }}
+                                className="p-2 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <a
+                                href={`/f/${publicToken}?edit=${row.submission_id}`}
+                                className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all"
+                                title="Edit"
+                              >
+                                <Edit size={16} />
+                              </a>
+                              <button
+                                onClick={() => handleDelete(row.submission_id)}
+                                className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* ── Grid View ── */
+          <div className="space-y-8">
+            {paginatedData.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-slate-300 py-20 text-center">
+                <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center mx-auto mb-4 text-slate-300">
+                  <Search size={32} />
+                </div>
+                <p className="text-sm font-medium text-slate-500">
+                  {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {paginatedData.map((row, idx) => {
+                  const globalIdx = (currentPage - 1) * pageSize + idx;
+                  const isSelected = selectedIds.has(row.submission_id);
+                  return (
+                    <div
+                      key={row.submission_id}
+                      className={`group relative p-6 rounded-[2rem] border transition-all duration-300 ${
+                        isSelected ? 'bg-blue-50/50 border-blue-200 shadow-md translate-y-[-4px]' : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-xl hover:translate-y-[-4px]'
+                      }`}
+                    >
+                      {/* Checkbox Overlay */}
+                      <button
+                        onClick={() => toggleSelect(row.submission_id)}
+                        className={`absolute top-6 left-6 p-2 rounded-xl transition-all z-10 ${
+                          isSelected ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 opacity-0 group-hover:opacity-100 border border-slate-100'
+                        }`}
+                      >
+                        {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                      </button>
+
+                      <div className="flex justify-end mb-6">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          row.submission_status === 'DRAFT' 
+                            ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                            : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        }`}>
+                          {row.submission_status || 'FINAL'}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-5 mb-8">
+                        {headers.filter(h => visibleColumns.has(h.key) && h.key !== 'submission_status').slice(0, 5).map(header => (
+                          <div key={header.key} className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{header.label}</label>
+                            <p className="text-sm font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
+                              {header.key === 'serial_no' ? globalIdx + 1 : header.key === 'submitted_at' ? new Date(row[header.key]).toLocaleDateString() : formatCellValue(row[header.key], header.type)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Status</span>
+                          <span className="text-xs text-slate-600 font-medium">
+                            {row.submission_status === 'DRAFT' ? 'In Progress' : 'Completed'}
+                          </span>
+                        </div>
+                        <div className="flex gap-1.5">
+                           <button 
+                            onClick={() => { setSelectedSubmission(row); setIsDrawerOpen(true); }} 
+                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-90"
+                            title="View Details"
+                           >
+                            <Eye size={18} />
+                           </button>
+                           <a 
+                            href={`/f/${publicToken}?edit=${row.submission_id}`} 
+                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all active:scale-90"
+                            title="Edit"
+                           >
+                            <Edit size={18} />
+                           </a>
+                           <button 
+                            onClick={() => handleDelete(row.submission_id)} 
+                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all active:scale-90"
+                            title="Delete"
+                           >
+                            <Trash2 size={18} />
+                           </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+        {/* ── SaaS Pagination ── */}
+        {totalElements > 0 && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-8 px-8 py-5 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Per Page</span>
                 <select
                   value={pageSize}
                   onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                  className="px-2 py-1.5 rounded-lg text-xs font-medium border"
-                  style={{ background: 'var(--bg-base)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                  className="bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500/20 outline-none"
                 >
-                  {[5, 10, 20, 50, 100].map(size => (
-                    <option key={size} value={size}>{size} rows</option>
+                  {[10, 20, 50, 100].map(size => (
+                    <option key={size} value={size}>{size}</option>
                   ))}
                 </select>
-                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>{filteredData.length} records total</span>
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white"
-                >
-                  <ChevronsLeft size={16} />
-                </button>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="flex items-center px-4 py-1.5 rounded-lg border text-xs font-semibold">
-                  Page {currentPage} of {totalPages || 1}
-                </div>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="p-1.5 rounded-lg border disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white"
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="p-1.5 rounded-lg border disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white"
-                >
-                  <ChevronsRight size={16} />
-                </button>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                {totalElements} records
               </div>
             </div>
-          )}
-        </div>
-      </main>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+              >
+                <ChevronsLeft size={16} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span className="text-slate-900 font-bold">{currentPage}</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-slate-500">{totalPages || 1}</span>
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+              >
+                <ChevronsRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Detail Drawer ── */}
+      <SubmissionDetailDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        submission={selectedSubmission}
+        headers={headers}
+        formTitle={formTitle}
+      />
 
       {/* ── Bulk Action Toolbar ── */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
-          <div
-            className="flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl border"
-            style={{ background: 'rgba(15, 23, 42, 0.9)', borderColor: 'rgba(51, 65, 85, 0.5)', color: 'white' }}
-          >
-            <div className="flex items-center gap-3 pr-4 border-r border-slate-700">
-              <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-bold">{selectedIds.size}</div>
-              <span className="text-sm font-medium">Selected</span>
+          <div className="flex items-center gap-4 px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white border border-slate-800">
+            <div className="flex items-center gap-3 pr-4 border-r border-slate-700 font-bold text-xs">
+              <span className="text-blue-400">{selectedIds.size}</span> Selected
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleDelete(Array.from(selectedIds))}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 transition-colors text-xs font-bold"
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-xs font-bold"
               >
                 <Trash2 size={14} /> Delete
               </button>
-              <button onClick={() => setSelectedIds(new Set())} className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
-                <X size={16} />
+              <button onClick={() => setSelectedIds(new Set())} className="p-1.5 text-slate-400 hover:text-white transition-colors">
+                <X size={18} />
               </button>
             </div>
           </div>

@@ -3,6 +3,9 @@ package com.sttl.formbuilder2.service;
 import com.sttl.formbuilder2.dto.internal.FormRuleDTO;
 import com.sttl.formbuilder2.dto.internal.RuleConditionDTO;
 import com.sttl.formbuilder2.dto.internal.RuleActionDTO;
+import com.sttl.formbuilder2.dto.internal.RuleConditionEntryDTO;
+import com.sttl.formbuilder2.dto.internal.ConditionGroupDTO;
+import com.sttl.formbuilder2.model.enums.ConditionLogic;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -57,21 +60,13 @@ public class RuleEngineService {
             return;
 
         for (FormRuleDTO rule : rules) {
-            RuleConditionDTO condition = rule.getConditions().get(0); // Note: currently evaluates only the first
-                                                                      // condition
-
-            boolean isMatch = evaluateCondition(condition, answers);
+            boolean isMatch = evaluateRule(rule, answers);
 
             if (isMatch) {
                 for (RuleActionDTO action : rule.getActions()) {
-
                     if ("VALIDATION_ERROR".equals(action.getType().name())) {
-                        // Reject submission with the builder-defined error message
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, action.getMessage());
-                    }
-
-                    else if ("REQUIRE".equals(action.getType().name())) {
-                        // Enforce that the target field has a non-empty value
+                    } else if ("REQUIRE".equals(action.getType().name())) {
                         Object targetValue = answers.get(action.getTargetField());
                         if (targetValue == null || targetValue.toString().trim().isEmpty()) {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -81,6 +76,44 @@ public class RuleEngineService {
                 }
             }
         }
+    }
+
+    /**
+     * Helper to evaluate all conditions in a rule based on AND/OR logic.
+     */
+    private boolean evaluateRule(FormRuleDTO rule, Map<String, Object> answers) {
+        List<RuleConditionEntryDTO> conditions = rule.getConditions();
+        if (conditions == null || conditions.isEmpty())
+            return false;
+
+        ConditionLogic logic = rule.getConditionLogic() != null ? rule.getConditionLogic() : ConditionLogic.AND;
+        return evaluateEntries(conditions, logic, answers);
+    }
+
+    private boolean evaluateEntries(List<RuleConditionEntryDTO> entries, ConditionLogic logic,
+            Map<String, Object> answers) {
+        if (logic == ConditionLogic.OR) {
+            for (RuleConditionEntryDTO entry : entries) {
+                if (evaluateEntry(entry, answers))
+                    return true;
+            }
+            return false;
+        } else {
+            for (RuleConditionEntryDTO entry : entries) {
+                if (!evaluateEntry(entry, answers))
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    private boolean evaluateEntry(RuleConditionEntryDTO entry, Map<String, Object> answers) {
+        if (entry instanceof RuleConditionDTO condition) {
+            return evaluateCondition(condition, answers);
+        } else if (entry instanceof ConditionGroupDTO group) {
+            return evaluateEntries(group.getConditions(), group.getLogic(), answers);
+        }
+        return false;
     }
 
     /**
@@ -100,16 +133,10 @@ public class RuleEngineService {
             return;
 
         for (FormRuleDTO rule : rules) {
-            RuleConditionDTO condition = rule.getConditions().get(0);
-
-            if (evaluateCondition(condition, answers)) {
+            if (evaluateRule(rule, answers)) {
                 for (RuleActionDTO action : rule.getActions()) {
-
                     if ("SEND_EMAIL".equals(action.getType().name())) {
                         String emailAddress = action.getMessage();
-
-                        // DEV: Email is simulated in the console.
-                        // TODO (production): replace with JavaMailSender.send(...)
                         System.out.println("==================================================");
                         System.out.println("🚀 WORKFLOW TRIGGERED: SEND_EMAIL");
                         System.out.println("📧 TO: " + emailAddress);

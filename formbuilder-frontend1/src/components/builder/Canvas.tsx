@@ -1,23 +1,9 @@
-// src/components/builder/Canvas.tsx
-'use client';
-
-/**
- * Canvas — The Droppable Form Building Area
- *
- * What it does:
- *   The central area of the builder where fields live. Users can:
- *     - Drop fields dragged from the Sidebar onto the canvas.
- *     - Re-order fields by dragging them within the canvas.
- *     - Click the canvas background to deselect the active field.
- *     - Edit the form title and description inline.
- *     - Toggle "Allow respondents to edit their submission".
- */
-
-import { useDroppable } from '@dnd-kit/core';
+import React from 'react';
+import { useDroppable, useDndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useFormStore } from '@/store/useFormStore';
 import { SortableField } from './SortableField';
-import { MousePointer2 } from 'lucide-react';
+import { MousePointer2, Plus } from 'lucide-react';
 
 // Maps font names to CSS font-family values
 const FONT_MAP: Record<string, string> = {
@@ -32,6 +18,12 @@ export default function Canvas() {
   const { fields } = schema;
 
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas-droppable' });
+  const { setNodeRef: setBottomRef, isOver: isOverBottom } = useDroppable({ id: 'canvas-drop-bottom' });
+  const { active, over } = useDndContext();
+
+  const isDraggingNewField = active?.data.current?.isSidebarBtn;
+  const overId = over?.id;
+  const overIndex = fields.findIndex(f => f.id === overId);
 
   return (
     <div
@@ -52,10 +44,10 @@ export default function Canvas() {
           className="rounded-xl min-h-[600px] transition-all duration-200 relative"
           style={{
             background: 'var(--card-bg)',
-            border: isOver
+            border: isOver || isOverBottom
               ? '2px dashed var(--accent)'
               : '1px solid var(--card-border)',
-            boxShadow: isOver
+            boxShadow: isOver || isOverBottom
               ? '0 0 0 4px var(--accent-muted)'
               : 'var(--card-shadow)',
             padding: '2rem',
@@ -119,7 +111,7 @@ export default function Canvas() {
           <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-3 min-h-[200px]">
               {/* Empty state */}
-              {fields.length === 0 && !isOver && (
+              {fields.length === 0 && !isOver && !isOverBottom && (
                 <div
                   className="flex flex-col items-center justify-center h-56 rounded-xl border-2 border-dashed gap-3"
                   style={{ borderColor: 'var(--border)', color: 'var(--text-faint)', background: 'var(--bg-muted)' }}
@@ -132,15 +124,49 @@ export default function Canvas() {
                 </div>
               )}
 
-              {fields.map((field) => (
-                <SortableField
-                  key={field.id}
-                  field={field}
-                  onRemove={removeField}
-                  onSelect={selectField}
-                  isSelected={selectedFieldId === field.id}
-                />
+              {fields.map((field, index) => (
+                <React.Fragment key={field.id}>
+                  {/* Drop Placeholder (Visual Preview) */}
+                  {isDraggingNewField && overIndex === index && (
+                    <div
+                      className="h-[72px] rounded-xl border-2 border-dashed flex items-center justify-center animate-in fade-in zoom-in duration-200"
+                      style={{ borderColor: 'var(--accent)', background: 'var(--accent-subtle)' }}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                        <Plus size={14} /> Insert {active.data.current?.type} here
+                      </div>
+                    </div>
+                  )}
+                  <SortableField
+                    field={field}
+                    onRemove={removeField}
+                    onSelect={selectField}
+                    isSelected={selectedFieldId === field.id}
+                  />
+                </React.Fragment>
               ))}
+
+              {/* Explicit Drop-at-bottom Zone & Placeholder */}
+              <div
+                ref={setBottomRef}
+                className={`group relative h-20 rounded-xl border-2 border-dashed transition-all flex items-center justify-center ${fields.length > 0 ? 'mt-6' : ''}`}
+                style={{
+                  borderColor: isOverBottom || (isDraggingNewField && overId === 'canvas-droppable') ? 'var(--accent)' : 'var(--border)',
+                  background: isOverBottom || (isDraggingNewField && overId === 'canvas-droppable') ? 'var(--accent-subtle)' : 'transparent',
+                  opacity: isDraggingNewField || fields.length === 0 ? 1 : 0.4
+                }}
+              >
+                {(isOverBottom || (isDraggingNewField && overId === 'canvas-droppable')) ? (
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider animate-pulse" style={{ color: 'var(--accent)' }}>
+                    <Plus size={14} /> Drop to append {isDraggingNewField ? active.data.current?.type : 'field'}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <Plus size={20} style={{ color: 'var(--text-faint)' }} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Add to end</span>
+                  </div>
+                )}
+              </div>
             </div>
           </SortableContext>
         </div>

@@ -1,0 +1,131 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > ActionType</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.enums</a>
+</div>
+
+<h1>Coverage Summary for Class: ActionType (com.sttl.formbuilder2.model.enums)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">ActionType</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (8/8)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.enums;
+&nbsp;
+&nbsp;/**
+&nbsp; * ActionType — The Effect a Logic Rule Can Trigger
+&nbsp; *
+&nbsp; * When a rule&#39;s condition is met, one of these actions is executed by
+&nbsp; * {@code RuleEngineService}:
+&nbsp; *
+&nbsp; * SHOW — (Currently a frontend-only hint) Show a hidden field.
+&nbsp; * HIDE — (Currently a frontend-only hint) Hide a visible field.
+&nbsp; * REQUIRE — Server-side: enforce that the target field is not blank;
+&nbsp; * throws HTTP 400 if missing.
+&nbsp; * VALIDATION_ERROR — Server-side: reject the submission with a custom error
+&nbsp; * message stored in {@code RuleActionDTO.message}.
+&nbsp; * SEND_EMAIL — Server-side post-submission workflow: logs/sends an email
+&nbsp; * to the address in {@code RuleActionDTO.message}.
+&nbsp; * (Email delivery is simulated via System.out in dev mode.)
+&nbsp; */
+<b class="fc">&nbsp;public enum ActionType {</b>
+<b class="fc">&nbsp;    SHOW,</b>
+<b class="fc">&nbsp;    HIDE,</b>
+<b class="fc">&nbsp;    REQUIRE,</b>
+<b class="fc">&nbsp;    ENABLE,</b>
+<b class="fc">&nbsp;    DISABLE,</b>
+<b class="fc">&nbsp;    VALIDATION_ERROR,</b>
+<b class="fc">&nbsp;    SEND_EMAIL,</b>
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

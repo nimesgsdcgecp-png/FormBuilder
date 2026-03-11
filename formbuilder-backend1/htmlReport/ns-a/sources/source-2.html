@@ -1,0 +1,622 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormService</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
+</div>
+
+<h1>Coverage Summary for Class: FormService (com.sttl.formbuilder2.service)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormService</td>
+<td class="coverageStat">
+  <span class="percent">
+    86.7%
+  </span>
+  <span class="absValue">
+    (13/15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    44.1%
+  </span>
+  <span class="absValue">
+    (30/68)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    77.6%
+  </span>
+  <span class="absValue">
+    (135/174)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormService$$SpringCGLIB$$0</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    86.7%
+  </span>
+  <span class="absValue">
+    (13/15)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    44.1%
+  </span>
+  <span class="absValue">
+    (30/68)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    77.6%
+  </span>
+  <span class="absValue">
+    (135/174)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.databind.ObjectMapper;
+&nbsp;import com.sttl.formbuilder2.dto.request.CreateFormRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormFieldResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormVersionResponseDTO;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormField;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormVersion;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import com.sttl.formbuilder2.repository.FormRepository;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import jakarta.persistence.EntityNotFoundException;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.security.core.context.SecurityContextHolder;
+&nbsp;import org.springframework.stereotype.Service;
+&nbsp;import org.springframework.transaction.annotation.Transactional;
+&nbsp;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;import java.util.stream.Collectors;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormService — Core Business Logic for Form Management
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Orchestrates the full lifecycle of a form: creation, versioning, schema
+&nbsp; * evolution, DTO mapping, and soft-deletion. Called exclusively by
+&nbsp; * {@link com.sttl.formbuilder2.controller.FormController}.
+&nbsp; *
+&nbsp; * Key responsibilities:
+&nbsp; * - Creates Form entities and their initial FormVersion when a builder first
+&nbsp; * saves.
+&nbsp; * - Coordinates with {@code DynamicTableService} to create/evolve the physical
+&nbsp; * PostgreSQL submission table when a form is published or re-published.
+&nbsp; * - Maps between {@code Form} entity graphs and response DTOs, including safely
+&nbsp; * parsing JSON options and rules stored as TEXT/JSONB.
+&nbsp; *
+&nbsp; * Dependencies:
+&nbsp; * - {@code FormRepository} — Spring Data JPA repository for CRUD on
+&nbsp; * {@code forms}.
+&nbsp; * - {@code DynamicTableService} — DDL operations on dynamic submission tables.
+&nbsp; * - {@code ObjectMapper} — Jackson for serialising/deserialising field options
+&nbsp; * and logic rules stored as JSON strings.
+&nbsp; *
+&nbsp; * Transactional behaviour:
+&nbsp; * Write methods are {@code @Transactional} so that the Form entity save and the
+&nbsp; * DDL table operation either both succeed or both roll back.
+&nbsp; */
+&nbsp;@Service
+<b class="fc">&nbsp;@RequiredArgsConstructor</b>
+&nbsp;public class FormService {
+&nbsp;
+&nbsp;    private final FormRepository formRepository;
+&nbsp;    private final DynamicTableService dynamicTableService;
+&nbsp;    private final ObjectMapper objectMapper;
+&nbsp;    private final UserRepository userRepository;
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // HELPER: Get Current User
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    private AppUser getCurrentUser() {
+<b class="fc">&nbsp;        String username = SecurityContextHolder.getContext().getAuthentication().getName();</b>
+<b class="fc">&nbsp;        return userRepository.findByUsername(username)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Current user not found in database&quot;));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // CREATE (POST /api/forms)
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Creates a brand-new form with version 1.
+&nbsp;     *
+&nbsp;     * Steps:
+&nbsp;     * 1. Build and persist the {@link Form} entity to get its generated ID.
+&nbsp;     * 2. Build {@link FormVersion} v1, mapping field DTOs to {@link FormField}
+&nbsp;     * entities.
+&nbsp;     * 3. Serialise logic rules to JSON and store on the version.
+&nbsp;     * 4. Set the dynamic table name to {@code sub_{id}_v1}.
+&nbsp;     * 5. If status is PUBLISHED, call
+&nbsp;     * {@code DynamicTableService.createDynamicTable()}
+&nbsp;     * to provision the physical submission table.
+&nbsp;     *
+&nbsp;     * @param request Incoming payload from POST /api/forms.
+&nbsp;     * @return The newly persisted {@link Form} entity (with generated ID).
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public Form createForm(CreateFormRequestDTO request) {
+&nbsp;        // 1. Build the Form entity
+<b class="fc">&nbsp;        Form form = new Form();</b>
+<b class="fc">&nbsp;        form.setTitle(request.getTitle());</b>
+<b class="fc">&nbsp;        form.setDescription(request.getDescription());</b>
+<b class="fc">&nbsp;        form.setAllowEditResponse(request.isAllowEditResponse());</b>
+&nbsp;
+<b class="pc">&nbsp;        FormStatus incomingStatus = request.getStatus() != null ? request.getStatus() : FormStatus.DRAFT;</b>
+<b class="fc">&nbsp;        form.setStatus(incomingStatus);</b>
+&nbsp;
+&nbsp;        // Associate the form with the currently logged-in user
+<b class="fc">&nbsp;        form.setOwner(getCurrentUser());</b>
+&nbsp;
+&nbsp;        // Save early to get the generated ID (needed for the dynamic table name)
+<b class="fc">&nbsp;        form = formRepository.save(form);</b>
+&nbsp;
+&nbsp;        // 2. Build Version 1
+<b class="fc">&nbsp;        FormVersion version = new FormVersion();</b>
+<b class="fc">&nbsp;        version.setForm(form);</b>
+<b class="fc">&nbsp;        version.setVersionNumber(1);</b>
+&nbsp;
+&nbsp;        // 3. Map fields from request DTOs to JPA entities
+<b class="fc">&nbsp;        version.setFields(mapFields(request.getFields(), version));</b>
+&nbsp;
+&nbsp;        // 4. Serialise logic rules to JSON and store on the version row
+<b class="fc">&nbsp;        version.setRules(serializeRules(request.getRules()));</b>
+&nbsp;
+<b class="fc">&nbsp;        form.getVersions().add(version);</b>
+&nbsp;
+&nbsp;        // 5. Set the dynamic submission table name (e.g. &quot;sub_3_u5_v1&quot;)
+&nbsp;        // Including the user ID ensures there are no table name collisions across
+&nbsp;        // different users
+<b class="fc">&nbsp;        String dynamicTableName = &quot;sub_&quot; + form.getId() + &quot;_u&quot; + form.getOwner().getId() + &quot;_v1&quot;;</b>
+<b class="fc">&nbsp;        form.setTargetTableName(dynamicTableName);</b>
+&nbsp;
+&nbsp;        // 6. Save everything via cascade (Form → FormVersion → FormField)
+<b class="fc">&nbsp;        formRepository.save(form);</b>
+&nbsp;
+&nbsp;        // 7. Create the physical PostgreSQL submission table ONLY when publishing
+<b class="pc">&nbsp;        if (incomingStatus == FormStatus.PUBLISHED) {</b>
+<b class="fc">&nbsp;            dynamicTableService.createDynamicTable(dynamicTableName, request.getFields());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return form;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ ALL (GET /api/forms)
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Returns a lightweight summary list of all non-archived forms, ordered by
+&nbsp;     * most recently updated. Used to populate the dashboard grid of form cards.
+&nbsp;     *
+&nbsp;     * @return List of {@link FormSummaryResponseDTO} (no versions or fields
+&nbsp;     *         loaded).
+&nbsp;     */
+&nbsp;    public List&lt;FormSummaryResponseDTO&gt; getAllForms() {
+<b class="fc">&nbsp;        AppUser currentUser = getCurrentUser();</b>
+<b class="fc">&nbsp;        List&lt;Form&gt; forms = formRepository.findByOwnerAndStatusNotOrderByUpdatedAtDesc(currentUser, FormStatus.ARCHIVED);</b>
+<b class="fc">&nbsp;        return forms.stream()</b>
+<b class="fc">&nbsp;                .map(this::toSummaryDTO)</b>
+<b class="fc">&nbsp;                .collect(Collectors.toList());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ ONE (GET /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Returns the full detail of a form including all versions, fields, options,
+&nbsp;     * and logic rules. Used by the builder to reload an existing form and by the
+&nbsp;     * admin responses page to build column headers.
+&nbsp;     *
+&nbsp;     * @param id The internal form ID.
+&nbsp;     * @return Fully populated {@link FormDetailResponseDTO}.
+&nbsp;     * @throws EntityNotFoundException if no form with this ID exists.
+&nbsp;     */
+&nbsp;    @Transactional(readOnly = true)
+&nbsp;    public FormDetailResponseDTO getFormById(Long id) {
+<b class="fc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new EntityNotFoundException(&quot;Form not found with ID: &quot; + id));</b>
+<b class="fc">&nbsp;        return toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ BY TOKEN (GET /api/forms/public/{token})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Resolves a UUID share token to the matching form and returns its full detail.
+&nbsp;     * Used exclusively by the public form page ({@code /f/[token]}) to load the
+&nbsp;     * schema before rendering the form to a respondent.
+&nbsp;     *
+&nbsp;     * @param token The {@code publicShareToken} UUID string from the URL.
+&nbsp;     * @return Fully populated {@link FormDetailResponseDTO}.
+&nbsp;     * @throws RuntimeException if no form with this token exists.
+&nbsp;     */
+&nbsp;    @Transactional(readOnly = true)
+&nbsp;    public FormDetailResponseDTO getFormByToken(String token) {
+<b class="fc">&nbsp;        Form form = formRepository.findByPublicShareToken(token)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found or link is invalid.&quot;));</b>
+<b class="fc">&nbsp;        return toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // UPDATE (PUT /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Updates an existing form and creates a new version snapshot.
+&nbsp;     *
+&nbsp;     * Steps:
+&nbsp;     * 1. Update form metadata (title, description, status, allowEditResponse).
+&nbsp;     * 2. Create a new {@link FormVersion} with the updated field list and rules,
+&nbsp;     * incrementing the version counter for audit history.
+&nbsp;     * 3. Depending on the status transition:
+&nbsp;     * - DRAFT → PUBLISHED : CREATE TABLE (idempotent, uses IF NOT EXISTS).
+&nbsp;     * - PUBLISHED → PUBLISHED : ALTER TABLE to add any new columns.
+&nbsp;     * - PUBLISHED → DRAFT : no DDL changes.
+&nbsp;     *
+&nbsp;     * Schema evolution is additive-only — existing columns are never dropped, so
+&nbsp;     * historical submissions remain intact. Removed fields become &quot;ghost columns&quot;.
+&nbsp;     *
+&nbsp;     * @param formId  The ID of the form to update.
+&nbsp;     * @param request Incoming payload from PUT /api/forms/{id}.
+&nbsp;     * @return The updated {@link Form} entity.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public Form updateForm(Long formId, UpdateFormRequestDTO request) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(formId)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="nc">&nbsp;        FormStatus oldStatus = form.getStatus();</b>
+<b class="nc">&nbsp;        FormStatus newStatus = request.getStatus() != null ? request.getStatus() : oldStatus;</b>
+&nbsp;
+<b class="nc">&nbsp;        form.setTitle(request.getTitle());</b>
+<b class="nc">&nbsp;        form.setDescription(request.getDescription());</b>
+<b class="nc">&nbsp;        form.setStatus(newStatus);</b>
+<b class="nc">&nbsp;        form.setAllowEditResponse(request.isAllowEditResponse());</b>
+&nbsp;
+&nbsp;        // Create new version for audit history
+<b class="nc">&nbsp;        int nextVersionNum = form.getVersions().size() + 1;</b>
+<b class="nc">&nbsp;        FormVersion newVersion = new FormVersion();</b>
+<b class="nc">&nbsp;        newVersion.setForm(form);</b>
+<b class="nc">&nbsp;        newVersion.setVersionNumber(nextVersionNum);</b>
+<b class="nc">&nbsp;        newVersion.setChangeLog(&quot;Updated via Builder&quot;);</b>
+&nbsp;
+<b class="nc">&nbsp;        newVersion.setFields(mapFields(request.getFields(), newVersion));</b>
+<b class="nc">&nbsp;        newVersion.setRules(serializeRules(request.getRules()));</b>
+&nbsp;
+<b class="nc">&nbsp;        form.getVersions().add(newVersion);</b>
+<b class="nc">&nbsp;        form = formRepository.save(form);</b>
+&nbsp;
+&nbsp;        // Evolve the physical submission table based on the status transition
+<b class="nc">&nbsp;        if ((oldStatus == null || oldStatus == FormStatus.DRAFT) &amp;&amp; newStatus == FormStatus.PUBLISHED) {</b>
+&nbsp;            // CREATE TABLE IF NOT EXISTS — safe to re-call if previously published then
+&nbsp;            // drafted
+<b class="nc">&nbsp;            dynamicTableService.createDynamicTable(form.getTargetTableName(), request.getFields());</b>
+<b class="nc">&nbsp;        } else if (oldStatus == FormStatus.PUBLISHED &amp;&amp; newStatus == FormStatus.PUBLISHED) {</b>
+&nbsp;            // Only ADD new columns; existing data is never touched
+<b class="nc">&nbsp;            dynamicTableService.alterDynamicTable(form.getTargetTableName(), request.getFields());</b>
+&nbsp;        }
+&nbsp;
+<b class="nc">&nbsp;        return form;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // DELETE / ARCHIVE (DELETE /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Soft-deletes a form by setting its status to ARCHIVED.
+&nbsp;     * The form and all its submissions remain in the database — nothing is
+&nbsp;     * physically
+&nbsp;     * deleted. The form disappears from the dashboard list (filtered by status ≠
+&nbsp;     * ARCHIVED).
+&nbsp;     *
+&nbsp;     * @param id The ID of the form to archive.
+&nbsp;     */
+&nbsp;    @Transactional
+&nbsp;    public void deleteForm(Long id) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+<b class="nc">&nbsp;        form.setStatus(FormStatus.ARCHIVED);</b>
+<b class="nc">&nbsp;        formRepository.save(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // PRIVATE HELPERS
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Converts a list of {@link FieldDefinitionRequestDTO}s into {@link FormField}
+&nbsp;     * JPA entities for the given version. Also:
+&nbsp;     * - Assigns the ordinal position (insertion order = display order).
+&nbsp;     * - Derives the SQL column name from the label (e.g. &quot;First Name&quot; →
+&nbsp;     * &quot;first_name&quot;).
+&nbsp;     * - Serialises the {@code options} object to a JSON string for TEXT storage.
+&nbsp;     */
+&nbsp;    private List&lt;FormField&gt; mapFields(List&lt;FieldDefinitionRequestDTO&gt; fieldDTOs, FormVersion version) {
+<b class="fc">&nbsp;        List&lt;FormField&gt; allEntities = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;        flattenAndMapFields(fieldDTOs, version, null, allEntities);</b>
+<b class="fc">&nbsp;        return allEntities;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void flattenAndMapFields(List&lt;FieldDefinitionRequestDTO&gt; dtos, FormVersion version, String parentColumnName,
+&nbsp;            List&lt;FormField&gt; allEntities) {
+<b class="pc">&nbsp;        if (dtos == null)</b>
+&nbsp;            return;
+<b class="fc">&nbsp;        for (FieldDefinitionRequestDTO dto : dtos) {</b>
+<b class="fc">&nbsp;            FormField entity = new FormField();</b>
+<b class="fc">&nbsp;            entity.setFormVersion(version);</b>
+<b class="fc">&nbsp;            entity.setFieldLabel(dto.getLabel());</b>
+<b class="fc">&nbsp;            entity.setFieldType(dto.getType());</b>
+<b class="fc">&nbsp;            entity.setIsMandatory(dto.isRequired());</b>
+<b class="fc">&nbsp;            entity.setValidationRules(dto.getValidation());</b>
+<b class="fc">&nbsp;            entity.setDefaultValue(dto.getDefaultValue());</b>
+<b class="fc">&nbsp;            entity.setCalculationFormula(dto.getCalculationFormula());</b>
+<b class="fc">&nbsp;            entity.setIsHidden(dto.isHidden());</b>
+<b class="fc">&nbsp;            entity.setParentColumnName(parentColumnName);</b>
+&nbsp;            entity.setOrdinalPosition(allEntities.size());
+<b class="pc">&nbsp;</b>
+&nbsp;            if (dto.getOptions() != null) {
+<b class="nc">&nbsp;                try {</b>
+&nbsp;                    entity.setOptions(objectMapper.writeValueAsString(dto.getOptions()));
+<b class="nc">&nbsp;                } catch (Exception e) {</b>
+&nbsp;                    entity.setOptions(&quot;[]&quot;);
+&nbsp;                }
+&nbsp;            }
+<b class="fc">&nbsp;</b>
+<b class="pc">&nbsp;            String colName = dto.getColumnName();</b>
+<b class="nc">&nbsp;            if (colName == null || colName.trim().isEmpty()) {</b>
+&nbsp;                colName = dto.getLabel().trim().toLowerCase().replaceAll(&quot;[^a-z0-9]+&quot;, &quot;_&quot;);
+<b class="pc">&nbsp;            }</b>
+<b class="nc">&nbsp;            if (colName.length() &gt; 64) {</b>
+&nbsp;                colName = colName.substring(0, 60) + &quot;_&quot; + Integer.toHexString(colName.hashCode()).substring(0, 3);
+<b class="pc">&nbsp;            }</b>
+<b class="nc">&nbsp;            if (colName.isEmpty() || colName.equals(&quot;_&quot;)) {</b>
+&nbsp;                colName = dto.getType().name().toLowerCase() + &quot;_&quot; + System.nanoTime() % 10000;
+<b class="fc">&nbsp;            }</b>
+&nbsp;            entity.setColumnName(colName);
+<b class="fc">&nbsp;</b>
+&nbsp;            allEntities.add(entity);
+&nbsp;
+<b class="pc">&nbsp;            // Recursively process children</b>
+<b class="nc">&nbsp;            if (dto.getChildren() != null &amp;&amp; !dto.getChildren().isEmpty()) {</b>
+&nbsp;                flattenAndMapFields(dto.getChildren(), version, colName, allEntities);
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Serialises a list of rule request DTOs to a JSON string for storage in the
+&nbsp;     * {@code form_versions.rules} TEXT column.
+&nbsp;     * Returns {@code &quot;[]&quot;} for null/empty lists so the column always holds valid
+&nbsp;     * JSON.
+&nbsp;     */
+<b class="pc">&nbsp;    private String serializeRules(Object rules) {</b>
+<b class="nc">&nbsp;        if (rules == null)</b>
+<b class="pc">&nbsp;            return &quot;[]&quot;;</b>
+<b class="nc">&nbsp;        if (rules instanceof List &amp;&amp; ((List&lt;?&gt;) rules).isEmpty())</b>
+&nbsp;            return &quot;[]&quot;;
+<b class="fc">&nbsp;        try {</b>
+&nbsp;            return objectMapper.writeValueAsString(rules);
+<b class="nc">&nbsp;        } catch (Exception e) {</b>
+&nbsp;            return &quot;[]&quot;;
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Maps a {@link Form} to a lightweight {@link FormSummaryResponseDTO} for the
+&nbsp;     * dashboard list. Does NOT include versions or fields to keep the response
+&nbsp;     * small.
+&nbsp;     */
+<b class="fc">&nbsp;    private FormSummaryResponseDTO toSummaryDTO(Form form) {</b>
+<b class="fc">&nbsp;        return FormSummaryResponseDTO.builder()</b>
+<b class="fc">&nbsp;                .id(form.getId())</b>
+<b class="fc">&nbsp;                .title(form.getTitle())</b>
+<b class="fc">&nbsp;                .description(form.getDescription())</b>
+<b class="fc">&nbsp;                .status(form.getStatus())</b>
+<b class="fc">&nbsp;                .createdAt(form.getCreatedAt())</b>
+<b class="fc">&nbsp;                .updatedAt(form.getUpdatedAt())</b>
+<b class="fc">&nbsp;                .targetTableName(form.getTargetTableName())</b>
+<b class="fc">&nbsp;                .publicShareToken(form.getPublicShareToken())</b>
+<b class="fc">&nbsp;                .allowEditResponse(form.isAllowEditResponse())</b>
+&nbsp;                .build();
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Maps a fully loaded {@link Form} (with versions and fields) to a
+&nbsp;     * {@link FormDetailResponseDTO}. This also:
+&nbsp;     * - Parses stored JSON options back into Java objects for each field.
+&nbsp;     * - Parses stored JSON rules back into an object for the LogicPanel.
+&nbsp;     * - Falls back gracefully for legacy data (plain comma-separated strings).
+&nbsp;     */
+<b class="fc">&nbsp;    private FormDetailResponseDTO toDetailDTO(Form form) {</b>
+&nbsp;        List&lt;FormVersionResponseDTO&gt; versionDTOs = form.getVersions().stream().map(version -&gt; {
+&nbsp;
+&nbsp;            // Safely parse field options from stored JSON back to Java objects
+<b class="fc">&nbsp;            // 1. Map all entities to DTOs first (flat list)</b>
+<b class="fc">&nbsp;            List&lt;FormFieldResponseDTO&gt; allFieldDTOs = version.getFields().stream().map(field -&gt; {</b>
+<b class="pc">&nbsp;                Object parsedOptions = null;</b>
+&nbsp;                if (field.getOptions() != null &amp;&amp; !field.getOptions().isBlank() &amp;&amp; !field.getOptions().equals(&quot;[]&quot;)) {
+<b class="nc">&nbsp;                    try {</b>
+&nbsp;                        parsedOptions = objectMapper.readValue(field.getOptions(), Object.class);
+<b class="nc">&nbsp;                    } catch (Exception e) {</b>
+&nbsp;                        parsedOptions = field.getOptions();
+&nbsp;                    }
+<b class="fc">&nbsp;                }</b>
+<b class="fc">&nbsp;                return FormFieldResponseDTO.builder()</b>
+<b class="fc">&nbsp;                        .id(field.getId())</b>
+<b class="fc">&nbsp;                        .fieldLabel(field.getFieldLabel())</b>
+<b class="fc">&nbsp;                        .columnName(field.getColumnName())</b>
+<b class="fc">&nbsp;                        .fieldType(field.getFieldType())</b>
+<b class="fc">&nbsp;                        .isMandatory(field.getIsMandatory())</b>
+<b class="fc">&nbsp;                        .defaultValue(field.getDefaultValue())</b>
+<b class="fc">&nbsp;                        .validationRules(field.getValidationRules())</b>
+<b class="fc">&nbsp;                        .ordinalPosition(field.getOrdinalPosition())</b>
+<b class="fc">&nbsp;                        .options(parsedOptions)</b>
+<b class="fc">&nbsp;                        .calculationFormula(field.getCalculationFormula())</b>
+<b class="fc">&nbsp;                        .isHidden(field.getIsHidden())</b>
+<b class="fc">&nbsp;                        .children(new ArrayList&lt;&gt;())</b>
+&nbsp;                        .build();
+&nbsp;            }).collect(Collectors.toList());
+<b class="fc">&nbsp;</b>
+<b class="fc">&nbsp;            // 2. Reconstruct tree structure</b>
+<b class="fc">&nbsp;            List&lt;FormFieldResponseDTO&gt; rootFields = new ArrayList&lt;&gt;();</b>
+&nbsp;            java.util.Map&lt;String, FormFieldResponseDTO&gt; dtoMap = allFieldDTOs.stream()
+<b class="fc">&nbsp;                    .collect(Collectors.toMap(FormFieldResponseDTO::getColumnName, dto -&gt; dto));</b>
+<b class="fc">&nbsp;</b>
+<b class="fc">&nbsp;            for (FormField entity : version.getFields()) {</b>
+<b class="fc">&nbsp;                FormFieldResponseDTO dto = dtoMap.get(entity.getColumnName());</b>
+&nbsp;                if (entity.getParentColumnName() == null) {
+<b class="fc">&nbsp;                    rootFields.add(dto);</b>
+<b class="pc">&nbsp;                } else {</b>
+<b class="fc">&nbsp;                    FormFieldResponseDTO parentDto = dtoMap.get(entity.getParentColumnName());</b>
+&nbsp;                    if (parentDto != null) {
+<b class="nc">&nbsp;                        parentDto.getChildren().add(dto);</b>
+&nbsp;                    } else {
+&nbsp;                        rootFields.add(dto); // Fallback: if parent not found, treat as root
+&nbsp;                    }
+&nbsp;                }
+&nbsp;            }
+<b class="fc">&nbsp;</b>
+<b class="pc">&nbsp;            // Safely parse rules from stored JSON string back to an object for the frontend</b>
+&nbsp;            Object parsedRules = null;
+<b class="fc">&nbsp;            if (version.getRules() != null &amp;&amp; !version.getRules().isBlank() &amp;&amp; !version.getRules().equals(&quot;[]&quot;)) {</b>
+&nbsp;                try {
+<b class="nc">&nbsp;                    parsedRules = objectMapper.readValue(version.getRules(), Object.class);</b>
+&nbsp;                } catch (Exception e) {
+&nbsp;                    parsedRules = version.getRules();
+&nbsp;                }
+<b class="fc">&nbsp;            }</b>
+<b class="fc">&nbsp;</b>
+<b class="fc">&nbsp;            return FormVersionResponseDTO.builder()</b>
+<b class="fc">&nbsp;                    .id(version.getId())</b>
+<b class="fc">&nbsp;                    .versionNumber(version.getVersionNumber())</b>
+<b class="fc">&nbsp;                    .changeLog(version.getChangeLog())</b>
+<b class="fc">&nbsp;                    .rules(parsedRules)</b>
+<b class="fc">&nbsp;                    .fields(rootFields)</b>
+&nbsp;                    .build();
+&nbsp;        }).collect(Collectors.toList());
+<b class="fc">&nbsp;</b>
+<b class="fc">&nbsp;        // Extract theme from metadata within version 0 rules if present</b>
+<b class="pc">&nbsp;        String themeColor = null;</b>
+<b class="fc">&nbsp;        String themeFont = null;</b>
+<b class="pc">&nbsp;        if (!versionDTOs.isEmpty()) {</b>
+<b class="fc">&nbsp;            Object rules = versionDTOs.get(0).getRules();</b>
+<b class="pc">&nbsp;            if (rules instanceof java.util.Map) {</b>
+<b class="fc">&nbsp;                java.util.Map&lt;String, Object&gt; rulesMap = (java.util.Map&lt;String, Object&gt;) rules;</b>
+<b class="fc">&nbsp;                if (rulesMap.containsKey(&quot;theme&quot;)) {</b>
+<b class="fc">&nbsp;                    java.util.Map&lt;String, String&gt; theme = (java.util.Map&lt;String, String&gt;) rulesMap.get(&quot;theme&quot;);</b>
+&nbsp;                    themeColor = theme.get(&quot;color&quot;);
+&nbsp;                    themeFont = theme.get(&quot;font&quot;);
+&nbsp;                }
+&nbsp;            }
+<b class="fc">&nbsp;        }</b>
+<b class="fc">&nbsp;</b>
+<b class="fc">&nbsp;        return FormDetailResponseDTO.builder()</b>
+<b class="fc">&nbsp;                .id(form.getId())</b>
+<b class="fc">&nbsp;                .title(form.getTitle())</b>
+<b class="fc">&nbsp;                .description(form.getDescription())</b>
+<b class="fc">&nbsp;                .status(form.getStatus())</b>
+<b class="fc">&nbsp;                .createdAt(form.getCreatedAt())</b>
+<b class="fc">&nbsp;                .updatedAt(form.getUpdatedAt())</b>
+<b class="pc">&nbsp;                .publicShareToken(form.getPublicShareToken())</b>
+<b class="fc">&nbsp;                .allowEditResponse(form.isAllowEditResponse())</b>
+<b class="fc">&nbsp;                .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)</b>
+<b class="fc">&nbsp;                .themeColor(themeColor)</b>
+<b class="fc">&nbsp;                .themeFont(themeFont)</b>
+&nbsp;                .versions(versionDTOs)
+&nbsp;                .build();
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

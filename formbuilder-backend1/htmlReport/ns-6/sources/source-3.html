@@ -1,0 +1,191 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormSummaryResponseDTO</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.dto.response</a>
+</div>
+
+<h1>Coverage Summary for Class: FormSummaryResponseDTO (com.sttl.formbuilder2.dto.response)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormSummaryResponseDTO</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/74)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormSummaryResponseDTO$FormSummaryResponseDTOBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/74)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (3/3)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.response;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import lombok.Builder;
+&nbsp;import lombok.Data;
+&nbsp;
+&nbsp;import java.time.Instant;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormSummaryResponseDTO — Lightweight Form Card for the Dashboard
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Returned by GET /api/forms. Contains only the high-level metadata needed
+&nbsp; * to render a form card on the dashboard (title, status, token for the share
+&nbsp; * link) without loading the full schema, versions, or fields.
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * FormController.getAllForms()
+&nbsp; * → FormService.getAllForms() → List&lt;FormSummaryResponseDTO&gt;
+&nbsp; * → Dashboard page (app/page.tsx) renders one card per DTO
+&nbsp; *
+&nbsp; * Design choice:
+&nbsp; * Using a dedicated summary DTO (instead of returning the full Form entity)
+&nbsp; * avoids the N+1 query problem — no versions or fields are fetched for the
+&nbsp; * dashboard list. The {@code allowEditResponse} field is intentionally excluded
+&nbsp; * here since the dashboard only needs it when opening the builder or public
+&nbsp; * form.
+&nbsp; */
+<b class="pc">&nbsp;@Data</b>
+<b class="fc">&nbsp;@Builder</b>
+&nbsp;public class FormSummaryResponseDTO {
+&nbsp;    private Long id;
+&nbsp;    private String title;
+&nbsp;    private String description;
+&nbsp;    private FormStatus status;
+&nbsp;    private Instant createdAt;
+&nbsp;    private Instant updatedAt;
+&nbsp;    private String targetTableName;
+&nbsp;    private String publicShareToken;
+&nbsp;    private boolean allowEditResponse;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-11 14:46</div>
+</div>
+</body>
+</html>

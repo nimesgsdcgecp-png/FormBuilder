@@ -22,10 +22,10 @@
  *   "Create New Form" button → /builder (opens a blank canvas)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, FileText, Edit, Eye, Trash2, User, Link2 } from 'lucide-react';
+import { Plus, FileText, Edit, Eye, Trash2, User, Link2, LayoutGrid, List as ListIcon, MoreVertical, ExternalLink, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
 import { deleteForm } from '@/services/api';
@@ -70,10 +70,21 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
+  const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
     fetchForms();
+    
+    // Close profile dropdown on click outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   /** Fetches the form list from the backend and updates local state. */
@@ -167,7 +178,7 @@ export default function Dashboard() {
 
             {/* Profile Dropdown */}
             {username && (
-              <div className="relative">
+              <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm transition-transform hover:scale-105 focus:outline-none focus:ring-2"
@@ -211,13 +222,33 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Your Forms</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Manage and track your dynamic forms</p>
           </div>
-          <Link
-            href="/builder"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white gradient-accent shadow-sm hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
-          >
-            <Plus size={18} strokeWidth={3} />
-            Create New Form
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* View Toggle */}
+            <div className="flex bg-[var(--bg-muted)] p-1 rounded-xl border border-[var(--border)] mr-2">
+              <button
+                onClick={() => setViewMode('GRID')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                title="Grid View"
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('LIST')}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'LIST' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                title="List View"
+              >
+                <ListIcon size={18} />
+              </button>
+            </div>
+
+            <Link
+              href="/builder"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white gradient-accent shadow-sm hover:shadow-md transition-all active:scale-95 whitespace-nowrap"
+            >
+              <Plus size={18} strokeWidth={3} />
+              Create New Form
+            </Link>
+          </div>
         </div>
 
         {/* ── Content ── */}
@@ -246,133 +277,218 @@ export default function Dashboard() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {forms.map((form) => {
-              const isPublished = form.status === 'PUBLISHED';
-              return (
-                <div
-                  key={form.id}
-                  className="rounded-xl border flex flex-col overflow-hidden transition-all duration-200 hover:shadow-lg group"
-                  style={{
-                    background: 'var(--card-bg)',
-                    borderColor: 'var(--card-border)',
-                    boxShadow: 'var(--card-shadow)',
-                  }}
-                >
-                  {/* Top colour accent bar by status */}
+          viewMode === 'GRID' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {forms.map((form) => {
+                const isPublished = form.status === 'PUBLISHED';
+                return (
                   <div
-                    className={`h-1 w-full ${isPublished ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}
-                  />
+                    key={form.id}
+                    className="rounded-xl border flex flex-col overflow-hidden transition-all duration-200 hover:shadow-lg group"
+                    style={{
+                      background: 'var(--card-bg)',
+                      borderColor: 'var(--card-border)',
+                      boxShadow: 'var(--card-shadow)',
+                    }}
+                  >
+                    {/* Top colour accent bar by status */}
+                    <div
+                      className={`h-1 w-full ${isPublished ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}
+                    />
 
-                  {/* Card body */}
-                  <div className="p-6 flex-1">
-                    <div className="flex justify-between items-start mb-3">
-                      {/* Status badge */}
-                      <span
-                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
-                        style={{
-                          background: isPublished ? 'var(--status-pub-bg)' : 'var(--status-draft-bg)',
-                          color: isPublished ? 'var(--status-pub-text)' : 'var(--status-draft-text)',
-                          borderColor: isPublished ? 'var(--status-pub-ring)' : 'var(--status-draft-ring)',
-                        }}
+                    {/* Card body */}
+                    <div className="p-6 flex-1">
+                      <div className="flex justify-between items-start mb-3">
+                        {/* Status badge */}
+                        <span
+                          className="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                          style={{
+                            background: isPublished ? 'var(--status-pub-bg)' : 'var(--status-draft-bg)',
+                            color: isPublished ? 'var(--status-pub-text)' : 'var(--status-draft-text)',
+                            borderColor: isPublished ? 'var(--status-pub-ring)' : 'var(--status-draft-ring)',
+                          }}
+                        >
+                          {isPublished ? '● Published' : '◌ Draft'}
+                        </span>
+                        <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>#{form.id}</span>
+                      </div>
+
+                      <h3
+                        className="text-base font-bold mb-1.5 truncate leading-snug"
+                        style={{ color: 'var(--text-primary)' }}
                       >
-                        {isPublished ? '● Published' : '◌ Draft'}
-                      </span>
-                      <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>#{form.id}</span>
+                        {form.title}
+                      </h3>
+                      <p className="text-sm line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                        {form.description || "No description provided."}
+                      </p>
                     </div>
 
-                    <h3
-                      className="text-base font-bold mb-1.5 truncate leading-snug"
-                      style={{ color: 'var(--text-primary)' }}
+                    {/* Card footer */}
+                    <div
+                      className="px-6 py-3 border-t flex justify-between items-center"
+                      style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
                     >
-                      {form.title}
-                    </h3>
-                    <p className="text-sm line-clamp-2" style={{ color: 'var(--text-muted)' }}>
-                      {form.description || "No description provided."}
-                    </p>
-                  </div>
+                      <div className="flex gap-1">
+                        {/* Edit Button */}
+                        <Link
+                          href={`/builder?id=${form.id}`}
+                          className="p-2 rounded-lg transition-all"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Edit Form"
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-subtle)', e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
+                        >
+                          <Edit size={16} />
+                        </Link>
 
-                  {/* Card footer */}
-                  <div
-                    className="px-6 py-3 border-t flex justify-between items-center"
-                    style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="flex gap-1">
-                      {/* Edit Button */}
-                      <Link
-                        href={`/builder?id=${form.id}`}
-                        className="p-2 rounded-lg transition-all"
-                        style={{ color: 'var(--text-muted)' }}
-                        title="Edit Form"
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-subtle)', e.currentTarget.style.color = 'var(--accent)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
-                      >
-                        <Edit size={16} />
-                      </Link>
-
-                      {isPublished && (
-                        <>
-                          {form.publicShareToken && (
-                            <button
-                              onClick={() => {
-                                const url = `${window.location.origin}/f/${form.publicShareToken}`;
-                                navigator.clipboard.writeText(url);
-                                toast.success("Share link copied!");
-                              }}
-                              className="p-2 rounded-lg transition-all"
-                              style={{ color: 'var(--text-muted)', cursor: 'pointer' }}
-                              title="Copy Share Link"
-                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-subtle)', e.currentTarget.style.color = 'var(--accent)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
-                            >
-                              <Link2 size={16} />
-                            </button>
-                          )}
-                          {form.publicShareToken && (
+                        {isPublished && (
+                          <>
+                            {form.publicShareToken && (
+                              <button
+                                onClick={() => {
+                                  const url = `${window.location.origin}/f/${form.publicShareToken}`;
+                                  navigator.clipboard.writeText(url);
+                                  toast.success("Share link copied!");
+                                }}
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: 'var(--text-muted)', cursor: 'pointer' }}
+                                title="Copy Share Link"
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-subtle)', e.currentTarget.style.color = 'var(--accent)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
+                              >
+                                <Link2 size={16} />
+                              </button>
+                            )}
+                            {form.publicShareToken && (
+                              <Link
+                                href={`/f/${form.publicShareToken}`}
+                                target="_blank"
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: 'var(--text-muted)' }}
+                                title="View Public Form"
+                                onMouseEnter={e => (e.currentTarget.style.background = '#d1fae5', e.currentTarget.style.color = '#059669')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
+                              >
+                                <Eye size={16} />
+                              </Link>
+                            )}
                             <Link
-                              href={`/f/${form.publicShareToken}`}
-                              target="_blank"
+                              href={`/forms/${form.id}/responses`}
                               className="p-2 rounded-lg transition-all"
                               style={{ color: 'var(--text-muted)' }}
-                              title="View Public Form"
-                              onMouseEnter={e => (e.currentTarget.style.background = '#d1fae5', e.currentTarget.style.color = '#059669')}
+                              title="View Responses"
+                              onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe', e.currentTarget.style.color = '#7c3aed')}
                               onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
                             >
-                              <Eye size={16} />
+                              <FileText size={16} />
                             </Link>
-                          )}
-                          <Link
-                            href={`/forms/${form.id}/responses`}
-                            className="p-2 rounded-lg transition-all"
-                            style={{ color: 'var(--text-muted)' }}
-                            title="View Responses"
-                            onMouseEnter={e => (e.currentTarget.style.background = '#ede9fe', e.currentTarget.style.color = '#7c3aed')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-muted)')}
-                          >
-                            <FileText size={16} />
-                          </Link>
-                        </>
-                      )}
-                    </div>
+                          </>
+                        )}
+                      </div>
 
-                    {/* Archive Button */}
-                    <button
-                      onClick={() => handleDelete(form.id)}
-                      className="p-2 rounded-lg transition-all"
-                      style={{ color: 'var(--text-faint)' }}
-                      title="Archive Form"
-                      onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2', e.currentTarget.style.color = '#dc2626')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-faint)')}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                      {/* Archive Button */}
+                      <button
+                        onClick={() => handleDelete(form.id)}
+                        className="p-2 rounded-lg transition-all"
+                        style={{ color: 'var(--text-faint)' }}
+                        title="Archive Form"
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fee2e2', e.currentTarget.style.color = '#dc2626')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'var(--text-faint)')}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* List View Layout */
+            <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)' }}>
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">ID</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">Form Title</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">Status</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-right text-[var(--text-faint)]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                  {forms.map((form) => {
+                    const isPublished = form.status === 'PUBLISHED';
+                    return (
+                      <tr key={form.id} className="hover:bg-[var(--bg-subtle)] transition-colors group">
+                        <td className="px-6 py-4">
+                          <span className="text-xs font-mono font-medium text-[var(--text-faint)]">#{form.id}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="text-sm font-bold text-[var(--text-primary)]">{form.title}</p>
+                            <p className="text-xs text-[var(--text-muted)] truncate max-w-md">{form.description || "No description"}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                            style={{
+                              background: isPublished ? 'var(--status-pub-bg)' : 'var(--status-draft-bg)',
+                              color: isPublished ? 'var(--status-pub-text)' : 'var(--status-draft-text)',
+                              borderColor: isPublished ? 'var(--status-pub-ring)' : 'var(--status-draft-ring)',
+                            }}
+                          >
+                            {isPublished ? 'PUBLISHED' : 'DRAFT'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Link
+                              href={`/builder?id=${form.id}`}
+                              className="p-1.5 rounded-lg hover:bg-[var(--accent-subtle)] hover:text-[var(--accent)] text-[var(--text-muted)] transition-all"
+                              title="Edit"
+                            >
+                              <Edit size={16} />
+                            </Link>
+
+                            {isPublished && (
+                              <>
+                                <Link
+                                  href={`/f/${form.publicShareToken}`}
+                                  target="_blank"
+                                  className="p-1.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/30 text-[var(--text-muted)] transition-all"
+                                  title="View Public"
+                                >
+                                  <ExternalLink size={16} />
+                                </Link>
+                                <Link
+                                  href={`/forms/${form.id}/responses`}
+                                  className="p-1.5 rounded-lg hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/30 text-[var(--text-muted)] transition-all"
+                                  title="Responses"
+                                >
+                                  <FileText size={16} />
+                                </Link>
+                              </>
+                            )}
+
+                            <button
+                              onClick={() => handleDelete(form.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 text-[var(--text-faint)] transition-all"
+                              title="Archive"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
-      </main>
-    </div>
+      </main >
+    </div >
   );
 }

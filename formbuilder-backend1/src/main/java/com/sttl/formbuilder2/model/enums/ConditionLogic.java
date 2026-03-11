@@ -6,7 +6,7 @@ package com.sttl.formbuilder2.model.enums;
  * Currently stored in {@code FormRuleDTO.conditionLogic} and persisted as part
  * of
  * the rules JSON in
- * {@link com.sttl.formbuilder2.model.entity.FormVersion#rules}.
+ * {@link com.sttl.formbuilder2.model.entity.FormVersion#   rules}.
  *
  * AND — All conditions in the rule must be true for actions to fire.
  * OR — Any single condition being true is sufficient to fire actions.
