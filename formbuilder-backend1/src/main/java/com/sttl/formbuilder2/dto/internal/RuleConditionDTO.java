@@ -30,4 +30,5 @@ public class RuleConditionDTO extends RuleConditionEntryDTO {
     private String field;
     private RuleOperator operator;
     private Object value; // Could be String, Integer, or Boolean
+    private String valueType; // "STATIC" or "FIELD"
 }

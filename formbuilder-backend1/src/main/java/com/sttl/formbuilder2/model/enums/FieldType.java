@@ -62,4 +62,5 @@ public enum FieldType {
     INFO_LABEL,
     PAGE_BREAK,
     DATE_TIME,
+    HIDDEN,
 }

@@ -430,7 +430,7 @@ export default function PropertiesPanel() {
                   />
                   <button
                     onClick={() => {
-                      const newOptions = (Array.isArray(selectedField.options) ? selectedField.options : []).filter((_, i) => i !== index);
+                      const newOptions = (Array.isArray(selectedField.options) ? selectedField.options : []).filter((_: string, i: number) => i !== index);
                       updateField(selectedField.id, { options: newOptions });
                     }}
                     className="p-2 rounded-lg shrink-0 transition-colors"
@@ -455,6 +455,25 @@ export default function PropertiesPanel() {
             >
               <Plus size={13} /> Add Option
             </button>
+            {selectedField.type === 'DROPDOWN' && (
+              <label className="flex items-start gap-3 p-3 mt-3 rounded-xl border transition-all cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" 
+                     style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+                <div className="pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedField.isMultiSelect || false}
+                    onChange={(e) => updateField(selectedField.id, { isMultiSelect: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Enable Multiple Selection</span>
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Allow respondents to select more than one option.
+                  </span>
+                </div>
+              </label>
+            )}
           </div>
         )}
 

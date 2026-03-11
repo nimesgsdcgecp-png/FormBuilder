@@ -19,7 +19,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { FieldType } from '@/types/schema';
-import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, CalendarClock } from 'lucide-react';
+import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, CalendarClock, EyeOff } from 'lucide-react';
 import { DraggableSidebarBtn } from './DraggableSidebarBtn';
 
 /** Each group has a label displayed as a section header in the sidebar. */
@@ -38,6 +38,7 @@ export const FIELD_TYPES = [
   { type: 'DATE_TIME' as FieldType, label: 'Date & Time', icon: CalendarClock, category: 'basic' },
   { type: 'BOOLEAN' as FieldType, label: 'Checkbox', icon: ToggleLeft, category: 'basic' },
   { type: 'TEXTAREA' as FieldType, label: 'Long Text', icon: AlignLeft, category: 'basic' },
+  { type: 'HIDDEN' as FieldType, label: 'Hidden Field', icon: EyeOff, category: 'basic' },
 
   // Choice types (require options configuration in PropertiesPanel)
   { type: 'DROPDOWN' as FieldType, label: 'Dropdown', icon: List, category: 'choice' },

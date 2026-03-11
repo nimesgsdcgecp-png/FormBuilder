@@ -31,7 +31,7 @@
 export type FieldType = 'TEXT' | 'NUMERIC' | 'DATE' | 'BOOLEAN' | 'TEXTAREA'
   | 'DROPDOWN' | 'RADIO' | 'CHECKBOX_GROUP'
   | 'TIME' | 'RATING' | 'SCALE' | 'FILE' | 'GRID_RADIO' | 'GRID_CHECK' | 'LOOKUP'
-  | 'CALCULATED' | 'SECTION_HEADER' | 'INFO_LABEL' | 'PAGE_BREAK' | 'DATE_TIME';
+  | 'CALCULATED' | 'SECTION_HEADER' | 'INFO_LABEL' | 'PAGE_BREAK' | 'DATE_TIME' | 'HIDDEN';
 
 /** Comparison operators for rule conditions. Mirrors the Java RuleOperator enum. */
 export type RuleOperator = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN' | 'CONTAINS';
@@ -49,7 +49,8 @@ export type ConditionLogic = 'AND' | 'OR';
 export interface RuleCondition {
   field: string;      // The columnName of the field we are checking (e.g., 'department')
   operator: RuleOperator;
-  value: string | number | boolean; // The value to compare the answer against
+  value: string | number | boolean; // The static value OR the columnName of another field
+  valueType?: 'STATIC' | 'FIELD';   // Whether 'value' refers to a static string or another field's value
 }
 
 /**
@@ -122,6 +123,7 @@ export interface FormField {
   isHidden?: boolean;
   isReadOnly?: boolean;
   isDisabled?: boolean;
+  isMultiSelect?: boolean;
   children?: FormField[];
 }
 

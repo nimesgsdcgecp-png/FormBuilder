@@ -147,4 +147,8 @@ public class FormField {
     @Column(name = "is_disabled", nullable = false)
     private Boolean isDisabled = false;
 
+    @Builder.Default
+    @Column(name = "is_multi_select", nullable = false)
+    private Boolean isMultiSelect = false;
+
 }

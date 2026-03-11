@@ -136,7 +136,7 @@ public class SubmissionService {
 
         String tableName = form.getTargetTableName();
 
-        StringBuilder sql = new StringBuilder("INSERT INTO " + tableName + " (");
+        StringBuilder sql = new StringBuilder("INSERT INTO \"" + tableName + "\" (");
         StringBuilder placeholders = new StringBuilder(" VALUES (");
         List<Object> arguments = new ArrayList<>();
 
@@ -152,7 +152,7 @@ public class SubmissionService {
             String colName = field.getColumnName();
 
             if (submissionData.containsKey(colName)) {
-                sql.append(colName).append(", ");
+                sql.append("\"").append(colName).append("\", ");
                 placeholders.append("?, ");
 
                 Object rawValue = submissionData.get(colName);
@@ -201,8 +201,8 @@ public class SubmissionService {
         validateColumnName(sortBy, form);
         String direction = "DESC".equalsIgnoreCase(sortOrder) ? "DESC" : "ASC";
 
-        // 2. Build WHERE clause from filters
-        StringBuilder whereClause = new StringBuilder(" WHERE 1=1");
+        // 2. Build WHERE clause from filters (Always filter out deleted)
+        StringBuilder whereClause = new StringBuilder(" WHERE is_deleted = FALSE");
         List<Object> args = new ArrayList<>();
         
         if (filters != null) {
@@ -238,13 +238,13 @@ public class SubmissionService {
         }
 
         // 3. Get total count for pagination metadata
-        String countSql = "SELECT COUNT(*) FROM " + tableName + whereClause;
+        String countSql = "SELECT COUNT(*) FROM \"" + tableName + "\"" + whereClause;
         Long total = jdbcTemplate.queryForObject(countSql, Long.class, args.toArray());
         long totalCount = (total != null) ? total : 0L;
 
         // 4. Fetch data with LIMIT and OFFSET
         int offset = page * size;
-        String dataSql = "SELECT * FROM " + tableName + whereClause + 
+        String dataSql = "SELECT * FROM \"" + tableName + "\"" + whereClause + 
                          " ORDER BY \"" + sortBy + "\" " + direction + 
                          " LIMIT ? OFFSET ?";
         
@@ -287,7 +287,7 @@ public class SubmissionService {
     public Map<String, Object> getSubmissionById(Long formId, UUID submissionId) {
         Form form = formRepository.findById(formId).orElseThrow(() -> new RuntimeException("Form not found"));
         String tableName = form.getTargetTableName();
-        String sql = "SELECT * FROM " + tableName + " WHERE submission_id = CAST(? AS UUID)";
+        String sql = "SELECT * FROM \"" + tableName + "\" WHERE submission_id = CAST(? AS UUID) AND is_deleted = FALSE";
 
         try {
             return jdbcTemplate.queryForMap(sql, submissionId);
@@ -315,7 +315,7 @@ public class SubmissionService {
         // Recalculate formulas for calculated fields
         recalculateCalculatedFields(submissionData, activeVersion.getFields());
 
-        StringBuilder sql = new StringBuilder("UPDATE " + tableName + " SET ");
+        StringBuilder sql = new StringBuilder("UPDATE \"" + tableName + "\" SET ");
         List<Object> arguments = new ArrayList<>();
 
         if (status != null) {
@@ -326,7 +326,7 @@ public class SubmissionService {
         for (FormField field : activeVersion.getFields()) {
             String colName = field.getColumnName();
             if (submissionData.containsKey(colName)) {
-                sql.append(colName).append(" = ?, ");
+                sql.append("\"").append(colName).append("\" = ?, ");
                 Object rawValue = submissionData.get(colName);
 
                 // Serialise complex values (checkboxes, grids) to JSON strings
@@ -367,7 +367,7 @@ public class SubmissionService {
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         String tableName = form.getTargetTableName();
-        String sql = "DELETE FROM " + tableName + " WHERE submission_id = ?";
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = TRUE WHERE submission_id = ?";
 
         jdbcTemplate.update(sql, submissionId);
     }
@@ -391,7 +391,7 @@ public class SubmissionService {
 
         // Dynamically build 'IN (?, ?, ...)' placeholders
         String placeholders = String.join(",", submissionIds.stream().map(id -> "?").toList());
-        String sql = "DELETE FROM " + tableName + " WHERE submission_id IN (" + placeholders + ")";
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = TRUE WHERE submission_id IN (" + placeholders + ")";
 
         jdbcTemplate.update(sql, submissionIds.toArray());
     }

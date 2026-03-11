@@ -152,6 +152,7 @@ function BuilderContent() {
               isHidden: f.isHidden,
               isReadOnly: f.isReadOnly,
               isDisabled: f.isDisabled,
+              isMultiSelect: f.isMultiSelect,
               children: f.children ? mapFieldsRecursive(f.children) : (f.fieldType === 'SECTION_HEADER' ? [] : undefined)
             };
           });

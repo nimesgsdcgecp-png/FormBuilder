@@ -115,7 +115,7 @@ public class FileUploadController {
      * @return The file as a downloadable binary response, or 404 if not found.
      */
     @GetMapping("/files/{fileName:.+}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable String fileName) {
+    public ResponseEntity<Resource> downloadFile(@PathVariable("fileName") String fileName) {
         try {
             Path filePath = this.fileStorageLocation.resolve(fileName).normalize();
             Resource resource = new UrlResource(filePath.toUri());

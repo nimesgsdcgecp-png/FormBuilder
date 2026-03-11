@@ -46,7 +46,7 @@ This document tracks the progress of the FormBuilder application against the pro
 
 ### 2.1 Submission Management (High Priority)
 - [x] **Grid View Listing**: A robust, functional grid view for listing all submissions of a form.
-- [ ] **Advanced Sorting, Filtering, and Pagination**: Robust implementation of these features within the submission grid (currently only basic client-side search exists).
+- [x] **Advanced Sorting, Filtering, and Pagination**: Robust implementation of these features within the submission grid (currently only basic client-side search exists).
 
 ### 2.2 Field Configuration & Types
 - [x] **Hidden/System Fields**: Fields that exist in the schema and database but are not shown to the end user.
@@ -54,5 +54,5 @@ This document tracks the progress of the FormBuilder application against the pro
 - [x] **Help Text**: Dedicated support for help/instructional text per field (distinct from labels and placeholders).
 
 ### 2.3 Additional Scope
-- [ ] **Form-level Validation Logic**: Comprehensive validation that executes once all mandatory fields are populated (currently handled primarily at the field/step level).
-- [ ] **Consolidated Error Feedback**: A unified UI section for all submission errors (currently relying on individual field highlights and toasts).
+- [x] **Form-level Validation Logic**: Comprehensive validation that executes once all mandatory fields are populated (currently handled primarily at the field/step level).
+- [x] **Consolidated Error Feedback**: A unified UI section for all submission errors (currently relying on individual field highlights and toasts).

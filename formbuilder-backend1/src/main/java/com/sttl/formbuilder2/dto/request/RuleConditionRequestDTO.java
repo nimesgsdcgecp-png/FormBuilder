@@ -27,4 +27,5 @@ public class RuleConditionRequestDTO {
     private String field;
     private RuleOperator operator;
     private Object value;
+    private String valueType;
 }

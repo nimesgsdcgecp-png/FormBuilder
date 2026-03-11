@@ -65,6 +65,7 @@ function PublicFormContent() {
               isHidden: f.isHidden,
               isReadOnly: f.isReadOnly,
               isDisabled: f.isDisabled,
+              isMultiSelect: f.isMultiSelect,
               children: f.children ? mapFieldsRecursive(f.children) : (f.fieldType === 'SECTION_HEADER' ? [] : undefined)
             };
           });
@@ -121,9 +122,10 @@ function PublicFormContent() {
                   const val = subDataLower[colLower];
 
                   if (val !== undefined && val !== null) {
-                    if (f.type === 'CHECKBOX_GROUP' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
+                    if (f.type === 'CHECKBOX_GROUP' || f.type === 'DROPDOWN' || f.type === 'GRID_RADIO' || f.type === 'GRID_CHECK') {
                       try {
-                        answers[f.columnName] = typeof val === 'string' ? JSON.parse(val) : val;
+                        const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+                        answers[f.columnName] = parsed;
                       } catch (e) {
                         answers[f.columnName] = val;
                       }

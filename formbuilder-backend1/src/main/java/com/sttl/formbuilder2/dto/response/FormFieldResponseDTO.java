@@ -1,5 +1,6 @@
 package com.sttl.formbuilder2.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sttl.formbuilder2.model.enums.FieldType;
 import lombok.Builder;
 import lombok.Data;
@@ -51,5 +52,7 @@ public class FormFieldResponseDTO {
     private Boolean isHidden;
     private Boolean isReadOnly;
     private Boolean isDisabled;
+    @JsonProperty("isMultiSelect")
+    private Boolean isMultiSelect;
     private java.util.List<FormFieldResponseDTO> children;
 }

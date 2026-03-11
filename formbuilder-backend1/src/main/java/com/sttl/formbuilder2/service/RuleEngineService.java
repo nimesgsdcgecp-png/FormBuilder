@@ -169,7 +169,18 @@ public class RuleEngineService {
 
         // Normalise both sides to lowercase strings for comparison
         String userAnswer = userAnswerObj.toString().trim().toLowerCase();
-        String ruleValue = condition.getValue() == null ? "" : condition.getValue().toString().trim().toLowerCase();
+
+        // Resolve target value: either a static value or another field's value
+        String ruleValue;
+        if ("FIELD".equals(condition.getValueType())) {
+            Object targetFieldVal = answers.get(condition.getValue());
+            if (targetFieldVal == null || targetFieldVal.toString().trim().isEmpty()) {
+                return false;
+            }
+            ruleValue = targetFieldVal.toString().trim().toLowerCase();
+        } else {
+            ruleValue = condition.getValue() == null ? "" : condition.getValue().toString().trim().toLowerCase();
+        }
 
         try {
             switch (condition.getOperator().name()) {

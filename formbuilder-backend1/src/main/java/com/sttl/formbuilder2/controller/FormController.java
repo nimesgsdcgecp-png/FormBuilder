@@ -127,10 +127,10 @@ public class FormController {
     @GetMapping("/{id}/submissions")
     public ResponseEntity<Map<String, Object>> getSubmissions(
             @PathVariable("id") Long id,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size,
-            @RequestParam(defaultValue = "submitted_at") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortOrder,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "50") int size,
+            @RequestParam(name = "sortBy", defaultValue = "submitted_at") String sortBy,
+            @RequestParam(name = "sortOrder", defaultValue = "DESC") String sortOrder,
             @RequestParam Map<String, String> allParams) {
 
         // Filter out known pagination params to leave only custom column filters

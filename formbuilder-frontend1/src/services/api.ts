@@ -82,6 +82,7 @@ export const saveForm = async (schema: FormSchema) => {
           hidden: field.isHidden || false,
           readOnly: field.isReadOnly || false,
           disabled: field.isDisabled || false,
+          isMultiSelect: field.isMultiSelect || false,
           children: field.children ? mapFields(field.children) : undefined
         }));
       };

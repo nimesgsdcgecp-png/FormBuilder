@@ -314,6 +314,7 @@ public class FormService {
             entity.setIsHidden(dto.isHidden());
             entity.setIsReadOnly(dto.isReadOnly());
             entity.setIsDisabled(dto.isDisabled());
+            entity.setIsMultiSelect(dto.isMultiSelect());
             entity.setParentColumnName(parentColumnName);
             entity.setOrdinalPosition(allEntities.size());
 
@@ -419,6 +420,7 @@ public class FormService {
                         .isHidden(field.getIsHidden())
                         .isReadOnly(field.getIsReadOnly())
                         .isDisabled(field.getIsDisabled())
+                        .isMultiSelect(field.getIsMultiSelect())
                         .children(new ArrayList<>())
                         .build();
             }).collect(Collectors.toList());

@@ -24,11 +24,12 @@ public class DynamicTableService {
     @Transactional
     public void createDynamicTable(String tableName, List<FieldDefinitionRequestDTO> fields) {
         StringBuilder sql = new StringBuilder();
-        sql.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (");
+        sql.append("CREATE TABLE IF NOT EXISTS \"").append(tableName).append("\" (");
 
         sql.append("submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
         sql.append("submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
         sql.append("submission_status VARCHAR(20) DEFAULT 'FINAL', ");
+        sql.append("is_deleted BOOLEAN DEFAULT FALSE, ");
 
         List<FieldDefinitionRequestDTO> allFields = new java.util.ArrayList<>();
         flattenFields(fields, allFields);
@@ -43,7 +44,7 @@ public class DynamicTableService {
                 columnName = generateColumnName(field.getLabel());
             }
             String sqlType = mapToSqlType(field.getType());
-            sql.append(columnName).append(" ").append(sqlType).append(", ");
+            sql.append("\"").append(columnName).append("\" ").append(sqlType).append(", ");
         }
 
         if (!allFields.isEmpty()) {
@@ -72,15 +73,20 @@ public class DynamicTableService {
                 columnName = generateColumnName(field.getLabel());
             }
             if (!existingColumns.contains(columnName)) {
-                String sql = "ALTER TABLE " + tableName
-                        + " ADD COLUMN " + columnName
+                String sql = "ALTER TABLE \"" + tableName + "\""
+                        + " ADD COLUMN \"" + columnName + "\""
                         + " " + mapToSqlType(field.getType());
                 jdbcTemplate.execute(sql);
             }
         }
 
         if (!existingColumns.contains("submission_status")) {
-            String sql = "ALTER TABLE " + tableName + " ADD COLUMN submission_status VARCHAR(20) DEFAULT 'FINAL'";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN submission_status VARCHAR(20) DEFAULT 'FINAL'";
+            jdbcTemplate.execute(sql);
+        }
+
+        if (!existingColumns.contains("is_deleted")) {
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE";
             jdbcTemplate.execute(sql);
         }
     }
@@ -97,8 +103,8 @@ public class DynamicTableService {
         }
 
         String tableName = form.getTargetTableName();
-        String sql = "SELECT DISTINCT " + columnName + " FROM " + tableName
-                + " WHERE " + columnName + " IS NOT NULL";
+        String sql = "SELECT DISTINCT \"" + columnName + "\" FROM \"" + tableName + "\""
+                + " WHERE \"" + columnName + "\" IS NOT NULL";
 
         return jdbcTemplate.queryForList(sql, String.class);
     }
@@ -109,13 +115,13 @@ public class DynamicTableService {
 
     private String mapToSqlType(FieldType type) {
         return switch (type) {
-            case TEXT, DROPDOWN, RADIO, FILE, LOOKUP -> "VARCHAR(500)";
+            case TEXT, RADIO, FILE, LOOKUP, HIDDEN -> "VARCHAR(500)";
             case NUMERIC, RATING, SCALE -> "INTEGER";
             case DATE -> "DATE";
             case TIME -> "TIME";
             case DATE_TIME -> "TIMESTAMP";
             case BOOLEAN -> "BOOLEAN";
-            case TEXTAREA, CHECKBOX_GROUP,
+            case TEXTAREA, DROPDOWN, CHECKBOX_GROUP,
                     GRID_RADIO, GRID_CHECK ->
                 "TEXT";
             case SECTION_HEADER, INFO_LABEL, PAGE_BREAK -> null;

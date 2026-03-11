@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FormField, FormSchema, FormRule } from '@/types/schema';
-import { FileText, Download, CheckCircle, UploadCloud, X as CloseIcon, Info } from 'lucide-react';
+import { FileText, Download, CheckCircle, UploadCloud, X, Info, ChevronDown, EyeOff, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 /** Maps font names to CSS font-family values */
@@ -32,6 +32,7 @@ export default function FormRenderer({
     const [lookupData, setLookupData] = useState<Record<string, string[]>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     // Initialize answers from schema defaults if not provided
     useEffect(() => {
@@ -44,7 +45,7 @@ export default function FormRenderer({
                         if (field.type === 'BOOLEAN') defaultAnswers[field.columnName] = field.defaultValue === 'true';
                         else if (field.type === 'NUMERIC') defaultAnswers[field.columnName] = Number(field.defaultValue);
                         else defaultAnswers[field.columnName] = field.defaultValue;
-                    } else if (field.type === 'CHECKBOX_GROUP') {
+                    } else if (field.type === 'CHECKBOX_GROUP' || (field.type === 'DROPDOWN' && field.isMultiSelect)) {
                         defaultAnswers[field.columnName] = [];
                     } else if (field.type === 'GRID_RADIO' || field.type === 'GRID_CHECK') {
                         defaultAnswers[field.columnName] = {};
@@ -97,6 +98,13 @@ export default function FormRenderer({
 
     const handleInputChange = (columnName: string, value: any) => {
         setAnswers(prev => ({ ...prev, [columnName]: value }));
+        // Always try to clear the error for this field
+        setErrors(prev => {
+            if (!prev[columnName]) return prev;
+            const newErrors = { ...prev };
+            delete newErrors[columnName];
+            return newErrors;
+        });
     };
 
     // --- Calculation Engine ---
@@ -202,10 +210,19 @@ export default function FormRenderer({
             const evaluateEntry = (entry: any): boolean => {
                 if (entry.type === 'condition') {
                     const userAnswer = answers[entry.field];
+                    // A missing or blank answer always returns false
                     if (userAnswer === undefined || userAnswer === "" || userAnswer === null) return false;
 
+                    // Resolve the target value: either a static value or another field's value
+                    let targetValue = entry.value;
+                    if (entry.valueType === 'FIELD' && typeof entry.value === 'string') {
+                        targetValue = answers[entry.value];
+                        // If the target field is empty, the condition fails
+                        if (targetValue === undefined || targetValue === "" || targetValue === null) return false;
+                    }
+
                     const strVal1 = String(userAnswer).toLowerCase().trim();
-                    const strVal2 = String(entry.value).toLowerCase().trim();
+                    const strVal2 = String(targetValue).toLowerCase().trim();
                     const numVal1 = Number(strVal1);
                     const numVal2 = Number(strVal2);
                     const isNumeric = !isNaN(numVal1) && !isNaN(numVal2) && strVal1 !== "" && strVal2 !== "";
@@ -220,15 +237,15 @@ export default function FormRenderer({
                     }
                 } else if (entry.type === 'group') {
                     const logic = entry.logic || 'AND';
-                    const results = entry.conditions.map((subEntry: any) => evaluateEntry(subEntry));
-                    return logic === 'OR' ? results.some(r => r === true) : results.every(r => r === true);
+                    const results = (entry.conditions || []).map((subEntry: any) => evaluateEntry(subEntry));
+                    return logic === 'OR' ? results.some((r: boolean) => r === true) : results.every((r: boolean) => r === true);
                 }
                 return false;
             };
 
             const ruleLogic = rule.conditionLogic || 'AND';
             const ruleResults = rule.conditions.map(entry => evaluateEntry(entry));
-            const isMatch = ruleLogic === 'OR' ? ruleResults.some(r => r === true) : ruleResults.every(r => r === true);
+            const isMatch = ruleLogic === 'OR' ? ruleResults.some((r: boolean) => r === true) : ruleResults.every((r: boolean) => r === true);
 
             if (isMatch) {
                 rule.actions.forEach((action) => {
@@ -292,19 +309,28 @@ export default function FormRenderer({
 
     const validateStep = (stepIdx: number): boolean => {
         const stepFields = pages[stepIdx] || [];
+        const newErrors: Record<string, string> = {};
+
         for (const field of stepFields) {
             const isDynamicallyRequired = dynamicallyRequiredCols.has(field.columnName);
             const isEffectivelyRequired = field.validation.required || isDynamicallyRequired;
 
             if (isEffectivelyRequired) {
                 const val = answers[field.columnName];
-                // basic validation
                 if (val === undefined || val === null || val === "" || (Array.isArray(val) && val.length === 0)) {
-                    toast.error(`Please fill in "${field.label}" before proceeding.`);
-                    return false;
+                    newErrors[field.columnName] = `"${field.label}" is required.`;
                 }
             }
         }
+
+        setErrors(newErrors);
+        
+        if (Object.keys(newErrors).length > 0) {
+            // Toast once to alert user, but they'll see the summary now
+            toast.error("Please fix the highlighted errors before proceeding.");
+            return false;
+        }
+
         return true;
     };
 
@@ -343,9 +369,19 @@ export default function FormRenderer({
             console.log("Preview Data:", answers);
             return;
         }
-        if (status === 'FINAL' && customErrors.length > 0) {
-            toast.error("Please fix the validation errors before submitting.");
-            return;
+        if (status === 'FINAL') {
+            for (let i = 0; i < pages.length; i++) {
+                if (!validateStep(i)) {
+                    setCurrentStep(i);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    toast.error(`Please fix errors on Step ${i + 1}`);
+                    return;
+                }
+            }
+            if (customErrors.length > 0) {
+                toast.error("Please fix the validation errors before submitting.");
+                return;
+            }
         }
         setIsSubmitting(true);
         try {
@@ -424,9 +460,16 @@ export default function FormRenderer({
                     lookupData[field.columnName] || [],
                     isPreview,
                     disabledCols.has(field.columnName),
-                    readOnlyCols.has(field.columnName)
+                    readOnlyCols.has(field.columnName),
+                    !!errors[field.columnName],
+                    schema.themeColor
                 )}
-                {field.type === 'NUMERIC' && field.validation?.min && (
+                {errors[field.columnName] && (
+                    <p className="text-xs mt-1.5 font-medium animate-in fade-in slide-in-from-top-1 duration-200" style={{ color: '#ef4444' }}>
+                        {errors[field.columnName]}
+                    </p>
+                )}
+                {field.type === 'NUMERIC' && field.validation?.min && !errors[field.columnName] && (
                     <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>Minimum value: {field.validation.min}</p>
                 )}
             </div>
@@ -483,19 +526,25 @@ export default function FormRenderer({
                 )}
             </div>
 
-            <form onSubmit={handleSubmit} className="px-8 py-8">
-                <div className="space-y-1">
-                    {currentPageFields.map((field) => renderFieldNode(field))}
-                </div>
-
-                {customErrors.length > 0 && (
-                    <div className="border-l-4 p-4 rounded-r-lg" style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
-                        <h3 className="text-sm font-semibold" style={{ color: '#b91c1c' }}>Validation Error</h3>
-                        <ul className="mt-2 text-sm list-disc pl-5 space-y-1" style={{ color: '#dc2626' }}>
-                            {customErrors.map((err, idx) => <li key={idx}>{err}</li>)}
+            <form onSubmit={handleSubmit} noValidate className="px-8 py-8">
+                {(customErrors.length > 0 || Object.keys(errors).length > 0) && (
+                    <div className="border-l-4 p-4 rounded-xl mb-8 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm" style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <X size={18} className="text-red-600" />
+                            <h3 className="text-sm font-bold" style={{ color: '#b91c1c' }}>Attention Required</h3>
+                        </div>
+                        <ul className="text-xs list-disc pl-5 space-y-1" style={{ color: '#dc2626' }}>
+                            {customErrors.map((err, idx) => <li key={`custom-${idx}`}>{err}</li>)}
+                            {Object.entries(errors).map(([col, err], idx) => (
+                                <li key={`field-${idx}`}>{err}</li>
+                            ))}
                         </ul>
                     </div>
                 )}
+
+                <div className="space-y-1">
+                    {currentPageFields.map((field) => renderFieldNode(field))}
+                </div>
 
                 <div className="pt-6 border-t flex gap-4" style={{ borderColor: 'var(--border)' }}>
                     {!isFirstStep && (
@@ -572,6 +621,146 @@ const uploadFile = async (file: File): Promise<string> => {
     return data.url;
 };
 
+const MultiSelectDropdown = ({ 
+    field, 
+    value, 
+    listOptions, 
+    onChange, 
+    isDisabled, 
+    isReadOnly, 
+    hasError,
+    themeColor
+}: { 
+    field: FormField; 
+    value: any; 
+    listOptions: string[]; 
+    onChange: (key: string, val: any) => void;
+    isDisabled: boolean;
+    isReadOnly: boolean;
+    hasError: boolean;
+    themeColor?: string;
+}) => {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [search, setSearch] = React.useState('');
+    const dropdownRef = React.useRef<HTMLDivElement>(null);
+    const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleToggle = (opt: string) => {
+        let newValues;
+        if (currentValues.includes(opt)) {
+            newValues = currentValues.filter((v: string) => v !== opt);
+        } else {
+            newValues = [...currentValues, opt];
+        }
+        onChange(field.columnName, newValues);
+        setIsOpen(false); // Close as per user request flow: "again the user opens the dropdown"
+    };
+
+    const filteredOptions = listOptions.filter(opt => 
+        opt.toLowerCase().includes(search.toLowerCase())
+    );
+
+    return (
+        <div className="space-y-3" ref={dropdownRef}>
+            {/* Dropdown Trigger */}
+            <div className="relative">
+                <button
+                    type="button"
+                    disabled={isDisabled || isReadOnly}
+                    onClick={() => setIsOpen(!isOpen)}
+                    className={`flex items-center justify-between w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2 ${
+                        hasError ? 'border-red-500 focus:ring-red-500' : 'border-[var(--input-border)] focus:ring-indigo-500'
+                    } bg-[var(--input-bg)] text-[var(--text-primary)]`}
+                >
+                    <span className={currentValues.length > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-faint)]'}>
+                        {currentValues.length > 0 
+                            ? `${currentValues.length} item${currentValues.length > 1 ? 's' : ''} selected` 
+                            : field.placeholder || "Select options..."}
+                    </span>
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isOpen && (
+                    <div className="absolute z-50 mt-1 w-full rounded-xl border bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                        <div className="p-2 border-b" style={{ borderColor: 'var(--border-muted)' }}>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search options..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-slate-50 border-none focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                        <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+                            {filteredOptions.length > 0 ? (
+                                filteredOptions.map((opt, idx) => {
+                                    const isSelected = currentValues.includes(opt);
+                                    return (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => handleToggle(opt)}
+                                            className={`w-full text-left px-4 py-2.5 text-sm transition-all hover:bg-slate-50 flex items-center justify-between group ${isSelected ? 'bg-indigo-50/30' : ''}`}
+                                        >
+                                            <span className={isSelected ? 'font-bold text-indigo-600' : 'text-slate-600 group-hover:text-indigo-600'}>
+                                                {opt}
+                                            </span>
+                                            {isSelected && (
+                                                <div className="flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: themeColor || '#4f46e5' }} />
+                                                    <CheckCircle size={14} className="text-indigo-500" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })
+                            ) : (
+                                <div className="px-4 py-8 text-center text-xs text-slate-400 italic">
+                                    No options found
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Selected Pills (Shown below) */}
+            {currentValues.length > 0 && (
+                <div className="flex flex-wrap gap-2 animate-in fade-in duration-300">
+                    {currentValues.map((v: string) => (
+                        <span key={v} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-100 shadow-sm animate-in zoom-in-95 duration-200">
+                            {v}
+                            {!isDisabled && !isReadOnly && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleToggle(v)}
+                                    className="hover:text-red-500 transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            )}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 function renderInput(
     field: FormField,
     value: any,
@@ -579,20 +768,22 @@ function renderInput(
     lookupOptions: string[] = [],
     isPreview: boolean = false,
     isDisabled: boolean = false,
-    isReadOnly: boolean = false
+    isReadOnly: boolean = false,
+    hasError: boolean = false,
+    themeColor?: string
 ) {
     const commonProps = {
         id: field.columnName,
         name: field.columnName,
-        required: field.validation.required,
         disabled: isDisabled,
         readOnly: isReadOnly,
         style: {
             background: 'var(--input-bg)',
-            borderColor: 'var(--input-border)',
+            borderColor: hasError ? '#ef4444' : 'var(--input-border)',
             color: 'var(--text-primary)',
+            boxShadow: hasError ? '0 0 0 1px #ef4444' : 'none'
         } as React.CSSProperties,
-        className: "block w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2",
+        className: `block w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2 ${hasError ? 'focus:ring-red-500' : 'focus:ring-indigo-500'}`,
         value: (value !== undefined && value !== null) ? value : '',
         onChange: (e: any) => onChange(field.columnName, e.target.value),
         minLength: field.validation?.minLength,
@@ -653,7 +844,21 @@ function renderInput(
                 </div>
             );
 
-        case 'DROPDOWN':
+        case 'DROPDOWN': {
+            if (field.isMultiSelect) {
+                return (
+                    <MultiSelectDropdown 
+                        field={field}
+                        value={value}
+                        listOptions={listOptions}
+                        onChange={onChange}
+                        isDisabled={isDisabled}
+                        isReadOnly={isReadOnly}
+                        hasError={hasError}
+                        themeColor={themeColor}
+                    />
+                );
+            }
             return (
                 <select {...commonProps}>
                     <option value="">Select an option...</option>
@@ -662,6 +867,23 @@ function renderInput(
                     ))}
                 </select>
             );
+        }
+
+        case 'HIDDEN':
+            if (isPreview) {
+                return (
+                    <div className="p-3 border rounded-lg bg-gray-50 flex items-center gap-3" style={{ borderColor: 'var(--border)' }}>
+                        <div className="p-2 rounded-lg bg-gray-200 text-gray-500">
+                            <EyeOff size={16} />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-gray-700">Hidden Field</span>
+                            <span className="text-[10px] text-gray-500">Value: {value || "(empty)"}</span>
+                        </div>
+                    </div>
+                );
+            }
+            return <input type="hidden" {...commonProps} />;
 
         case 'RADIO':
             return (
@@ -683,7 +905,7 @@ function renderInput(
                 </div>
             );
 
-        case 'CHECKBOX_GROUP':
+        case 'CHECKBOX_GROUP': {
             const currentValues = Array.isArray(value) ? value : [];
             const handleCheck = (opt: string, checked: boolean) => {
                 let newValues;
@@ -708,6 +930,7 @@ function renderInput(
                     ))}
                 </div>
             );
+        }
 
         case 'RATING':
             return (
@@ -898,7 +1121,7 @@ function renderInput(
                                             className="p-2.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all"
                                             title="Remove File"
                                         >
-                                            <CloseIcon size={18} />
+                                            <X size={18} />
                                         </button>
                                     </div>
                                 </div>

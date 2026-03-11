@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { useFormStore } from '@/store/useFormStore';
-import { Plus, Trash2, GitBranch } from 'lucide-react';
+import { Plus, Trash2, GitBranch, Type, Columns } from 'lucide-react';
 import { RuleOperator, ActionType, ConditionLogic } from '@/types/schema';
 
 const selectStyle: React.CSSProperties = {
@@ -357,17 +357,56 @@ const ConditionGroupBuilder = ({
                   <option value="CONTAINS">Contains</option>
                 </select>
 
-                <input
-                  type="text"
-                  placeholder="Value..."
-                  value={entry.value as string || ''}
-                  onChange={(e) => {
-                    const updated = [...conditions];
-                    updated[idx] = { ...updated[idx], value: e.target.value };
-                    onUpdate(updated);
-                  }}
-                  style={{ ...inputStyle, flex: '1 1 100px' }}
-                />
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = [...conditions];
+                      const currentType = updated[idx].valueType || 'STATIC';
+                      const newType = currentType === 'FIELD' ? 'STATIC' : 'FIELD';
+                      updated[idx] = { ...updated[idx], valueType: newType, value: '' };
+                      onUpdate(updated);
+                    }}
+                    className="p-2 rounded-lg border transition-all hover:bg-slate-100"
+                    style={{ 
+                      borderColor: 'var(--border)', 
+                      background: entry.valueType === 'FIELD' ? 'var(--accent-subtle)' : 'var(--bg-muted)',
+                      color: entry.valueType === 'FIELD' ? 'var(--accent)' : 'var(--text-faint)'
+                    }}
+                    title={entry.valueType === 'FIELD' ? "Switch to Static Value" : "Switch to Field Comparison"}
+                  >
+                    {entry.valueType === 'FIELD' ? <Columns size={14} /> : <Type size={14} />}
+                  </button>
+
+                  {entry.valueType === 'FIELD' ? (
+                    <select
+                      value={entry.value as string || ''}
+                      onChange={(e) => {
+                        const updated = [...conditions];
+                        updated[idx] = { ...updated[idx], value: e.target.value };
+                        onUpdate(updated);
+                      }}
+                      style={{ ...selectStyle, flex: '1 1 100px' }}
+                    >
+                      <option value="">Select Field...</option>
+                      {fields
+                        .filter((f: any) => f.id !== entry.field && f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL' && f.columnName !== entry.field)
+                        .map((f: any) => <option key={f.id} value={f.columnName}>{f.label}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Value..."
+                      value={entry.value as string || ''}
+                      onChange={(e) => {
+                        const updated = [...conditions];
+                        updated[idx] = { ...updated[idx], value: e.target.value };
+                        onUpdate(updated);
+                      }}
+                      style={{ ...inputStyle, flex: '1 1 100px' }}
+                    />
+                  )}
+                </div>
 
                 {conditions.length > 1 && (
                   <button

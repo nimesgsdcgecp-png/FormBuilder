@@ -1,5 +1,6 @@
 package com.sttl.formbuilder2.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sttl.formbuilder2.model.enums.FieldType;
 import lombok.Data;
 
@@ -48,5 +49,7 @@ public class FieldDefinitionRequestDTO {
     private boolean hidden;
     private boolean readOnly;
     private boolean disabled;
+    @JsonProperty("isMultiSelect")
+    private boolean isMultiSelect;
     private java.util.List<FieldDefinitionRequestDTO> children;
 }
