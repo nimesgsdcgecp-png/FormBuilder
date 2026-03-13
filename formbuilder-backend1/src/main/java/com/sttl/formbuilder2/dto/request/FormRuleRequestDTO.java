@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.request;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 import java.util.List;
@@ -28,8 +30,11 @@ import java.util.List;
 @Data
 public class FormRuleRequestDTO {
     private String id;
+    @NotBlank(message = "Rule name is required")
     private String name;
     private String conditionLogic;
+    @Valid
     private List<RuleConditionRequestDTO> conditions;
+    @Valid
     private List<RuleActionRequestDTO> actions;
 }

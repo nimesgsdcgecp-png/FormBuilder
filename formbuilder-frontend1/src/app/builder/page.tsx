@@ -24,10 +24,12 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { useFormStore } from '@/store/useFormStore';
 import { FieldType } from '@/types/schema';
-import { saveForm, deleteForm } from '@/services/api';
+import { saveForm, updateForm, deleteForm } from '@/services/api';
 import { toast } from 'sonner';
 import LogicPanel from '@/components/builder/LogicPanel';
-import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save, Palette, FileText, User } from 'lucide-react';
+import Header from '@/components/Header';
+import { usePermissions } from '@/hooks/usePermissions';
+import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save, Palette, FileText, User, ChevronRight, Check, Search, ShieldAlert, Plus, Settings2 } from 'lucide-react';
 
 import Sidebar, { FIELD_TYPES } from '@/components/builder/Sidebar';
 import { SidebarBtnOverlay } from '@/components/builder/DraggableSidebarBtn';
@@ -47,7 +49,7 @@ function BuilderContent() {
   const {
     schema, addField, insertField, reorderFields, setFormId, setTitle, setDescription,
     setFields, setRules, resetForm, setAllowEditResponse, isThemePanelOpen, setThemePanelOpen,
-    setThemeColor, setThemeFont
+    setThemeColor, setThemeFont, setStatus
   } = useFormStore();
 
   const [activeSidebarItem, setActiveSidebarItem] = useState<FieldType | null>(null);
@@ -56,7 +58,21 @@ function BuilderContent() {
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC'>('EDITOR');
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'PALETTE' | 'CANVAS' | 'PROPERTIES'>('CANVAS');
   const profileRef = useRef<HTMLDivElement>(null);
+  const { hasPermission, assignments } = usePermissions();
+  const isAdminOrBuilder = assignments.some((a: any) => 
+    ['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'ADMINISTRATOR'].includes(a.role.name)
+  );
+
+  // Workflow Modal State
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
+  const [workflowType, setWorkflowType] = useState<'NORMAL' | 'LEVEL_1' | 'LEVEL_2'>('NORMAL');
+  const [availableBuilders, setAvailableBuilders] = useState<any[]>([]);
+  const [availableCustomApprovers, setAvailableCustomApprovers] = useState<any[]>([]);
+  const [selectedBuilderId, setSelectedBuilderId] = useState<string>('');
+  const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
 
   useEffect(() => {
     // 1. Check Auth first. If we are just creating a new form, we still need to be logged in.
@@ -104,9 +120,10 @@ function BuilderContent() {
         setTitle(data.title);
         setDescription(data.description || '');
         setAllowEditResponse(data.allowEditResponse || false);
+        setStatus(data.status);
 
         useFormStore.setState((state) => ({
-          schema: { ...state.schema, publicShareToken: data.publicShareToken }
+          schema: { ...state.schema, publicShareToken: data.publicShareToken, status: data.status }
         }));
 
         if (data.themeColor) setThemeColor(data.themeColor);
@@ -169,6 +186,29 @@ function BuilderContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [editFormId, setFormId, setTitle, setDescription, setFields]);
 
+  useEffect(() => {
+    // Fetch users for workflow selection
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/workflows/available-authorities', { credentials: 'include' });
+        if (res.ok) {
+          const users = await res.json();
+          // Filter Builders (for final step) - check if any role starts with "BUILDER"
+          setAvailableBuilders(users.filter((u: any) => 
+            u.roles.some((r: string) => r.startsWith('BUILDER'))
+          ));
+          // Filter Custom Roles (for intermediate steps)
+          // A user is a custom approver if they have AT LEAST ONE role that is NOT a static role
+          const staticRoles = ['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'USER'];
+          setAvailableCustomApprovers(users.filter((u: any) => 
+            u.roles.some((r: string) => !staticRoles.some(s => r.startsWith(s)))
+          ));
+        }
+      } catch (err) { console.error("Failed to load users for workflow", err); }
+    };
+    fetchUsers();
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -178,15 +218,89 @@ function BuilderContent() {
       toast.error("Cannot save an empty form");
       return;
     }
+    
+    
+    // Only force workflow modal if:
+    // 1. Trying to PUBLISH and NOT an Admin/Builder
+    // 2. OR if user explicitly clicks "Request Approval" (which we will handle via its own button)
+    if (status === 'PUBLISHED' && !isAdminOrBuilder) {
+        setIsWorkflowModalOpen(true);
+        return;
+    }
+
     setIsSaving(true);
     try {
-      const payload = { ...schema, status };
-      await saveForm(payload);
-      toast.success(`Form ${status === 'DRAFT' ? 'saved as draft' : 'published successfully'}!`);
-      router.push('/');
+      // Cast status to any to bypass the union type restriction for the DTO
+      const payload: any = { ...schema, status: status };
+      
+      let savedForm;
+      if (editFormId) {
+        savedForm = await updateForm(Number(editFormId), payload);
+      } else {
+        savedForm = await saveForm(payload);
+        // After initial save, set the editFormId so subsequent saves update THIS form
+        if (savedForm && savedForm.id) {
+            setFormId(savedForm.id);
+        }
+      }
+
+      if (savedForm && savedForm.status) {
+        setStatus(savedForm.status);
+      }
+
+      toast.success(`Form ${status === 'PUBLISHED' ? 'published successfully!' : 'saved as draft!'}`);
+      // Don't push to '/' yet, allow user to keep editing or "Request Approval"
+      // router.push('/'); 
     } catch (error) {
       console.error(error);
       toast.error("Failed to save form");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleInitiateWorkflow = async () => {
+    if (!selectedBuilderId) return toast.error("Please select a target Builder");
+    if (workflowType === 'LEVEL_1' && selectedApproverIds.length < 1) return toast.error("Select an intermediate authority");
+    if (workflowType === 'LEVEL_2' && selectedApproverIds.length < 2) return toast.error("Select 2 intermediate authorities");
+
+    setIsSaving(true);
+    try {
+      // 1. Save form first if it's new
+      const currentPayload: any = { ...schema, status: 'DRAFT' };
+      const savedForm = await saveForm(currentPayload);
+      const formId = savedForm.id;
+
+      // 2. Initiate Workflow
+      const res = await fetch('http://localhost:8080/api/workflows/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          formId,
+          workflowType,
+          targetBuilderId: parseInt(selectedBuilderId),
+          intermediateAuthorityIds: selectedApproverIds.map(id => parseInt(id))
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        console.log("Workflow initiated successfully:", result);
+        toast.success("Workflow initiated successfully!");
+        
+        // Update local status to reflect that it's now pending approval
+        // The backend transition for a new workflow initiation sets it to PENDING_PUBLISH or similar
+        // Let's refetch or manually set a temporary status. 
+        // Actually, the router push will take them to dashboard where it's fresh.
+        router.push('/');
+      } else {
+        const errorText = await res.text();
+        console.error("Workflow initiation failed:", res.status, errorText);
+        toast.error(`Failed to initiate workflow: ${res.status}`);
+      }
+    } catch (err) {
+      toast.error("An error occurred");
     } finally {
       setIsSaving(false);
     }
@@ -315,19 +429,24 @@ function BuilderContent() {
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-screen w-full overflow-hidden" style={{ background: 'var(--canvas-bg)' }}>
-        {/* ── Top Header Bar (Full Width) ── */}
-        <header
-          className="h-16 border-b flex items-center justify-between px-6 shrink-0 z-20 backdrop-blur-md"
-          style={{ background: 'var(--bg-header)', borderColor: 'var(--header-border)' }}
-        >
-          {/* Left: Back link + form title */}
-          <div className="flex items-center gap-4">
+        {/* Global Header removed from Builder */}
+
+        <div className="flex flex-col flex-1 overflow-hidden">
+          {/* ── Builder Toolbar (Sub-Header) ── */}
+          <div 
+            className="h-14 border-b flex items-center justify-between px-6 shrink-0 z-20"
+            style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}
+          >
+            {/* Left: Back Button, Form title & Status */}
             <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-3 group transition-transform hover:scale-105" title="Go to Dashboard">
-                <div className="w-8 h-8 rounded-lg gradient-accent shadow-sm flex items-center justify-center text-white">
-                  <FileText size={16} className="stroke-[2.5]" />
-                </div>
-              </Link>
+              <button
+                onClick={() => router.push('/')}
+                className="p-2 rounded-lg hover:bg-[var(--bg-muted)] transition-colors group"
+                title="Back to Dashboard"
+              >
+                <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={20} />
+              </button>
+
               <div className="flex flex-col">
                 <input
                   type="text"
@@ -337,177 +456,288 @@ function BuilderContent() {
                   style={{ color: 'var(--text-primary)' }}
                   placeholder="Untitled Form"
                 />
-                <span className="text-[10px] font-semibold opacity-50 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-                  {editFormId ? 'Editing Saved Form' : 'New Form Draft'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="hidden xs:inline text-[10px] font-semibold opacity-50 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+                    {editFormId ? 'Editing Form' : 'New Draft'}
+                  </span>
+                  <span className="hidden xs:inline w-1 h-1 rounded-full bg-[var(--border)]" />
+                  <span className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">
+                    {schema.status}
+                  </span>
+                  {isSaving && <span className="text-[10px] font-medium animate-pulse text-blue-500">. Saving...</span>}
+                </div>
               </div>
+            </div>
+
+            {/* Centre: View Mode Switcher - Hidden on tiny screens or simplified */}
+            <div className="hidden sm:flex bg-[var(--bg-muted)] p-1 rounded-lg border border-[var(--border)]">
+              <button
+                onClick={() => setActiveTab('EDITOR')}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'EDITOR' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+              >
+                <Layout size={13} /> Editor
+              </button>
+              <button
+                onClick={() => setActiveTab('LOGIC')}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'LOGIC' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+              >
+                <Link2 size={13} /> Logic
+              </button>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={() => setThemePanelOpen(!isThemePanelOpen)}
+                className={`p-2 rounded-lg transition-colors shrink-0 ${isThemePanelOpen ? 'bg-[var(--accent)] text-white' : ''}`}
+                style={!isThemePanelOpen ? { color: 'var(--text-muted)' } : {}}
+                title="Theme Options"
+              >
+                <Palette size={16} />
+              </button>
+
+              {hasPermission('WRITE') && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const payload: any = { ...schema, status: 'DRAFT' };
+                      const saved = await saveForm(payload);
+                      window.open(`/f/${saved.publicShareToken}`, '_blank');
+                    } catch (e) {
+                      toast.error("Save failed before preview");
+                    }
+                  }}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[var(--bg-muted)] transition-all"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <Eye size={14} /> Preview
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsWorkflowModalOpen(true)}
+                className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm hover:shadow-md shrink-0"
+              >
+                <ShieldAlert size={14} className="sm:mr-1.5" /> <span className="hidden lg:inline">Request Approval</span>
+              </button>
+
+              {isAdminOrBuilder && (
+                <>
+                  <button
+                    onClick={() => handleSave('DRAFT')}
+                    disabled={isSaving}
+                    className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold border bg-[var(--bg-muted)] hover:bg-[var(--bg-subtle)] transition-all shrink-0"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                  >
+                    <Save size={14} className="sm:mr-1.5" /> <span className="hidden sm:inline">Save</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleSave('PUBLISHED')}
+                    disabled={isSaving}
+                    className="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-black text-white gradient-accent shadow-sm hover:shadow-md transition-all uppercase tracking-widest shrink-0"
+                  >
+                    {isSaving ? '...' : 'Publish'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Centre: Tab toggle */}
-          <div
-            className="flex rounded-lg p-1"
-            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border)' }}
-          >
-            <button
-              onClick={() => setActiveTab('EDITOR')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
-              style={
-                activeTab === 'EDITOR'
-                  ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                  : { color: 'var(--text-muted)' }
-              }
-            >
-              <Layout size={13} /> Form Editor
-            </button>
-            <button
-              onClick={() => setActiveTab('LOGIC')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all"
-              style={
-                activeTab === 'LOGIC'
-                  ? { background: 'var(--card-bg)', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }
-                  : { color: 'var(--text-muted)' }
-              }
-            >
-              <GitBranch size={13} /> Logic Rules
-            </button>
-          </div>
-
-          {/* Right: Action buttons */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setThemePanelOpen(!isThemePanelOpen)}
-              className={`p-2 rounded-lg transition-colors ${isThemePanelOpen ? 'bg-[var(--accent)] text-white' : ''}`}
-              style={!isThemePanelOpen ? { color: 'var(--text-muted)' } : {}}
-              title="Theme Options"
-            >
-              <Palette size={18} />
-            </button>
-
-            <ThemeToggle />
-
-            <button
-              onClick={() => {
-                localStorage.setItem('form_builder_preview', JSON.stringify(schema));
-                window.open('/builder/preview', '_blank');
-              }}
-              className="p-2 rounded-lg transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              title="Preview in New Tab"
-            >
-              <Eye size={18} />
-            </button>
-
-
-
-            {editFormId && (
+          <div className="flex flex-1 overflow-hidden relative">
+            {/* ── Mobile View Toggle Tabs ── */}
+            <div className="flex lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-[var(--card-bg)] border border-[var(--border)] p-1.5 rounded-2xl shadow-2xl backdrop-blur-xl">
               <button
-                onClick={handleArchive}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ color: '#b91c1c', background: '#fee2e2' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fecaca'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fee2e2'}
+                onClick={() => setActiveMobileTab('PALETTE')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PALETTE' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
               >
-                <Archive size={13} /> Archive
+                <Plus size={14} /> 
+                <span className={activeMobileTab === 'PALETTE' ? 'inline' : 'hidden md:inline'}>Fields</span>
               </button>
-            )}
-
-            <button
-              onClick={() => handleSave('DRAFT')}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border"
-              style={{
-                background: 'var(--bg-muted)',
-                borderColor: 'var(--border)',
-                color: 'var(--text-secondary)'
-              }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-subtle)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-            >
-              <Save size={13} /> Save Draft
-            </button>
-
-            {schema.publicShareToken && (
               <button
-                onClick={() => {
-                  const url = `${window.location.origin}/f/${schema.publicShareToken}`;
-                  navigator.clipboard.writeText(url);
-                  toast.success("Share link copied to clipboard!");
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ color: 'var(--accent)', background: 'var(--accent-subtle)', cursor: 'pointer' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-muted)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--accent-subtle)'}
+                onClick={() => setActiveMobileTab('CANVAS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'CANVAS' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
               >
-                <Link2 size={13} /> Share
+                <Layout size={14} /> 
+                <span className={activeMobileTab === 'CANVAS' ? 'inline' : 'hidden md:inline'}>Canvas</span>
               </button>
-            )}
+              <button
+                onClick={() => setActiveMobileTab('PROPERTIES')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PROPERTIES' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
+              >
+                <Settings2 size={14} /> 
+                <span className={activeMobileTab === 'PROPERTIES' ? 'inline' : 'hidden md:inline'}>Setup</span>
+              </button>
+            </div>
 
-            <button
-              onClick={() => handleSave('PUBLISHED')}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm transition-all hover:shadow-md disabled:opacity-60"
-            >
-              {isSaving ? 'Saving...' : 'Publish →'}
-            </button>
-
-            {username && (
-              <div className="relative border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }} ref={profileRef}>
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white shadow-sm transition-transform hover:scale-105 focus:outline-none focus:ring-2"
-                  style={{ background: 'var(--accent)', outlineColor: 'var(--accent-subtle)' }}
-                  title="Account profile"
-                >
-                  {username.charAt(0).toUpperCase()}
-                </button>
-
-                {isProfileOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg border overflow-hidden z-20 animate-in fade-in slide-in-from-top-2"
-                    style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
-                  >
-                    <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-muted)' }}>
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{username}</p>
-                    </div>
-                    <div className="p-1">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-3 py-2 text-sm rounded-lg flex items-center gap-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                        style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}
-                      >
-                        <User size={16} />
-                        Sign out
-                      </button>
-                    </div>
-                  </div>
-                )}
+            {/* 1. Sidebar (Palette) */}
+            {activeTab === 'EDITOR' && (
+              <div className={`${activeMobileTab === 'PALETTE' ? 'flex flex-1' : 'hidden lg:flex'} h-full overflow-hidden border-r`} style={{ borderColor: 'var(--border)' }}>
+                <Sidebar />
               </div>
             )}
+
+            {/* 2. Main content (Canvas) */}
+            <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden ${activeTab === 'EDITOR' && activeMobileTab !== 'CANVAS' ? 'hidden lg:flex' : 'flex'}`}>
+              {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
+            </main>
+
+            {/* 3. Right panel (Properties) */}
+            {activeTab === 'EDITOR' && (
+              <>
+                <div className={`${activeMobileTab === 'PROPERTIES' ? 'flex flex-1' : 'hidden lg:flex'} h-full overflow-hidden border-l`} style={{ borderColor: 'var(--border)' }}>
+                  <PropertiesPanel />
+                </div>
+                <DragOverlay>{renderOverlay()}</DragOverlay>
+              </>
+            )}
           </div>
-        </header>
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* 1. Sidebar */}
-          {activeTab === 'EDITOR' && <Sidebar />}
-
-          {/* 2. Main content */}
-          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-            {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
-          </main>
-
-          {/* 3. Right panel */}
-          {activeTab === 'EDITOR' && (
-            <>
-              <PropertiesPanel />
-              <DragOverlay>{renderOverlay()}</DragOverlay>
-            </>
-          )}
         </div>
+
+        {/* Workflow Initiation Modal */}
+        {isWorkflowModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-300">
+            <div className="w-full max-w-2xl rounded-[3rem] border shadow-2xl bg-[var(--card-bg)] border-[var(--card-border)] animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col overflow-hidden">
+              
+              {/* Modal Header */}
+              <div className="px-10 pt-10 pb-6 flex justify-between items-center shrink-0">
+                <div>
+                  <h2 className="text-3xl font-black tracking-tighter uppercase leading-none mb-2">Initiate <span className="gradient-text">Approval</span></h2>
+                  <p className="text-[10px] font-black text-[var(--text-faint)] uppercase tracking-[0.2em]">Select your chain of responsibility</p>
+                </div>
+                <button 
+                  onClick={() => setIsWorkflowModalOpen(false)}
+                  className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-[var(--bg-muted)] transition-all transform hover:rotate-90 group"
+                >
+                  <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={28} />
+                </button>
+              </div>
+
+              {/* Modal Body - Scrollable */}
+              <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar style={{ scrollbarGutter: 'stable' }}">
+                <div className="space-y-8">
+                  {/* Workflow Type Selector */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-[0.3em] ml-1 text-[var(--text-faint)]">Approval Strategy</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        { id: 'NORMAL', label: 'Self Publish', desc: 'Direct approval' },
+                        { id: 'LEVEL_1', label: 'Level 1 Flow', desc: '1-Step Review' },
+                        { id: 'LEVEL_2', label: 'Level 2 Flow', desc: '2-Step Review' }
+                      ].map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setWorkflowType(t.id as any);
+                            setSelectedApproverIds([]);
+                          }}
+                          className={`p-5 rounded-3xl border-2 transition-all text-left ${workflowType === t.id ? 'border-[var(--accent)] bg-[var(--accent-subtle)] shadow-xl -translate-y-1' : 'border-[var(--border)] bg-[var(--card-bg)] hover:border-[var(--text-faint)]'}`}
+                        >
+                          <p className={`text-xs font-black mb-1 ${workflowType === t.id ? 'text-[var(--accent)]' : ''}`}>{t.label}</p>
+                          <p className="text-[9px] font-bold opacity-50 leading-tight uppercase tracking-tight">{t.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Authority Chain */}
+                  <div className="space-y-6 bg-[var(--bg-muted)] p-8 rounded-[2rem] border border-[var(--border)] relative overflow-hidden">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-full gradient-accent flex items-center justify-center text-white">
+                        <GitBranch size={16} />
+                      </div>
+                      <h4 className="text-xs font-black uppercase tracking-widest">Workflow Chain</h4>
+                    </div>
+
+                    <div className="space-y-8 relative">
+                      {/* Vertical line connector */}
+                      <div className="absolute left-6 top-8 bottom-8 w-px border-l-2 border-dashed border-[var(--border)]"></div>
+
+                      {/* Intermediate steps */}
+                      {(workflowType === 'LEVEL_1' || workflowType === 'LEVEL_2') && (
+                        <div className="relative flex items-start gap-6">
+                          <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg)] border border-[var(--border)] flex items-center justify-center font-black text-xs z-10 shrink-0">1</div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest mb-2 block opacity-50">Intermediate Authority</label>
+                            <select 
+                              value={selectedApproverIds[0] || ''}
+                              onChange={(e) => {
+                                const newIds = [...selectedApproverIds];
+                                newIds[0] = e.target.value;
+                                setSelectedApproverIds(newIds);
+                              }}
+                              className="w-full px-5 py-4 rounded-xl border bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-bold text-sm"
+                            >
+                              <option value="">Choose Custom Authority...</option>
+                              {availableCustomApprovers.map(u => <option key={u.id} value={u.id}>{u.username} ({u.roles.join(', ')})</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {workflowType === 'LEVEL_2' && (
+                        <div className="relative flex items-start gap-6">
+                          <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg)] border border-[var(--border)] flex items-center justify-center font-black text-xs z-10 shrink-0">2</div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest mb-2 block opacity-50">Secondary Reviewer</label>
+                            <select 
+                              value={selectedApproverIds[1] || ''}
+                              onChange={(e) => {
+                                const newIds = [...selectedApproverIds];
+                                newIds[1] = e.target.value;
+                                setSelectedApproverIds(newIds);
+                              }}
+                              className="w-full px-5 py-4 rounded-xl border bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-bold text-sm"
+                            >
+                              <option value="">Choose Custom Authority...</option>
+                              {availableCustomApprovers
+                                .filter(u => u.id.toString() !== selectedApproverIds[0])
+                                .map(u => <option key={u.id} value={u.id}>{u.username} ({u.roles.join(', ')})</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Final step (Builder) */}
+                      <div className="relative flex items-start gap-6">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--accent)] text-white flex items-center justify-center font-black text-xs z-10 shrink-0 shadow-lg shadow-blue-500/20">
+                          {workflowType === 'NORMAL' ? '1' : workflowType === 'LEVEL_1' ? '2' : '3'}
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest mb-2 block text-[var(--accent)]">Final Target (Builder)</label>
+                          <select 
+                            value={selectedBuilderId}
+                            onChange={(e) => setSelectedBuilderId(e.target.value)}
+                            className="w-full px-5 py-4 rounded-xl border border-[var(--accent)] bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-black text-sm"
+                          >
+                            <option value="">Select Target Builder...</option>
+                            {availableBuilders.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                          </select>
+                          <p className="mt-2 text-[10px] font-medium text-[var(--text-muted)] italic flex items-center gap-1">
+                            <ShieldAlert size={10} /> After approval, this person will own this form.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button 
+                      onClick={handleInitiateWorkflow}
+                      disabled={isSaving}
+                      className="w-full py-5 rounded-3xl text-sm font-black text-white gradient-accent shadow-xl shadow-blue-500/30 hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 uppercase tracking-[0.2em]"
+                    >
+                      {isSaving ? 'Processing Chain...' : 'Submit Request →'}
+                    </button>
+                    <p className="text-center mt-4 text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-widest">Form will be locked during approval process</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </DndContext >
+    </DndContext>
   );
 }
 

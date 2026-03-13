@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sttl.formbuilder2.dto.internal.FormRuleDTO;
 import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.model.entity.FormField;
+import com.sttl.formbuilder2.model.enums.FieldType;
 import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.repository.FormRepository;
 import lombok.RequiredArgsConstructor;
@@ -161,6 +162,10 @@ public class SubmissionService {
 
         String tableName = form.getTargetTableName();
         
+        if ("serial_no".equals(sortBy)) {
+            sortBy = "submitted_at";
+        }
+        
         // 1. Validate sortBy column to prevent SQL injection
         validateColumnName(sortBy, form);
         String direction = "DESC".equalsIgnoreCase(sortOrder) ? "DESC" : "ASC";
@@ -176,11 +181,14 @@ public class SubmissionService {
                 whereClause.append(" AND (");
                 List<String> searchable = new ArrayList<>(List.of("submission_id", "submission_status"));
                 searchable.addAll(form.getVersions().get(0).getFields().stream()
+                        .filter(f -> f.getFieldType() != FieldType.SECTION_HEADER 
+                                 && f.getFieldType() != FieldType.INFO_LABEL 
+                                 && f.getFieldType() != FieldType.PAGE_BREAK)
                         .map(FormField::getColumnName)
                         .collect(Collectors.toList()));
                 
                 for (int i = 0; i < searchable.size(); i++) {
-                    whereClause.append("CAST(").append(searchable.get(i)).append(" AS TEXT) ILIKE ?");
+                    whereClause.append("CAST(\"").append(searchable.get(i)).append("\" AS TEXT) ILIKE ?");
                     args.add("%" + globalVal + "%");
                     if (i < searchable.size() - 1) whereClause.append(" OR ");
                 }
@@ -195,7 +203,7 @@ public class SubmissionService {
                 
                 if (val != null && !val.isBlank()) {
                     validateColumnName(col, form);
-                    whereClause.append(" AND CAST(").append(col).append(" AS TEXT) ILIKE ?");
+                    whereClause.append(" AND CAST(\"").append(col).append("\" AS TEXT) ILIKE ?");
                     args.add("%" + val + "%");
                 }
             }

@@ -45,7 +45,12 @@ public class FormDetailResponseDTO {
     private String publicShareToken;
     private boolean allowEditResponse;
     private Long ownerId;
+    private String ownerName;
+    private Long approvedById;
+    private String approvedByName;
     private String themeColor;
     private String themeFont;
+    private String issuedByUsername;
+    private String approvalChain;
     private List<FormVersionResponseDTO> versions;
 }

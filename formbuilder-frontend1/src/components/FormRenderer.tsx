@@ -478,7 +478,7 @@ export default function FormRenderer({
 
     return (
         <div
-            className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border font-sans transition-all"
+            className="w-full max-w-2xl mx-auto rounded-2xl border font-sans transition-all"
             style={{
                 background: 'var(--card-bg)',
                 borderColor: 'var(--card-border)',
@@ -487,7 +487,7 @@ export default function FormRenderer({
             }}
         >
             {/* Progress Bar Container */}
-            <div className="h-2 w-full bg-gray-100 dark:bg-gray-800 relative">
+            <div className="h-2 w-full bg-gray-100 dark:bg-gray-800 relative rounded-t-2xl overflow-hidden">
                 <div
                     className="h-full transition-all duration-500 ease-out absolute left-0 top-0"
                     style={{
@@ -956,9 +956,9 @@ function renderInput(
             const scaleOptions = Array.from({ length: (maxS - minS) + 1 }, (_, i) => minS + i);
 
             return (
-                <div className="flex items-center justify-between w-full overflow-x-auto py-2 gap-4">
-                    <span className="text-xs text-gray-400 mt-6">{minS}</span>
-                    <div className="flex gap-4">
+                <div className="flex flex-wrap items-center justify-between w-full py-2 gap-4">
+                    <span className="text-xs text-gray-400 sm:mt-6">{minS}</span>
+                    <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                         {scaleOptions.map((num) => (
                             <label key={num} className="flex flex-col items-center gap-2 cursor-pointer group">
                                 <span className="text-sm font-medium text-gray-400 group-hover:text-black transition-colors">{num}</span>
@@ -974,7 +974,7 @@ function renderInput(
                             </label>
                         ))}
                     </div>
-                    <span className="text-xs text-gray-400 mt-6">{maxS}</span>
+                    <span className="text-xs text-gray-400 sm:mt-6">{maxS}</span>
                 </div>
             );
 
@@ -1001,40 +1001,78 @@ function renderInput(
             };
 
             return (
-                <div className="overflow-x-auto border rounded-lg">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50 dark:bg-gray-900/50">
-                            <tr>
-                                <th className="px-4 py-3"></th>
-                                {cols.map((col, i) => (
-                                    <th key={i} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{col}</th>
+                <div className="border rounded-xl bg-gray-50/30 overflow-hidden">
+                    {/* Desktop Table View */}
+                    <div className="hidden sm:block overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                <tr>
+                                    <th className="px-4 py-3"></th>
+                                    {cols.map((col, i) => (
+                                        <th key={i} className="px-4 py-3 text-center text-xs font-black text-gray-400 uppercase tracking-widest">{col}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white">
+                                {rows.map((row, rIdx) => (
+                                    <tr key={rIdx}>
+                                        <td className="px-4 py-3 text-sm font-bold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{row}</td>
+                                        {cols.map((col, cIdx) => {
+                                            const isRadio = field.type === 'GRID_RADIO';
+                                            const isSelected = isRadio ? gridValue[row] === col : (gridValue[row] || []).includes(col);
+                                            return (
+                                                <td key={cIdx} className="px-4 py-3 text-center">
+                                                    <input
+                                                        type={isRadio ? "radio" : "checkbox"}
+                                                        name={`${field.columnName}-${row}`}
+                                                        checked={isSelected}
+                                                        disabled={isDisabled}
+                                                        onChange={(e) => handleGridChange(row, col, !isRadio, e.target.checked)}
+                                                        className={`w-5 h-5 text-black focus:ring-black border-gray-300 ${!isRadio ? 'rounded' : ''}`}
+                                                    />
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
                                 ))}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                            {rows.map((row, rIdx) => (
-                                <tr key={rIdx}>
-                                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{row}</td>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile Stacked View */}
+                    <div className="block sm:hidden divide-y divide-gray-200">
+                        {rows.map((row, rIdx) => (
+                            <div key={rIdx} className="p-4 space-y-3">
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{row}</p>
+                                <div className="grid grid-cols-2 gap-2">
                                     {cols.map((col, cIdx) => {
                                         const isRadio = field.type === 'GRID_RADIO';
                                         const isSelected = isRadio ? gridValue[row] === col : (gridValue[row] || []).includes(col);
                                         return (
-                                            <td key={cIdx} className="px-4 py-3 text-center">
+                                            <label 
+                                                key={cIdx} 
+                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
+                                                    isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'
+                                                }`}
+                                            >
                                                 <input
                                                     type={isRadio ? "radio" : "checkbox"}
-                                                    name={`${field.columnName}-${row}`}
+                                                    name={`${field.columnName}-${row}-mobile`}
                                                     checked={isSelected}
                                                     disabled={isDisabled}
                                                     onChange={(e) => handleGridChange(row, col, !isRadio, e.target.checked)}
                                                     className={`w-4 h-4 text-black focus:ring-black border-gray-300 ${!isRadio ? 'rounded' : ''}`}
                                                 />
-                                            </td>
+                                                <span className={`text-[11px] font-bold ${isSelected ? 'text-indigo-700' : 'text-slate-600'}`}>
+                                                    {col}
+                                                </span>
+                                            </label>
                                         );
                                     })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             );
 

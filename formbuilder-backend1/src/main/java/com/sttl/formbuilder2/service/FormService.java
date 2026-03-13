@@ -14,7 +14,11 @@ import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import com.sttl.formbuilder2.repository.FormRepository;
 import com.sttl.formbuilder2.model.entity.AppUser;
+import com.sttl.formbuilder2.model.entity.UserFormRole;
+import com.sttl.formbuilder2.model.entity.WorkflowInstance;
 import com.sttl.formbuilder2.repository.UserRepository;
+import com.sttl.formbuilder2.repository.UserFormRoleRepository;
+import com.sttl.formbuilder2.repository.WorkflowInstanceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -58,8 +62,11 @@ public class FormService {
 
     private final FormRepository formRepository;
     private final DynamicTableService dynamicTableService;
+    private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
+    private final UserFormRoleRepository userFormRoleRepository;
+    private final WorkflowInstanceRepository workflowInstanceRepository;
 
     // ─────────────────────────────────────────────
     // HELPER: Get Current User
@@ -88,10 +95,10 @@ public class FormService {
      * to provision the physical submission table.
      *
      * @param request Incoming payload from POST /api/forms.
-     * @return The newly persisted {@link Form} entity (with generated ID).
+     * @return The newly persisted {@link FormDetailResponseDTO} (with generated ID).
      */
     @Transactional
-    public Form createForm(CreateFormRequestDTO request) {
+    public FormDetailResponseDTO createForm(CreateFormRequestDTO request) {
         // 1. Build the Form entity
         Form form = new Form();
         form.setTitle(request.getTitle());
@@ -101,8 +108,11 @@ public class FormService {
         FormStatus incomingStatus = request.getStatus() != null ? request.getStatus() : FormStatus.DRAFT;
         form.setStatus(incomingStatus);
 
-        // Associate the form with the currently logged-in user
-        form.setOwner(getCurrentUser());
+        // Associate the form with the currently logged-in user (both as owner and creator initially)
+        AppUser currentUser = getCurrentUser();
+        form.setOwner(currentUser);
+        form.setCreator(currentUser);
+        form.setIssuedByUsername(currentUser.getUsername());
 
         // Save early to get the generated ID (needed for the dynamic table name)
         form = formRepository.save(form);
@@ -134,7 +144,48 @@ public class FormService {
             dynamicTableService.createDynamicTable(dynamicTableName, request.getFields());
         }
 
-        return form;
+        auditService.log("FORM_SAVE", currentUser.getUsername(), "FORM", form.getId().toString(), "Form saved as " + incomingStatus);
+
+        return toDetailDTO(form);
+    }
+
+    @Transactional
+    public void finalizeWorkflowForm(Long formId, AppUser targetOwner, AppUser approver) {
+        Form form = formRepository.findById(formId)
+                .orElseThrow(() -> new EntityNotFoundException("Form not found"));
+
+        FormStatus oldStatus = form.getStatus();
+        // Transition: PENDING_DRAFT -> DRAFT, PENDING_PUBLISH -> PUBLISHED, REJECTED -> REJECTED (handled by rejectStep)
+        FormStatus newStatus = (oldStatus == FormStatus.PENDING_PUBLISH) ? FormStatus.PUBLISHED : FormStatus.DRAFT;
+
+        form.setOwner(targetOwner);
+        form.setApprovedBy(approver);
+        form.setStatus(newStatus);
+        formRepository.save(form);
+
+        String currentActor = SecurityContextHolder.getContext().getAuthentication().getName();
+        auditService.log("FORM_FINALIZE", currentActor, "FORM", formId.toString(), "Form finalized as " + newStatus);
+
+        // If it was PENDING_PUBLISH, ensure the table is created
+        if (newStatus == FormStatus.PUBLISHED) {
+            // Get the latest version's fields
+            FormVersion latest = form.getVersions().stream()
+                    .max((v1, v2) -> Integer.compare(v1.getVersionNumber(), v2.getVersionNumber()))
+                    .orElseThrow(() -> new RuntimeException("No versions found for form"));
+
+            // Provision table
+            dynamicTableService.createDynamicTable(form.getTargetTableName(), 
+                latest.getFields().stream().map(this::toFieldDTO).collect(Collectors.toList()));
+        }
+    }
+
+    private FieldDefinitionRequestDTO toFieldDTO(FormField f) {
+        FieldDefinitionRequestDTO dto = new FieldDefinitionRequestDTO();
+        dto.setLabel(f.getFieldLabel());
+        dto.setType(f.getFieldType());
+        dto.setRequired(f.getIsMandatory());
+        dto.setColumnName(f.getColumnName());
+        return dto;
     }
 
     // ─────────────────────────────────────────────
@@ -150,7 +201,36 @@ public class FormService {
      */
     public List<FormSummaryResponseDTO> getAllForms() {
         AppUser currentUser = getCurrentUser();
-        List<Form> forms = formRepository.findByOwnerAndStatusNotOrderByUpdatedAtDesc(currentUser, FormStatus.ARCHIVED);
+        boolean hasAllAccess = currentUser.getUserFormRoles().stream()
+                .anyMatch(ufr -> ufr.getRole().getName().equals("ADMIN") || ufr.getRole().getName().equals("ROLE_ADMINISTRATOR"));
+
+        List<Form> forms;
+        if (hasAllAccess) {
+            forms = formRepository.findAllByStatusNotOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
+        } else {
+            forms = formRepository.findByOwnerOrIssuedByUsernameAndStatusNot(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
+        }
+
+        return forms.stream()
+                .map(this::toSummaryDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns a lightweight summary list of all archived forms.
+     */
+    public List<FormSummaryResponseDTO> getArchivedForms() {
+        AppUser currentUser = getCurrentUser();
+        boolean hasAllAccess = currentUser.getUserFormRoles().stream()
+                .anyMatch(ufr -> ufr.getRole().getName().equals("ADMIN") || ufr.getRole().getName().equals("ROLE_ADMINISTRATOR"));
+
+        List<Form> forms;
+        if (hasAllAccess) {
+            forms = formRepository.findByStatusOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
+        } else {
+            forms = formRepository.findByOwnerOrIssuedByUsernameAndStatus(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
+        }
+
         return forms.stream()
                 .map(this::toSummaryDTO)
                 .collect(Collectors.toList());
@@ -217,10 +297,10 @@ public class FormService {
      *
      * @param formId  The ID of the form to update.
      * @param request Incoming payload from PUT /api/forms/{id}.
-     * @return The updated {@link Form} entity.
+     * @return The updated {@link FormDetailResponseDTO}.
      */
     @Transactional
-    public Form updateForm(Long formId, UpdateFormRequestDTO request) {
+    public FormDetailResponseDTO updateForm(Long formId, UpdateFormRequestDTO request) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
@@ -247,15 +327,18 @@ public class FormService {
 
         // Evolve the physical submission table based on the status transition
         if ((oldStatus == null || oldStatus == FormStatus.DRAFT) && newStatus == FormStatus.PUBLISHED) {
-            // CREATE TABLE IF NOT EXISTS — safe to re-call if previously published then
-            // drafted
+            // Record who approved the form
+            form.setApprovedBy(getCurrentUser());
+            formRepository.save(form);
+
+            // CREATE TABLE IF NOT EXISTS
             dynamicTableService.createDynamicTable(form.getTargetTableName(), request.getFields());
         } else if (oldStatus == FormStatus.PUBLISHED && newStatus == FormStatus.PUBLISHED) {
             // Only ADD new columns; existing data is never touched
             dynamicTableService.alterDynamicTable(form.getTargetTableName(), request.getFields());
         }
 
-        return form;
+        return toDetailDTO(form);
     }
 
     // ─────────────────────────────────────────────
@@ -276,6 +359,53 @@ public class FormService {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         form.setStatus(FormStatus.ARCHIVED);
+        formRepository.save(form);
+        
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+        auditService.log("FORM_ARCHIVE", actor, "FORM", id.toString(), "Form archived");
+    }
+
+    @Transactional
+    public void hardDeleteForm(Long id) {
+        Form form = formRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Form not found with ID: " + id));
+        
+        String tableName = form.getTargetTableName();
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        // 1. Log the audit event first
+        auditService.log("FORM_HARD_DELETE", actor, "FORM", id.toString(), "Form permanently deleted: " + form.getTitle());
+        
+        // 2. Delete related Workflow Instances and Steps (deleteAll triggers cascades)
+        List<WorkflowInstance> instances = workflowInstanceRepository.findAllByFormId(id);
+        workflowInstanceRepository.deleteAll(instances);
+        
+        // 3. Delete related User Form Roles (deleteAll triggers cascades/standard cleanup)
+        List<UserFormRole> roles = userFormRoleRepository.findAllByFormId(id);
+        userFormRoleRepository.deleteAll(roles);
+        
+        // 4. Drop the physical submission table
+        if (tableName != null) {
+            dynamicTableService.dropTable(tableName);
+        }
+        
+        // 5. Delete the Form itself (cascades to FormVersion and FormField)
+        formRepository.delete(form);
+    }
+
+    /**
+     * Restores an archived form by setting its status back to DRAFT.
+     *
+     * @param id The ID of the form to restore.
+     */
+    @Transactional
+    public void restoreForm(Long id) {
+        Form form = formRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Form not found"));
+        if (form.getStatus() != FormStatus.ARCHIVED) {
+            throw new RuntimeException("Only archived forms can be restored.");
+        }
+        form.setStatus(FormStatus.DRAFT);
         formRepository.save(form);
     }
 
@@ -381,6 +511,10 @@ public class FormService {
                 .targetTableName(form.getTargetTableName())
                 .publicShareToken(form.getPublicShareToken())
                 .allowEditResponse(form.isAllowEditResponse())
+                .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)
+                .ownerName(form.getOwner() != null ? form.getOwner().getUsername() : "Unknown")
+                .approvedByName(form.getApprovedBy() != null ? form.getApprovedBy().getUsername() : null)
+                .issuedByUsername(form.getIssuedByUsername())
                 .build();
     }
 
@@ -490,6 +624,8 @@ public class FormService {
                 .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)
                 .themeColor(themeColor)
                 .themeFont(themeFont)
+                .issuedByUsername(form.getIssuedByUsername())
+                .approvalChain(form.getApprovalChain())
                 .versions(versionDTOs)
                 .build();
     }

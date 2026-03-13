@@ -2,6 +2,9 @@ package com.sttl.formbuilder2.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sttl.formbuilder2.model.enums.FieldType;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.Map;
@@ -37,9 +40,14 @@ import java.util.Map;
  */
 @Data
 public class FieldDefinitionRequestDTO {
+    @NotBlank(message = "Field label is required")
     private String label;
+
     private String columnName;
+
+    @NotNull(message = "Field type is required")
     private FieldType type;
+
     private boolean required;
     private Object options;
     private Map<String, Object> validation;
@@ -51,5 +59,7 @@ public class FieldDefinitionRequestDTO {
     private boolean disabled;
     @JsonProperty("isMultiSelect")
     private boolean isMultiSelect;
+
+    @Valid
     private java.util.List<FieldDefinitionRequestDTO> children;
 }

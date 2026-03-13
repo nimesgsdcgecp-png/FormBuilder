@@ -115,7 +115,7 @@ export interface FormSchema {
   title: string;
   description: string;
   targetTableName: string;
-  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | 'PENDING_DRAFT' | 'PENDING_PUBLISH' | 'REJECTED';
   allowEditResponse?: boolean;    // Whether respondents can edit their submission
   themeColor?: string;            // The custom primary color for the form
   themeFont?: string;             // The custom font family for the form

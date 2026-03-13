@@ -3,21 +3,18 @@ package com.sttl.formbuilder2.model.enums;
 /**
  * FormStatus — Lifecycle State of a Form
  *
- * Used to control form visibility and access across the application:
- *
- * DRAFT — The form is being built. It is visible in the dashboard builder
- * but cannot be submitted by respondents via the public /f/{token} URL.
- *
- * PUBLISHED — The form is live. A dynamic submission table has been created in
- * the database and respondents can access and submit it via the
- * public share link.
- *
- * ARCHIVED — Soft-deleted. The form is hidden from the dashboard list
- * ({@code findByStatusNotOrderByUpdatedAtDesc}) but data is preserved
- * in the database for audit purposes.
+ * DRAFT — Form is being built and is editable by owner/creator.
+ * PENDING_DRAFT — Viewer-created form waiting for Builder adoption.
+ * PENDING_PUBLISH — User-created draft waiting for publication approval.
+ * PUBLISHED — Form is live and accepting submissions.
+ * REJECTED — Workflow was rejected; form is returned to creator for fixes.
+ * ARCHIVED — Soft-deleted.
  */
 public enum FormStatus {
     DRAFT,
+    PENDING_DRAFT,
+    PENDING_PUBLISH,
     PUBLISHED,
+    REJECTED,
     ARCHIVED
 }

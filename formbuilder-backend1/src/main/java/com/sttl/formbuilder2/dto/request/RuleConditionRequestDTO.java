@@ -1,6 +1,8 @@
 package com.sttl.formbuilder2.dto.request;
 
 import com.sttl.formbuilder2.model.enums.RuleOperator;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -24,8 +26,12 @@ import lombok.Data;
  */
 @Data
 public class RuleConditionRequestDTO {
+    @NotBlank(message = "Condition field is required")
     private String field;
+
+    @NotNull(message = "Condition operator is required")
     private RuleOperator operator;
+
     private Object value;
     private String valueType;
 }

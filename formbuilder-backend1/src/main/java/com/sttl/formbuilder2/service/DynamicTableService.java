@@ -109,6 +109,13 @@ public class DynamicTableService {
         return jdbcTemplate.queryForList(sql, String.class);
     }
 
+    @Transactional
+    public void dropTable(String tableName) {
+        if (tableName == null || tableName.trim().isEmpty()) return;
+        String sql = "DROP TABLE IF EXISTS \"" + tableName + "\" CASCADE";
+        jdbcTemplate.execute(sql);
+    }
+
     private String generateColumnName(String label) {
         return label.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
     }

@@ -3,6 +3,10 @@ package com.sttl.formbuilder2.dto.request;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import lombok.Data;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -26,10 +30,19 @@ import java.util.List;
  */
 @Data
 public class CreateFormRequestDTO {
+    @NotBlank(message = "Title is required")
     private String title;
+
     private String description;
+
     private boolean allowEditResponse;
+
+    @NotNull(message = "Status is required")
     private FormStatus status;
+
     private Object rules;
+
+    @NotEmpty(message = "At least one field is required")
+    @Valid
     private List<FieldDefinitionRequestDTO> fields;
 }

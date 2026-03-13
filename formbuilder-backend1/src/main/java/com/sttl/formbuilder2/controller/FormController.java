@@ -5,11 +5,11 @@ import com.sttl.formbuilder2.dto.request.SubmissionRequestDTO;
 import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
 import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
-import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.service.DynamicTableService;
 import com.sttl.formbuilder2.service.FormService;
 import com.sttl.formbuilder2.service.SubmissionService;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -48,12 +48,21 @@ public class FormController {
     }
 
     /**
+     * GET /api/forms/archived
+     * Returns a list of all archived forms for the current user.
+     */
+    @GetMapping("/archived")
+    public ResponseEntity<List<FormSummaryResponseDTO>> getArchivedForms() {
+        return ResponseEntity.ok(formService.getArchivedForms());
+    }
+
+    /**
      * POST /api/forms
      * Creates a brand-new form (DRAFT status). Does NOT create a submission table
      * yet — that only happens on Publish (PUT with status=PUBLISHED).
      */
     @PostMapping
-    public ResponseEntity<Form> createForm(@RequestBody CreateFormRequestDTO request) {
+    public ResponseEntity<FormDetailResponseDTO> createForm(@Valid @RequestBody CreateFormRequestDTO request) {
         return ResponseEntity.ok(formService.createForm(request));
     }
 
@@ -75,7 +84,7 @@ public class FormController {
      * {@code DynamicTableService}.
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Form> updateForm(@PathVariable("id") Long id, @RequestBody UpdateFormRequestDTO request) {
+    public ResponseEntity<FormDetailResponseDTO> updateForm(@PathVariable("id") Long id, @Valid @RequestBody UpdateFormRequestDTO request) {
         return ResponseEntity.ok(formService.updateForm(id, request));
     }
 
@@ -88,6 +97,33 @@ public class FormController {
     public ResponseEntity<Void> deleteForm(@PathVariable("id") Long id) {
         formService.deleteForm(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * DELETE /api/forms/{id}/permanent
+     * Hard-deletes a form from the database. Restricted to administrators.
+     */
+    @DeleteMapping("/{id}/permanent")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'ROLE_ADMINISTRATOR')")
+    public ResponseEntity<?> hardDeleteForm(@PathVariable("id") Long id) {
+        try {
+            formService.hardDeleteForm(id);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            System.err.println("!!! PERMANENT DELETE ERROR: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error during permanent delete: " + e.getMessage());
+        }
+    }
+
+    /**
+     * PUT /api/forms/{id}/restore
+     * Restores an archived form back to DRAFT status.
+     */
+    @PutMapping("/{id}/restore")
+    public ResponseEntity<Void> restoreForm(@PathVariable("id") Long id) {
+        formService.restoreForm(id);
+        return ResponseEntity.ok().build();
     }
 
     // ─────────────────────────────────────────────────────────
@@ -121,7 +157,7 @@ public class FormController {
     @PostMapping("/{id}/submissions")
     public ResponseEntity<Map<String, Object>> submitForm(
             @PathVariable("id") Long id,
-            @RequestBody SubmissionRequestDTO request) {
+            @Valid @RequestBody SubmissionRequestDTO request) {
 
         UUID submissionId = submissionService.submitData(id, request.getData(), request.getStatus());
         return ResponseEntity.ok(Map.of(
@@ -150,7 +186,7 @@ public class FormController {
     public ResponseEntity<Map<String, Object>> updateSubmission(
             @PathVariable("formId") Long formId,
             @PathVariable("submissionId") UUID submissionId,
-            @RequestBody SubmissionRequestDTO request) {
+            @Valid @RequestBody SubmissionRequestDTO request) {
         UUID id = submissionService.updateSubmission(formId, submissionId, request.getData(), request.getStatus());
         return ResponseEntity.ok(Map.of("submissionId", id, "message", "Update successful"));
     }
@@ -223,7 +259,7 @@ public class FormController {
     @PostMapping("/public/{token}/submissions")
     public ResponseEntity<?> submitPublicForm(
             @PathVariable("token") String token,
-            @RequestBody SubmissionRequestDTO request) {
+            @Valid @RequestBody SubmissionRequestDTO request) {
         UUID submissionId = submissionService.submitDataByToken(token, request.getData(), request.getStatus());
         return ResponseEntity.ok(Map.of(
                 "message", "Submission successful",
@@ -249,7 +285,7 @@ public class FormController {
     public ResponseEntity<Map<String, Object>> updatePublicSubmission(
             @PathVariable("token") String token,
             @PathVariable("submissionId") UUID submissionId,
-            @RequestBody SubmissionRequestDTO request) {
+            @Valid @RequestBody SubmissionRequestDTO request) {
         UUID id = submissionService.updateSubmissionByToken(token, submissionId, request.getData(),
                 request.getStatus());
         return ResponseEntity.ok(Map.of("submissionId", id, "message", "Update successful"));

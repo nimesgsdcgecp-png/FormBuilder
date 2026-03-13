@@ -15,6 +15,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.repository.UserRepository;
+import com.sttl.formbuilder2.service.UserService;
+import com.sttl.formbuilder2.service.AuditService;
 
 import java.util.Map;
 
@@ -25,12 +27,19 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final AuditService auditService;
 
-    public AuthController(AuthenticationManager authenticationManager, UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+    public AuthController(AuthenticationManager authenticationManager, 
+                          UserRepository userRepository,
+                          PasswordEncoder passwordEncoder,
+                          UserService userService,
+                          AuditService auditService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userService = userService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/login")
@@ -54,6 +63,7 @@ public class AuthController {
             HttpSession session = request.getSession(true);
             session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
 
+            auditService.log("LOGIN", username, "USER", null, "User logged in successfully");
             return ResponseEntity.ok(Map.of("message", "Login successful", "username", username));
 
         } catch (AuthenticationException e) {
@@ -65,6 +75,9 @@ public class AuthController {
     public ResponseEntity<?> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
+            String username = SecurityContextHolder.getContext().getAuthentication() != null ? 
+                             SecurityContextHolder.getContext().getAuthentication().getName() : "unknown";
+            auditService.log("LOGOUT", username, "USER", null, "User logged out");
             session.invalidate();
         }
         SecurityContextHolder.clearContext();
@@ -87,9 +100,13 @@ public class AuthController {
         AppUser newUser = new AppUser();
         newUser.setUsername(username);
         newUser.setPasswordHash(passwordEncoder.encode(password));
-        newUser.setRole("ROLE_USER");
 
-        userRepository.save(newUser);
+        newUser = userRepository.save(newUser);
+        
+        // Assign default role
+        userService.assignDefaultRole(newUser);
+
+        auditService.log("REGISTER", username, "USER", newUser.getId().toString(), "New user registered");
 
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "User registered successfully"));
     }
@@ -106,5 +123,13 @@ public class AuthController {
                 "id", user.getId(),
                 "username", user.getUsername(),
                 "roles", authentication.getAuthorities()));
+    }
+
+    @GetMapping("/permissions")
+    public ResponseEntity<?> getUserPermissions(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(userService.getUserPermissions(authentication.getName()));
     }
 }

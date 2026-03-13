@@ -4,6 +4,8 @@ import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -40,11 +42,21 @@ public interface FormRepository extends JpaRepository<Form, Long> {
      * Returns all forms whose status is NOT the given value, ordered by most
      * recently updated. Used by the dashboard to exclude ARCHIVED forms.
      */
-    List<Form> findByStatusNotOrderByUpdatedAtDesc(FormStatus status);
+    List<Form> findAllByStatusNotOrderByUpdatedAtDesc(FormStatus status);
 
-    // Find all forms for a specific user, excluding a specific status (e.g.
-    // ARCHIVED)
+    List<Form> findByStatusOrderByUpdatedAtDesc(FormStatus status);
+
+    // Find all forms for a specific user, excluding a specific status (e.g. ARCHIVED)
     List<Form> findByOwnerAndStatusNotOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
+
+    // Find all forms for a specific user with a specific status (e.g. ARCHIVED)
+    List<Form> findByOwnerAndStatusOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
+
+    @Query("SELECT f FROM Form f WHERE (f.owner = :owner OR f.issuedByUsername = :username) AND f.status <> :status ORDER BY f.updatedAt DESC")
+    List<Form> findByOwnerOrIssuedByUsernameAndStatusNot(@Param("owner") AppUser owner, @Param("username") String username, @Param("status") FormStatus status);
+
+    @Query("SELECT f FROM Form f WHERE (f.owner = :owner OR f.issuedByUsername = :username) AND f.status = :status ORDER BY f.updatedAt DESC")
+    List<Form> findByOwnerOrIssuedByUsernameAndStatus(@Param("owner") AppUser owner, @Param("username") String username, @Param("status") FormStatus status);
 
     /**
      * Looks up a form by its public share token (a UUID stored in the {@code forms}

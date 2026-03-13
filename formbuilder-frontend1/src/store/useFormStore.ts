@@ -64,6 +64,7 @@ interface FormState {
   selectField: (id: string | null) => void;
   reorderFields: (newOrder: FormField[], parentId?: string | null) => void;
   setThemePanelOpen: (isOpen: boolean) => void;
+  setStatus: (status: string) => void;
 }
 
 /** Recursive helper to update a field within a tree of fields */
@@ -156,6 +157,7 @@ export const useFormStore = create<FormState>((set) => ({
     allowEditResponse: false,
     themeColor: '#6366f1',  // Default: indigo
     themeFont: 'Inter',     // Default: Inter
+    status: 'DRAFT',
   },
   selectedFieldId: null,
   isThemePanelOpen: false,
@@ -205,6 +207,10 @@ export const useFormStore = create<FormState>((set) => ({
   /** Sets the form's database ID after a save response. */
   setFormId: (id) =>
     set((state) => ({ schema: { ...state.schema, id } })),
+
+  /** Sets the form's status (e.g. DRAFT, PUBLISHED). */
+  setStatus: (status) =>
+    set((state) => ({ schema: { ...state.schema, status: status as any } })),
 
   /** Replaces the entire field list — used when loading an existing form from the API. */
   setFields: (fields) =>

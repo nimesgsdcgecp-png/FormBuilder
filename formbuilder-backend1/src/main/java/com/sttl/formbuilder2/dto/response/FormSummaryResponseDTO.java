@@ -38,4 +38,9 @@ public class FormSummaryResponseDTO {
     private String targetTableName;
     private String publicShareToken;
     private boolean allowEditResponse;
+    private Long ownerId;
+    private String ownerName;
+    private String approvedByName;
+    private String issuedByUsername;
+    private String approvalChain;
 }

@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List } from 'lucide-react';
 import { deleteSubmission, deleteSubmissionsBulk, getSubmissions } from '@/services/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
 import SubmissionDetailDrawer from '@/components/SubmissionDetailDrawer';
@@ -29,6 +30,7 @@ export default function ResponsesPage() {
   const params = useParams();
   const router = useRouter();
   const formId = params.id as string;
+  const { hasPermission, isLoading: permsLoading } = usePermissions();
 
   const [headers, setHeaders] = useState<FormHeader[]>([]);
   const [data, setData] = useState<any[]>([]);
@@ -383,45 +385,44 @@ export default function ResponsesPage() {
   }
 
   return (
-    <div className="min-h-screen font-sans" style={{ background: '#f8fafc' }}>
+    <div className="min-h-screen font-sans transition-colors duration-300" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       {/* ── SaaS Header ── */}
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{ background: 'rgba(255, 255, 255, 0.8)', borderColor: '#e2e8f0' }}
+        style={{ background: 'var(--header-bg)', borderColor: 'var(--border)' }}
       >
         <div className="max-w-[1600px] mx-auto px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <button
               onClick={() => router.push('/')}
-              className="p-2.5 rounded-xl transition-all hover:bg-slate-100 group"
-              style={{ color: '#64748b' }} 
+              className="p-2 rounded-xl transition-all hover:bg-[var(--bg-muted)] group shrink-0"
+              style={{ color: 'var(--text-muted)' }} 
             >
-              <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
+              <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
             </button>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Responses Page</span>
-                <span className="text-slate-200 font-light">/</span>
-                <h1 className="text-xl font-extrabold tracking-tight" style={{ color: '#0f172a' }}>{formTitle}</h1>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase tracking-wider border border-emerald-100/50">Live</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-0.5 overflow-hidden">
+                <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-[var(--text-faint)] whitespace-nowrap">Responses Page</span>
+                <span className="hidden sm:inline text-[var(--border)] font-light">/</span>
+                <h1 className="text-base sm:text-xl font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>{formTitle}</h1>
+                <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">Live</span>
               </div>
-              <p className="text-xs font-medium" style={{ color: '#64748b' }}>
-                Total Submissions: <span className="text-slate-900 font-bold">{totalElements}</span>
-                {searchTerm && <> • Matches: <span className="text-blue-600 font-bold">{totalElements}</span></>}
+              <p className="text-[10px] sm:text-xs font-medium truncate" style={{ color: 'var(--text-muted)' }}>
+                {totalElements} <span className="hidden xs:inline">Submissions</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <ThemeToggle />
             
             <a
               href={`/f/${publicToken}`}
               target="_blank"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
+              className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
               style={{ background: '#2563eb' }} 
             >
-              <Plus size={16} /> New Record
+              <Plus size={14} className="sm:size-4" /> <span className="hidden xs:inline">New Record</span>
             </a>
           </div>
         </div>
@@ -509,8 +510,8 @@ export default function ResponsesPage() {
               )}
             </div>
 
-            {/* View Toggle */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2 shadow-inner">
+            {/* View Toggle - Hidden on mobile, force GRID */}
+            <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2 shadow-inner">
               <button
                 onClick={() => setViewMode('TABLE')}
                 className={`p-1.5 rounded-lg transition-all ${viewMode === 'TABLE' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}
@@ -575,35 +576,37 @@ export default function ResponsesPage() {
             </div>
 
             {/* Export */}
-            <div className="relative">
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 transition-all hover:border-slate-300"
-              >
-                <Download size={16} /> 
-                <span className="hidden lg:inline">Export</span>
-                <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
-              </button>
+            {hasPermission('EXPORT', Number(formId)) && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 transition-all hover:border-slate-300"
+                >
+                  <Download size={16} /> 
+                  <span className="hidden lg:inline">Export</span>
+                  <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
+                </button>
 
-              {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    <div className="p-2">
-                       <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
-                      </button>
-                      <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
-                      </button>
-                      <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                        <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
-                      </button>
+                {showExportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
+                    <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-2">
+                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
+                        </button>
+                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
+                        </button>
+                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
+                          <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -659,13 +662,20 @@ export default function ResponsesPage() {
 
         {/* ── View Rendering ── */}
         <div className={`transition-all duration-300 ${isFetching ? 'opacity-40 grayscale-[0.5] pointer-events-none' : 'opacity-100'}`}>
-          {viewMode === 'TABLE' ? (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <div className="block sm:hidden mb-6">
+            <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl border border-blue-100 flex items-center gap-3">
+              <LayoutGrid size={18} />
+              <span className="text-xs font-black uppercase tracking-widest">Mobile Card View Active</span>
+            </div>
+          </div>
+
+          {(viewMode === 'TABLE' && !globalThis.window?.innerWidth || globalThis.window?.innerWidth >= 640) ? (
+          <div className="rounded-3xl border shadow-sm overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+            <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full border-separate border-spacing-0">
                 <thead>
-                  <tr className="bg-slate-50/50">
-                    <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b border-slate-200 bg-slate-50/50">
+                  <tr className="bg-[var(--bg-muted)]/50">
+                    <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b bg-inherit" style={{ borderColor: 'var(--border)' }}>
                       <button
                         onClick={toggleSelectAll}
                         className={`p-2 rounded-lg transition-all ${selectedIds.size === paginatedData.length && paginatedData.length > 0 ? 'text-blue-600' : 'text-slate-300'}`}
@@ -677,7 +687,8 @@ export default function ResponsesPage() {
                       <th
                         key={header.key}
                         onClick={() => handleSort(header.key)}
-                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 cursor-pointer hover:bg-slate-100/50 transition-colors z-20 bg-inherit"
+                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest border-b cursor-pointer hover:bg-[var(--bg-hover)] transition-colors z-20 bg-inherit"
+                        style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}
                       >
                         <div className="flex items-center gap-2">
                           {header.label}
@@ -689,7 +700,7 @@ export default function ResponsesPage() {
                         </div>
                       </th>
                     ))}
-                    <th className="sticky top-0 right-0 px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 z-30 bg-slate-50/50">
+                    <th className="sticky top-0 right-0 px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest border-b z-30 bg-inherit" style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}>
                       Actions
                     </th>
                   </tr>

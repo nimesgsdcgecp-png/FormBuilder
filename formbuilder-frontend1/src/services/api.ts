@@ -88,6 +88,67 @@ export const saveForm = async (schema: FormSchema) => {
   return response.json();
 };
 
+/**
+ * Updates an existing form directly.
+ */
+export const updateForm = async (id: number, schema: any) => {
+    const payload = {
+      title: schema.title,
+      description: schema.description,
+      allowEditResponse: schema.allowEditResponse,
+      status: schema.status || 'DRAFT',
+      rules: {
+        theme: {
+          color: schema.themeColor,
+          font: schema.themeFont
+        },
+        logic: schema.rules || []
+      },
+      fields: (() => {
+        const mapFields = (fields: any[]): any[] => {
+          return fields.map((field) => ({
+            label: field.label,
+            columnName: field.columnName,
+            type: field.type,
+            required: field.validation?.required || false,
+            options: field.options,
+            validation: {
+              ...field.validation,
+              required: undefined,
+              minLength: field.validation?.minLength,
+              maxLength: field.validation?.maxLength,
+              pattern: field.validation?.pattern,
+            },
+            defaultValue: field.defaultValue,
+            calculationFormula: field.calculationFormula,
+            helpText: field.helpText,
+            hidden: field.isHidden || false,
+            readOnly: field.isReadOnly || false,
+            disabled: field.isDisabled || false,
+            isMultiSelect: field.isMultiSelect || false,
+            children: field.children ? mapFields(field.children) : undefined
+          }));
+        };
+        return mapFields(schema.fields);
+      })(),
+    };
+  
+    const response = await fetch(`http://localhost:8080/api/forms/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+  
+    if (!response.ok) {
+      if (response.status === 401) throw new UnauthorizedError();
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to update form');
+    }
+  
+    return response.json();
+  };
+
 export interface SubmissionsResponse {
   content: Record<string, any>[];
   totalElements: number;
@@ -189,6 +250,39 @@ export const deleteForm = async (id: number) => {
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
     throw new Error('Failed to delete form');
+  }
+};
+
+/**
+ * Fetches the list of archived forms for the current user.
+ * Calls GET /api/forms/archived.
+ */
+export const getArchivedForms = async () => {
+  const response = await fetch(`${API_BASE_URL}/forms/archived`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to fetch archived forms');
+  }
+  return response.json();
+};
+
+/**
+ * Restores an archived form back to DRAFT state.
+ * Calls PUT /api/forms/{id}/restore.
+ *
+ * @param id The form's numeric ID.
+ */
+export const restoreForm = async (id: number) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${id}/restore`, {
+    method: 'PUT',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    throw new Error('Failed to restore form');
   }
 };
 

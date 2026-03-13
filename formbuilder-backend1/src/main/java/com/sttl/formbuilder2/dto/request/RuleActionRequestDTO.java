@@ -1,6 +1,7 @@
 package com.sttl.formbuilder2.dto.request;
 
 import com.sttl.formbuilder2.model.enums.ActionType;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
@@ -26,7 +27,9 @@ import lombok.Data;
  */
 @Data
 public class RuleActionRequestDTO {
+    @NotNull(message = "Action type is required")
     private ActionType type;
+
     private String targetField;
     private String message;
 }

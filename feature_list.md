@@ -1,16 +1,17 @@
 # FormBuilder3 Feature Backlog
 
 ## Core Form Features
-- [ ] Add a time limit for form filling, or to publish and unpublish the form
+- [ ] Add a time limit for form filling, 
+- [ ] to publish and unpublish the form,
 - [ ] Allow anyone to fill the form only once (Unique Submissions)
 - [ ] Validation: numbers (1,2,3,...) and "end" cannot be the label name
-- [ ] Backend: Add robust validation in Request DTOs
+- [x] Backend: Add robust validation in Request DTOs--
 
 ## Form Management
-- [ ] Show Archive section and allow restoring archived forms
+- [x] Show Archive section and allow restoring archived forms
 
 ## Workflow & Approvals
-- [ ] Workflow Engine: Approval from higher authority
+- [x] Workflow Engine: Approval from higher authority
 - [ ] Sending emails (Notifications/Workflow actions)
 
 ## Advanced Logic & Rule Engine Enhancements
