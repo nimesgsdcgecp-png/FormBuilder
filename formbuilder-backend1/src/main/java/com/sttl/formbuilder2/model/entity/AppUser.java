@@ -13,6 +13,7 @@ import java.util.Set;
 @Table(name = "users")
 @Getter
 @Setter
+@org.hibernate.annotations.SQLRestriction("deleted = false")
 public class AppUser {
 
     @Id
@@ -25,6 +26,9 @@ public class AppUser {
     @Column(name = "password_hash", nullable = false)
     @JsonIgnore
     private String passwordHash;
+
+    @Column(nullable = false)
+    private boolean deleted = false;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<UserFormRole> userFormRoles = new HashSet<>();

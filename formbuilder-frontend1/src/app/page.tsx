@@ -255,6 +255,8 @@ export default function Dashboard() {
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 gradient-accent rounded-full" />
               )}
             </button>
+            {/* Archive section hidden as requested */}
+            {/* 
             <button
               onClick={() => setCurrentTab('ARCHIVED')}
               className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ARCHIVED' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
@@ -263,7 +265,8 @@ export default function Dashboard() {
               {currentTab === 'ARCHIVED' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 gradient-accent rounded-full" />
               )}
-            </button>
+            </button> 
+            */}
           </div>
         </div>
 
@@ -451,7 +454,6 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      {/* Archive Button (Only in ACTIVE tab) */}
                       {currentTab === 'ACTIVE' && hasPermission('DELETE', form.id) && (
                         <button
                           onClick={() => handleDelete(form.id)}
@@ -533,7 +535,7 @@ export default function Dashboard() {
                                   >
                                     <Edit size={16} />
                                   </Link>
-
+ 
                                   {isPublished && (
                                     <>
                                       <Link

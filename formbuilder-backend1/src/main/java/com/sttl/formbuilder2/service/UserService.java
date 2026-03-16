@@ -88,8 +88,12 @@ public class UserService {
 
         // Cleanup role assignments
         userFormRoleRepository.deleteByUserId(id);
+        user.getUserFormRoles().clear();
+        userFormRoleRepository.flush();
 
-        userRepository.delete(user);
+        // Soft delete
+        user.setDeleted(true);
+        userRepository.save(user);
     }
 
     @Transactional

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Shield, UserPlus, Trash2, Plus, Info, Check, Search, Filter, ShieldCheck, FormInput, RotateCcw, Users, ShieldAlert } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Plus, Info, Check, Search, Filter, ShieldCheck, FormInput, RotateCcw, Users, ShieldAlert, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -48,7 +48,25 @@ export default function RoleManagementPage() {
   const [selectedForm, setSelectedForm] = useState<string>("global");
 
   const [isAddingRole, setIsAddingRole] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [newRole, setNewRole] = useState({ name: "", description: "", permissionIds: [] as number[] });
+
+  useEffect(() => {
+    if (editingRole) {
+      setNewRole({
+        name: editingRole.name,
+        description: editingRole.description,
+        permissionIds: editingRole.permissions.map(p => p.id)
+      });
+      setIsAddingRole(true);
+    }
+  }, [editingRole]);
+
+  const handleModalClose = () => {
+    setIsAddingRole(false);
+    setEditingRole(null);
+    setNewRole({ name: "", description: "", permissionIds: [] });
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -85,21 +103,26 @@ export default function RoleManagementPage() {
     if (!newRole.name) return toast.error("Role name is required");
 
     try {
-      const res = await fetch('http://localhost:8080/api/admin/roles', {
-        method: 'POST',
+      const url = editingRole 
+        ? `http://localhost:8080/api/admin/roles/${editingRole.id}`
+        : 'http://localhost:8080/api/admin/roles';
+      
+      const method = editingRole ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(newRole)
       });
 
       if (res.ok) {
-        toast.success("Role created successfully");
-        setIsAddingRole(false);
-        setNewRole({ name: "", description: "", permissionIds: [] });
+        toast.success(editingRole ? "Role updated successfully" : "Role created successfully");
+        handleModalClose();
         fetchData();
       } else {
         const err = await res.json();
-        toast.error(err.error || "Failed to create role");
+        toast.error(err.error || `Failed to ${editingRole ? 'update' : 'create'} role`);
       }
     } catch (err) {
       toast.error("An error occurred");
@@ -279,13 +302,22 @@ export default function RoleManagementPage() {
                       <h3 className="text-sm sm:text-lg font-black group-hover:text-[var(--accent)] transition-colors truncate">{role.name}</h3>
                     </div>
                     {!['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'USER'].includes(role.name) && (
-                      <button 
-                        onClick={() => handleDeleteRole(role.id, role.name)}
-                        className="p-2 rounded-lg text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete Role"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => setEditingRole(role)}
+                          className="p-2 rounded-lg text-blue-500 hover:bg-blue-50"
+                          title="Edit Role"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteRole(role.id, role.name)}
+                          className="p-2 rounded-lg text-red-500 hover:bg-red-50"
+                          title="Delete Role"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     )}
                   </div>
                   <p className="text-[11px] sm:text-xs mb-6 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
@@ -378,7 +410,7 @@ export default function RoleManagementPage() {
                 >
                   <option value="">Choose a user...</option>
                   {users
-                    .filter(u => !u.roles.some(r => ['ADMIN', 'ROLE_ADMINISTRATOR'].includes(r)))
+                    .filter(u => !u.roles.some(r => ['ADMIN', 'ROLE_ADMINISTRATOR'].includes(r)) && u.username !== 'admin')
                     .map(u => <option key={u.id} value={u.id}>{u.username} (ID: #{u.id})</option>)
                   }
                 </select>
@@ -451,9 +483,9 @@ export default function RoleManagementPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-black/40 animate-in fade-in duration-200">
             <div className="w-full max-w-2xl rounded-3xl sm:rounded-[3rem] border shadow-2xl bg-[var(--card-bg)] border-[var(--card-border)] animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col overflow-hidden">
               <div className="flex justify-between items-center px-6 sm:px-10 pt-8 sm:pt-10 pb-6 shrink-0">
-                <h2 className="text-lg sm:text-2xl font-black tracking-tight uppercase tracking-widest leading-none">Create New <span className="gradient-text">System Role</span></h2>
+                <h2 className="text-lg sm:text-2xl font-black tracking-tight uppercase tracking-widest leading-none">{editingRole ? 'Update' : 'Create New'} <span className="gradient-text">System Role</span></h2>
                 <button 
-                  onClick={() => setIsAddingRole(false)}
+                  onClick={handleModalClose}
                   className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-[var(--bg-muted)] transition-colors group shrink-0 ml-2"
                 >
                   <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={24} />
@@ -547,7 +579,7 @@ export default function RoleManagementPage() {
                   type="submit"
                   className="w-full py-5 rounded-2xl text-sm font-black text-white gradient-accent shadow-lg shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4 uppercase tracking-widest"
                 >
-                  Deploy Role
+                  {editingRole ? 'Update Role' : 'Deploy Role'}
                 </button>
               </div>
             </form>

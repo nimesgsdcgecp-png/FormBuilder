@@ -40,6 +40,15 @@ public class RoleController {
         }
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateRole(@PathVariable("id") Long id, @RequestBody RoleRequestDTO dto) {
+        try {
+            return ResponseEntity.ok(roleService.updateRole(id, dto));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/assign")
     public ResponseEntity<?> assignRole(@RequestBody RoleAssignmentDTO dto, Authentication auth) {
         try {

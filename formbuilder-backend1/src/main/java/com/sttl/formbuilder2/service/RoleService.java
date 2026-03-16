@@ -63,6 +63,37 @@ public class RoleService {
     }
 
     @Transactional
+    public RoleResponseDTO updateRole(Long id, RoleRequestDTO dto) {
+        Role role = roleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        List<String> protectedRoles = List.of("ADMIN", "ROLE_ADMINISTRATOR", "BUILDER", "USER");
+        if (protectedRoles.contains(role.getName())) {
+            throw new RuntimeException("Cannot edit protected system role: " + role.getName());
+        }
+
+        // Check if new name conflict
+        roleRepository.findByName(dto.getName()).ifPresent(existing -> {
+            if (!existing.getId().equals(id)) {
+                throw new RuntimeException("Role name already exists: " + dto.getName());
+            }
+        });
+
+        role.setName(dto.getName());
+        role.setDescription(dto.getDescription());
+
+        if (dto.getPermissionIds() != null) {
+            Set<Permission> perms = dto.getPermissionIds().stream()
+                    .map(permId -> permissionRepository.findById(permId)
+                            .orElseThrow(() -> new RuntimeException("Permission not found: " + permId)))
+                    .collect(Collectors.toSet());
+            role.setPermissions(perms);
+        }
+
+        return convertToDTO(roleRepository.save(role));
+    }
+
+    @Transactional
     public void assignRole(RoleAssignmentDTO dto, String assignedBy) {
         AppUser user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
