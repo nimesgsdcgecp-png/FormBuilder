@@ -208,7 +208,7 @@ public class FormService {
         if (hasAllAccess) {
             forms = formRepository.findAllByStatusNotOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
         } else {
-            forms = formRepository.findByOwnerOrIssuedByUsernameAndStatusNot(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
+            forms = formRepository.findByAccessAndStatusNot(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
         }
 
         return forms.stream()
@@ -228,7 +228,7 @@ public class FormService {
         if (hasAllAccess) {
             forms = formRepository.findByStatusOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
         } else {
-            forms = formRepository.findByOwnerOrIssuedByUsernameAndStatus(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
+            forms = formRepository.findByAccessAndStatus(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);
         }
 
         return forms.stream()

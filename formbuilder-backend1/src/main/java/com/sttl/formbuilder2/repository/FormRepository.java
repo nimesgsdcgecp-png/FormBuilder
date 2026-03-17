@@ -52,11 +52,19 @@ public interface FormRepository extends JpaRepository<Form, Long> {
     // Find all forms for a specific user with a specific status (e.g. ARCHIVED)
     List<Form> findByOwnerAndStatusOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
 
-    @Query("SELECT f FROM Form f WHERE (f.owner = :owner OR f.issuedByUsername = :username) AND f.status <> :status ORDER BY f.updatedAt DESC")
-    List<Form> findByOwnerOrIssuedByUsernameAndStatusNot(@Param("owner") AppUser owner, @Param("username") String username, @Param("status") FormStatus status);
+    @Query("SELECT DISTINCT f FROM Form f " +
+           "LEFT JOIN UserFormRole ufr ON f.id = ufr.formId " +
+           "WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) " +
+           "AND f.status <> :status " +
+           "ORDER BY f.updatedAt DESC")
+    List<Form> findByAccessAndStatusNot(@Param("user") AppUser user, @Param("username") String username, @Param("status") FormStatus status);
 
-    @Query("SELECT f FROM Form f WHERE (f.owner = :owner OR f.issuedByUsername = :username) AND f.status = :status ORDER BY f.updatedAt DESC")
-    List<Form> findByOwnerOrIssuedByUsernameAndStatus(@Param("owner") AppUser owner, @Param("username") String username, @Param("status") FormStatus status);
+    @Query("SELECT DISTINCT f FROM Form f " +
+           "LEFT JOIN UserFormRole ufr ON f.id = ufr.formId " +
+           "WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) " +
+           "AND f.status = :status " +
+           "ORDER BY f.updatedAt DESC")
+    List<Form> findByAccessAndStatus(@Param("user") AppUser user, @Param("username") String username, @Param("status") FormStatus status);
 
     /**
      * Looks up a form by its public share token (a UUID stored in the {@code forms}

@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import Header from '@/components/Header';
 
 interface WorkflowHistory {
   id: number;
@@ -43,6 +44,7 @@ export default function ApprovalHistoryPage() {
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [username, setUsername] = useState<string | null>(null);
 
   const fetchHandledWorkflows = async () => {
     try {
@@ -57,6 +59,14 @@ export default function ApprovalHistoryPage() {
     } finally {
       setIsLoading(false);
     }
+
+    try {
+      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUsername(userData.username);
+      }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -78,16 +88,18 @@ export default function ApprovalHistoryPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      <header className="sticky top-0 z-30 border-b backdrop-blur-md" style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}>
-        <div className="w-full px-4 sm:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <History size={20} className="text-blue-500" />
-             <h1 className="text-lg font-bold text-[var(--text-primary)]">Past Decisions</h1>
-          </div>
-          <ThemeToggle />
-        </div>
-        
-        <div className="py-3 px-8 border-t flex items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
+      <Header 
+        username={username} 
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Approvals', href: '/admin/approvals' },
+          { label: 'Past Decisions', href: '/admin/approvals/history' }
+        ]}
+        title="Approval History"
+        badge={{ label: 'Archives', color: '#3b82f6' }}
+      />
+      
+      <div className="sticky top-16 z-20 py-3 px-8 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" size={16} />
                 <input 
@@ -101,8 +113,7 @@ export default function ApprovalHistoryPage() {
              <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">
                 {filteredInstances.length} Handled Archives
              </div>
-        </div>
-      </header>
+      </div>
 
       <main className="flex-1 p-4 sm:p-8">
         <div className="max-w-7xl mx-auto">

@@ -6,6 +6,7 @@ import { Inbox, CheckCircle2, XCircle, ArrowRight, Loader2, User, Clock, FileTex
 import { toast } from 'sonner';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import Header from '@/components/Header';
 
 interface WorkflowStep {
   id: number;
@@ -31,6 +32,7 @@ export default function ApprovalInbox() {
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [comments, setComments] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [username, setUsername] = useState<string | null>(null);
 
   const fetchPendingSteps = async () => {
     try {
@@ -44,6 +46,14 @@ export default function ApprovalInbox() {
     } finally {
       setIsLoading(false);
     }
+
+    try {
+      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUsername(userData.username);
+      }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -83,37 +93,18 @@ export default function ApprovalInbox() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      {/* ── SaaS Header ── */}
-      <header className="sticky top-0 z-30 border-b backdrop-blur-md" style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}>
-        <div className="w-full px-4 sm:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <nav className="hidden lg:flex items-center gap-2 text-sm font-medium">
-              <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Dashboard</Link>
-              <span className="text-[var(--text-faint)]">/</span>
-              <span className="text-[var(--text-primary)] font-bold">Approval Inbox</span>
-            </nav>
-            <div className="hidden lg:block h-4 w-px bg-[var(--border)] mx-2" />
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[var(--text-primary)] truncate">Pending Authorization</h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-black uppercase tracking-widest shrink-0">Action Required</span>
-            </div>
-          </div>
+      <Header 
+        username={username} 
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Approval Inbox', href: '/admin/approvals' }
+        ]}
+        title="Pending Authorization"
+        badge={{ label: 'Action Required', color: '#f59e0b' }}
+      />
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:block h-8 w-px bg-[var(--border)] mx-2" />
-            <ThemeToggle />
-            <Link 
-              href="/"
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-[var(--bg-muted)] hover:bg-[var(--border)] transition-all"
-              title="Close"
-            >
-              <Plus className="rotate-45 text-[var(--text-muted)]" size={20} />
-            </Link>
-          </div>
-        </div>
-
-        {/* ── Toolbar ── */}
-        <div className="py-3 px-4 sm:px-8 border-t flex items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
+      {/* ── Toolbar ── */}
+      <div className="sticky top-16 z-20 py-3 px-4 sm:px-8 border-b flex items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
           <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
             <div className="flex bg-[var(--bg-base)] p-1 rounded-xl border border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-black text-[var(--accent)] bg-[var(--accent-subtle)] rounded-lg">
@@ -138,7 +129,6 @@ export default function ApprovalInbox() {
             </button>
           </div>
         </div>
-      </header>
 
       {/* ── Content ── */}
       <main className="flex-1 p-4 sm:p-8">

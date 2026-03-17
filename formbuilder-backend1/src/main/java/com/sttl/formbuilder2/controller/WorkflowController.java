@@ -73,8 +73,8 @@ public class WorkflowController {
     }
 
     @GetMapping("/available-authorities")
-    public ResponseEntity<?> getAvailableAuthorities() {
-        return ResponseEntity.ok(workflowService.getAvailableAuthorities());
+    public ResponseEntity<?> getAvailableAuthorities(@RequestParam(value = "formId", required = false) Long formId) {
+        return ResponseEntity.ok(workflowService.getAvailableAuthorities(formId));
     }
 
     @GetMapping("/fix-db")

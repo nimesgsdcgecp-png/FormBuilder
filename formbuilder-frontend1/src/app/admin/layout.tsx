@@ -12,12 +12,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { isLoading, assignments } = usePermissions();
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [username, setUsername] = useState<string | null>(null);
-
-  const isCustomHeaderPage = pathname.includes('/admin/audit') || 
-                            pathname.includes('/admin/users') || 
-                            pathname.includes('/admin/roles') ||
-                            pathname.includes('/admin/approvals');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -29,8 +23,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           router.push('/login');
           return;
         }
-        const data = await response.json();
-        setUsername(data.username);
         setIsAuthChecking(false);
       } catch (err) {
         router.push('/login');
@@ -54,8 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
-      {!isCustomHeaderPage && <Header username={username} />}
-      <main className={isCustomHeaderPage ? "min-h-screen" : "max-w-7xl mx-auto px-6 lg:px-8 py-10"}>
+      <main className="min-h-screen">
         {children}
       </main>
     </div>

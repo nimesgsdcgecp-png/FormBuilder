@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
+import Header from '@/components/Header';
 
 interface UserSummary {
   id: number;
@@ -189,37 +190,18 @@ export default function UserManagementPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      {/* ── SaaS Header ── */}
-      <header className="sticky top-0 z-30 border-b backdrop-blur-md" style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}>
-        <div className="w-full px-4 sm:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <nav className="hidden lg:flex items-center gap-2 text-sm font-medium">
-              <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Dashboard</Link>
-              <span className="text-[var(--text-faint)]">/</span>
-              <span className="text-[var(--text-primary)] font-bold">User Management</span>
-            </nav>
-            <div className="hidden lg:block h-4 w-px bg-[var(--border)] mx-2" />
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[var(--text-primary)] truncate">Identity Control</h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-widest shrink-0">Master View</span>
-            </div>
-          </div>
+      <Header 
+        username={currentUser?.username} 
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'User Management', href: '/admin/users' }
+        ]}
+        title="Identity Control"
+        badge={{ label: 'Master View', color: '#3b82f6' }}
+      />
 
-          <div className="flex items-center gap-4">
-            <div className="h-8 w-px bg-[var(--border)] mx-2" />
-            <ThemeToggle />
-            <Link 
-              href="/"
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-[var(--bg-muted)] hover:bg-[var(--border)] transition-all"
-              title="Close"
-            >
-              <Plus className="rotate-45 text-[var(--text-muted)]" size={20} />
-            </Link>
-          </div>
-        </div>
-
-        {/* ── Toolbar ── */}
-        <div className="py-3 px-4 sm:px-8 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
+      {/* ── Toolbar ── */}
+      <div className="sticky top-16 z-20 py-3 px-4 sm:px-8 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 flex-1">
             <div className="relative w-full sm:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)]" size={16} />
@@ -261,7 +243,6 @@ export default function UserManagementPage() {
               </button>
           </div>
         </div>
-      </header>
 
       {/* ── Content ── */}
       <main className="flex-1 p-4 sm:p-8">

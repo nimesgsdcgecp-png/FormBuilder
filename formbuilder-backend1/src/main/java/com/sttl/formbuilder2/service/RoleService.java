@@ -1,9 +1,6 @@
 package com.sttl.formbuilder2.service;
 
-import com.sttl.formbuilder2.dto.PermissionResponseDTO;
-import com.sttl.formbuilder2.dto.RoleAssignmentDTO;
-import com.sttl.formbuilder2.dto.RoleRequestDTO;
-import com.sttl.formbuilder2.dto.RoleResponseDTO;
+import com.sttl.formbuilder2.dto.*;
 import com.sttl.formbuilder2.model.entity.*;
 import com.sttl.formbuilder2.repository.*;
 import org.springframework.data.domain.Page;
@@ -100,19 +97,34 @@ public class RoleService {
         Role role = roleRepository.findById(dto.getRoleId())
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
-        // Enforce Single Role Policy: Clear database and in-memory state
-        // We use repository delete and collection clear for maximum safety with Hibernate
-        userFormRoleRepository.deleteByUserId(user.getId());
-        user.getUserFormRoles().clear();
-        userFormRoleRepository.flush();
+        // If it's a global assignment (formId is null)
+        if (dto.getFormId() == null) {
+            // Restriction: ADMIN and ROLE_ADMINISTRATOR should only have one instance globally
+            if (role.getName().equals("ADMIN") || role.getName().equals("ROLE_ADMINISTRATOR")) {
+                boolean alreadyAssigned = userFormRoleRepository.findAll().stream()
+                        .anyMatch(ufr -> ufr.getRole().getName().equals(role.getName()) && ufr.getFormId() == null && !ufr.getUser().getId().equals(user.getId()));
+                
+                if (alreadyAssigned) {
+                    throw new RuntimeException("System restricted: only one instance of " + role.getName() + " is allowed.");
+                }
+            }
 
-        // Restriction: ADMIN and ROLE_ADMINISTRATOR should only have one instance globally
-        if (role.getName().equals("ADMIN") || role.getName().equals("ROLE_ADMINISTRATOR")) {
-            boolean alreadyAssigned = userFormRoleRepository.findAll().stream()
-                    .anyMatch(ufr -> ufr.getRole().getName().equals(role.getName()) && ufr.getFormId() == null);
+            // Remove existing global roles for this user before adding new one
+            List<UserFormRole> existingGlobal = user.getUserFormRoles().stream()
+                .filter(ufr -> ufr.getFormId() == null)
+                .collect(Collectors.toList());
             
-            if (alreadyAssigned) {
-                throw new RuntimeException("System restricted: only one instance of " + role.getName() + " is allowed.");
+            for (UserFormRole ufr : existingGlobal) {
+                user.getUserFormRoles().remove(ufr);
+                userFormRoleRepository.delete(ufr);
+            }
+        } else {
+            // If it's a scoped assignment, check if this specific (user, role, form) combination already exists
+            boolean exists = user.getUserFormRoles().stream()
+                .anyMatch(ufr -> ufr.getRole().getId().equals(role.getId()) && Objects.equals(ufr.getFormId(), dto.getFormId()));
+            
+            if (exists) {
+                return; // Already assigned, do nothing
             }
         }
 
@@ -165,8 +177,18 @@ public class RoleService {
         userFormRoleRepository.deleteById(id);
     }
 
-    public List<UserFormRole> getUserAssignments(Long userId) {
-        return userFormRoleRepository.findByUserId(userId);
+    @Transactional(readOnly = true)
+    public List<UserRoleAssignmentResponseDTO> getUserAssignments(Long userId) {
+        return userFormRoleRepository.findByUserId(userId).stream()
+                .map(ufr -> UserRoleAssignmentResponseDTO.builder()
+                        .id(ufr.getId())
+                        .role(UserRoleAssignmentResponseDTO.RoleInfo.builder()
+                                .id(ufr.getRole().getId())
+                                .name(ufr.getRole().getName())
+                                .build())
+                        .formId(ufr.getFormId())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     private RoleResponseDTO convertToDTO(Role role) {

@@ -190,7 +190,11 @@ function BuilderContent() {
     // Fetch users for workflow selection
     const fetchUsers = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/workflows/available-authorities', { credentials: 'include' });
+        const url = editFormId 
+          ? `http://localhost:8080/api/workflows/available-authorities?formId=${editFormId}`
+          : 'http://localhost:8080/api/workflows/available-authorities';
+          
+        const res = await fetch(url, { credentials: 'include' });
         if (res.ok) {
           const users = await res.json();
           // Filter Builders (for final step) - check if any role starts with "BUILDER"

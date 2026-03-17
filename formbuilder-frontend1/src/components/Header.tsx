@@ -11,9 +11,12 @@ import { useUIStore } from '@/store/useUIStore';
 
 interface HeaderProps {
   username: string | null;
+  breadcrumbs?: { label: string; href: string }[];
+  title?: string;
+  badge?: { label: string; color?: string };
 }
 
-export default function Header({ username }: HeaderProps) {
+export default function Header({ username, breadcrumbs, title, badge }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -82,8 +85,50 @@ export default function Header({ username }: HeaderProps) {
               <FileText size={18} className="stroke-[2.5]" />
             </div>
           </Link>
-          <div className="hidden sm:block">
-            <span className="text-xs font-black uppercase tracking-[0.2em] text-[var(--text-faint)]">Management Console</span>
+          <div className="hidden sm:flex items-center gap-3">
+            {breadcrumbs ? (
+              <nav className="flex items-center gap-2 text-sm font-medium">
+                {breadcrumbs.map((crumb, i) => (
+                  <div key={crumb.href} className="flex items-center gap-2">
+                    <Link 
+                      href={crumb.href} 
+                      className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors whitespace-nowrap"
+                    >
+                      {crumb.label}
+                    </Link>
+                    {i < breadcrumbs.length - 1 && (
+                      <span className="text-[var(--text-faint)]">/</span>
+                    )}
+                  </div>
+                ))}
+              </nav>
+            ) : (
+              <span className="text-xs font-black uppercase tracking-[0.2em] text-[var(--text-faint)]">Management Console</span>
+            )}
+
+            {(title || badge) && (
+              <>
+                <div className="h-4 w-px bg-[var(--border)] mx-2" />
+                <div className="flex items-center gap-2 min-w-0">
+                  {title && (
+                    <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[var(--text-primary)] truncate">
+                      {title}
+                    </h1>
+                  )}
+                  {badge && (
+                    <span 
+                      className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0"
+                      style={{ 
+                        background: `${badge.color || 'var(--accent)'}1A`, 
+                        color: badge.color || 'var(--accent)' 
+                      }}
+                    >
+                      {badge.label}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -113,7 +158,29 @@ export default function Header({ username }: HeaderProps) {
                   <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-muted)' }}>
                     <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{username}</p>
                     <p className="text-[10px] font-black uppercase tracking-widest mt-1" style={{ color: 'var(--text-faint)' }}>
-                      {assignments.length > 0 ? assignments[0].role.name.replace('ROLE_', '') : 'Viewer'}
+                      {(() => {
+                        if (assignments.length === 0) return 'Viewer';
+                        
+                        // Sort: Global first, then priority roles
+                        const sorted = [...assignments].sort((a, b) => {
+                          const aGlobal = a.formId === null;
+                          const bGlobal = b.formId === null;
+                          if (aGlobal && !bGlobal) return -1;
+                          if (!aGlobal && bGlobal) return 1;
+                          
+                          const priority = ['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'ROLE_BUILDER'];
+                          const aPriority = priority.indexOf(a.role.name.replace('ROLE_', ''));
+                          const bPriority = priority.indexOf(b.role.name.replace('ROLE_', ''));
+                          
+                          if (aPriority !== -1 && bPriority === -1) return -1;
+                          if (aPriority === -1 && bPriority !== -1) return 1;
+                          if (aPriority !== -1 && bPriority !== -1) return aPriority - bPriority;
+                          
+                          return 0;
+                        });
+                        
+                        return sorted[0].role.name.replace('ROLE_', '');
+                      })()}
                     </p>
                   </div>
                   <div className="p-1">

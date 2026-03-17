@@ -192,12 +192,25 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public List<com.sttl.formbuilder2.dto.UserSummaryDTO> getAvailableAuthorities() {
+    public List<com.sttl.formbuilder2.dto.UserSummaryDTO> getAvailableAuthorities(Long formId) {
         return userRepository.findAll().stream()
+                .filter(user -> {
+                    // Always show users with Global roles
+                    boolean hasGlobal = user.getUserFormRoles().stream().anyMatch(ufr -> ufr.getFormId() == null);
+                    if (hasGlobal) return true;
+                    
+                    // If formId is provided, also show users who have a role for THIS form
+                    if (formId != null) {
+                        return user.getUserFormRoles().stream().anyMatch(ufr -> formId.equals(ufr.getFormId()));
+                    }
+                    
+                    return false;
+                })
                 .map(user -> com.sttl.formbuilder2.dto.UserSummaryDTO.builder()
                         .id(user.getId())
                         .username(user.getUsername())
                         .roles(user.getUserFormRoles().stream()
+                                .filter(ufr -> ufr.getFormId() == null || (formId != null && formId.equals(ufr.getFormId())))
                                 .map(ufr -> ufr.getRole().getName() + (ufr.getFormId() != null ? " (Scoped)" : " (Global)"))
                                 .collect(java.util.stream.Collectors.toSet()))
                         .build())

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
+import Header from '@/components/Header';
 
 interface AuditLog {
   id: number;
@@ -25,6 +26,7 @@ export default function AuditLogsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,9 +40,12 @@ export default function AuditLogsPage() {
       const res = await fetch('http://localhost:8080/api/admin/audit', { credentials: 'include' });
       if (res.ok) {
         setLogs(await res.json());
-      } else {
-        const errorText = await res.text();
-        console.error("Audit logs fetch failed:", errorText);
+      }
+      
+      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUsername(userData.username);
       }
     } catch (err) {
       console.error("Network error during audit logs fetch:", err);
@@ -94,57 +99,15 @@ export default function AuditLogsPage() {
 
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      {/* ── SaaS Header ── */}
-      <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md"
-        style={{ background: 'var(--header-bg)', borderColor: 'var(--border)' }}
-      >
-        <div className="max-w-[1600px] mx-auto px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => router.push('/')}
-              className="p-2.5 rounded-xl transition-all hover:bg-[var(--bg-muted)] group"
-              style={{ color: 'var(--text-muted)' }} 
-            >
-              <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
-            </button>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-faint)]">Management Console</span>
-                <span className="text-[var(--border)] font-light">/</span>
-                <h1 className="text-xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>Audit Logs</h1>
-                <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 text-[10px] font-bold uppercase tracking-wider border border-blue-500/20">Live Feed</span>
-              </div>
-              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                Total Actions Tracked: <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{logs.length}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            
-            <button
-              onClick={fetchLogs}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
-              style={{ background: '#2563eb' }} 
-            >
-              <RefreshCcw size={16} className={isLoading ? 'animate-spin' : ''} />
-              Refresh Logs
-            </button>
-
-            {isSuperAdmin && (
-              <button
-                onClick={() => setIsClearModalOpen(true)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg shadow-red-500/20 transition-all hover:scale-[1.02] active:scale-95 bg-red-600 hover:bg-red-700"
-              >
-                <Trash2 size={16} />
-                Clear Trail
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header 
+        username={username} 
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Audit Logs', href: '/admin/audit' }
+        ]}
+        title="Management Console"
+        badge={{ label: 'Live Feed', color: '#3b82f6' }}
+      />
 
       {/* ── SaaS Toolbar & Main Content ── */}
       <main className="max-w-[1600px] mx-auto px-8 py-6">

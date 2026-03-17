@@ -1,9 +1,6 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.RoleAssignmentDTO;
-import com.sttl.formbuilder2.dto.RoleRequestDTO;
-import com.sttl.formbuilder2.dto.RoleResponseDTO;
-import com.sttl.formbuilder2.model.entity.UserFormRole;
+import com.sttl.formbuilder2.dto.*;
 import com.sttl.formbuilder2.service.RoleService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -66,7 +63,7 @@ public class RoleController {
     }
 
     @GetMapping("/users/{userId}/assignments")
-    public ResponseEntity<List<UserFormRole>> getUserAssignments(@PathVariable("userId") Long userId) {
+    public ResponseEntity<List<UserRoleAssignmentResponseDTO>> getUserAssignments(@PathVariable("userId") Long userId) {
         return ResponseEntity.ok(roleService.getUserAssignments(userId));
     }
 

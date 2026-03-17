@@ -98,10 +98,12 @@ export default function ProfilePage() {
     );
   }
 
-  const isAlreadyBuilderOrAdmin = user?.roles?.some((r: any) => 
-    r.authority === 'ROLE_BUILDER' || r.authority === 'ROLE_ADMIN' || 
-    r.authority === 'BUILDER' || r.authority === 'ADMIN' ||
-    r.authority === 'ROLE_ADMINISTRATOR'
+  const isAdmin = user?.roles?.some((r: any) => 
+    r.authority === 'ROLE_ADMIN' || r.authority === 'ADMIN' || r.authority === 'ROLE_ADMINISTRATOR'
+  );
+
+  const isAlreadyBuilderOrAdmin = isAdmin || user?.roles?.some((r: any) => 
+    r.authority === 'ROLE_BUILDER' || r.authority === 'BUILDER'
   );
 
   return (
@@ -203,9 +205,13 @@ export default function ProfilePage() {
               <div className="p-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-muted)] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <ShieldCheck size={24} className="text-emerald-500" />
-                    <span className="text-sm font-bold text-[var(--text-primary)]">You have elevated creator permissions.</span>
+                    <span className="text-sm font-bold text-[var(--text-primary)]">
+                        {isAdmin ? 'You have full system management access.' : 'You have elevated creator permissions.'}
+                    </span>
                 </div>
-                <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest">Verified Builder</span>
+                <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest">
+                    {isAdmin ? 'System Administrator' : 'Verified Builder'}
+                </span>
               </div>
             )}
           </div>
