@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > RuleConditionRequestDTO</title>
+  <title>Coverage Report > SubmissionRequestDTO</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.dto.request</a>
 </div>
 
-<h1>Coverage Summary for Class: RuleConditionRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
+<h1>Coverage Summary for Class: SubmissionRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,13 +45,21 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">RuleConditionRequestDTO</td>
+  <td class="name">SubmissionRequestDTO</td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/1)
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
   </span>
 </td>
 <td class="coverageStat">
@@ -59,23 +67,15 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/1)
+    (0/22)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/30)
-  </span>
-</td>
-<td class="coverageStat">
-  <span class="percent">
-    0%
-  </span>
-  <span class="absValue">
-    (0/1)
+    (1/1)
   </span>
 </td>
 </tr>
@@ -89,33 +89,21 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.request;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.model.enums.RuleOperator;
+&nbsp;import jakarta.validation.constraints.NotBlank;
+&nbsp;import jakarta.validation.constraints.NotEmpty;
 &nbsp;import lombok.Data;
+&nbsp;import java.util.Map;
 &nbsp;
 &nbsp;/**
-&nbsp; * RuleConditionRequestDTO — The IF Part of a Logic Rule (API Input Shape)
-&nbsp; *
-&nbsp; * What it does:
-&nbsp; * Carries a single condition within a {@link FormRuleRequestDTO}. Describes
-&nbsp; * which
-&nbsp; * field is evaluated, how it is compared, and what value triggers the rule.
-&nbsp; *
-&nbsp; * Application flow:
-&nbsp; * Frontend LogicPanel → FormRuleRequestDTO.conditions → serialised to JSON
-&nbsp; * → stored in FormVersion.rules
-&nbsp; * → deserialized at submission time into dto.internal.RuleConditionDTO
-&nbsp; * → evaluated by RuleEngineService.evaluateCondition()
-&nbsp; *
-&nbsp; * Fields:
-&nbsp; * - {@code field} — the SQL {@code columnName} of the field being evaluated.
-&nbsp; * - {@code operator} — comparison operator (e.g. EQUALS, GREATER_THAN).
-&nbsp; * - {@code value} — the value to compare the submission answer against.
+&nbsp; * SubmissionRequestDTO — Request body for form submissions.
 &nbsp; */
-<b class="nc">&nbsp;@Data</b>
-&nbsp;public class RuleConditionRequestDTO {
-&nbsp;    private String field;
-&nbsp;    private RuleOperator operator;
-&nbsp;    private Object value;
+<b class="pc">&nbsp;@Data</b>
+&nbsp;public class SubmissionRequestDTO {
+&nbsp;    @NotEmpty(message = &quot;Submission data is required&quot;)
+&nbsp;    private Map&lt;String, Object&gt; data;
+&nbsp;
+&nbsp;    @NotBlank(message = &quot;Submission status is required&quot;)
+&nbsp;    private String status; // DRAFT or FINAL
 &nbsp;}
 </code>
 </pre>
@@ -140,7 +128,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

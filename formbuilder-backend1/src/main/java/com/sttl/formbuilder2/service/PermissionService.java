@@ -1,6 +1,6 @@
 package com.sttl.formbuilder2.service;
 
-import com.sttl.formbuilder2.dto.PermissionResponseDTO;
+import com.sttl.formbuilder2.dto.response.*;
 import com.sttl.formbuilder2.model.entity.Permission;
 import com.sttl.formbuilder2.repository.PermissionRepository;
 import org.springframework.stereotype.Service;

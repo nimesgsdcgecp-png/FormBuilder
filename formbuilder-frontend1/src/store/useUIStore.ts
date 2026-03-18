@@ -4,10 +4,12 @@ import { persist } from 'zustand/middleware';
 interface UIState {
   sidebarCollapsed: boolean;
   mobileMenuOpen: boolean;
+  pendingApprovalsCount: number;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
+  setPendingApprovalsCount: (count: number) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -15,10 +17,12 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       sidebarCollapsed: false,
       mobileMenuOpen: false,
+      pendingApprovalsCount: 0,
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
       toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
+      setPendingApprovalsCount: (count) => set({ pendingApprovalsCount: count }),
     }),
     {
       name: 'formbuilder-ui-storage',

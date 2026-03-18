@@ -1,9 +1,16 @@
 package com.sttl.formbuilder2.service;
 
-import com.sttl.formbuilder2.dto.UserAssignmentDTO;
-import com.sttl.formbuilder2.dto.UserResponseDTO;
-import com.sttl.formbuilder2.model.entity.*;
-import com.sttl.formbuilder2.repository.*;
+import com.sttl.formbuilder2.dto.response.UserAssignmentDTO;
+import com.sttl.formbuilder2.dto.response.UserResponseDTO;
+import com.sttl.formbuilder2.dto.response.UserSummaryDTO;
+import com.sttl.formbuilder2.model.entity.AppUser;
+import com.sttl.formbuilder2.model.entity.Role;
+import com.sttl.formbuilder2.model.entity.SystemConfiguration;
+import com.sttl.formbuilder2.model.entity.UserFormRole;
+import com.sttl.formbuilder2.repository.RoleRepository;
+import com.sttl.formbuilder2.repository.SystemConfigurationRepository;
+import com.sttl.formbuilder2.repository.UserFormRoleRepository;
+import com.sttl.formbuilder2.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -183,9 +190,9 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<com.sttl.formbuilder2.dto.UserSummaryDTO> getUserSummaries() {
+    public List<UserSummaryDTO> getUserSummaries() {
         return userRepository.findAll().stream()
-                .map(user -> com.sttl.formbuilder2.dto.UserSummaryDTO.builder()
+                .map(user -> UserSummaryDTO.builder()
                         .id(user.getId())
                         .username(user.getUsername())
                         .roles(user.getUserFormRoles().stream()

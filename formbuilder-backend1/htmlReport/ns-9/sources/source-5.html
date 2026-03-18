@@ -1,0 +1,133 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > RuleOperator</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.enums</a>
+</div>
+
+<h1>Coverage Summary for Class: RuleOperator (com.sttl.formbuilder2.model.enums)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RuleOperator</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    0%
+  </span>
+  <span class="absValue">
+    (0/6)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.enums;
+&nbsp;
+&nbsp;/**
+&nbsp; * RuleOperator — Comparison Operator Used in Logic Rule Conditions
+&nbsp; *
+&nbsp; * Each value is evaluated by {@code RuleEngineService.evaluateCondition()} when
+&nbsp; * a
+&nbsp; * form submission is received. The comparison is always between the user&#39;s
+&nbsp; * submitted
+&nbsp; * answer and the value configured in the rule.
+&nbsp; *
+&nbsp; * EQUALS — Exact match (case-insensitive string comparison)
+&nbsp; * NOT_EQUALS — Inverse of EQUALS
+&nbsp; * CONTAINS — Substring match (user answer contains the rule value)
+&nbsp; * GREATER_THAN — Numeric comparison: user answer &gt; rule value
+&nbsp; * LESS_THAN — Numeric comparison: user answer &lt; rule value
+&nbsp; *
+&nbsp; * Note: GREATER_THAN and LESS_THAN parse both operands as doubles. If either
+&nbsp; * cannot
+&nbsp; * be parsed (e.g. applied to a text field), the condition safely returns
+&nbsp; * {@code false}.
+&nbsp; */
+<b class="nc">&nbsp;public enum RuleOperator {</b>
+<b class="nc">&nbsp;    EQUALS,</b>
+<b class="nc">&nbsp;    NOT_EQUALS,</b>
+<b class="nc">&nbsp;    GREATER_THAN,</b>
+<b class="nc">&nbsp;    LESS_THAN,</b>
+<b class="nc">&nbsp;    CONTAINS</b>
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

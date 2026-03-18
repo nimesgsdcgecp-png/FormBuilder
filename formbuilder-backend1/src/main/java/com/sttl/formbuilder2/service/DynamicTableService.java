@@ -9,7 +9,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * DynamicTableService — DDL Management for Form Submission Tables
@@ -28,6 +31,7 @@ public class DynamicTableService {
 
         sql.append("submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
         sql.append("submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
+        sql.append("updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
         sql.append("submission_status VARCHAR(20) DEFAULT 'FINAL', ");
         sql.append("is_deleted BOOLEAN DEFAULT FALSE, ");
 
@@ -85,10 +89,136 @@ public class DynamicTableService {
             jdbcTemplate.execute(sql);
         }
 
+        if (!existingColumns.contains("updated_at")) {
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
+            jdbcTemplate.execute(sql);
+        }
+
         if (!existingColumns.contains("is_deleted")) {
             String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE";
             jdbcTemplate.execute(sql);
         }
+    }
+
+    @Transactional
+    public void insertData(String tableName, Map<String, Object> data) {
+        StringBuilder sql = new StringBuilder("INSERT INTO \"").append(tableName).append("\" (");
+        StringBuilder values = new StringBuilder("VALUES (");
+        List<Object> params = new java.util.ArrayList<>();
+
+        List<String> existingColumns = getTableColumns(tableName);
+        
+        data.forEach((col, val) -> {
+            if (existingColumns.contains(col)) {
+                sql.append("\"").append(col).append("\", ");
+                values.append("?, ");
+                
+                // Convert complex types to JSON string before saving to DB
+                if (val instanceof java.util.Collection || val instanceof java.util.Map) {
+                    try {
+                        params.add(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(val));
+                    } catch (Exception e) {
+                        params.add(val.toString());
+                    }
+                } else {
+                    params.add(val);
+                }
+            }
+        });
+
+        if (params.isEmpty()) {
+            return; // No matching columns to insert
+        }
+
+        sql.setLength(sql.length() - 2);
+        values.setLength(values.length() - 2);
+        sql.append(") ").append(values).append(")");
+
+        jdbcTemplate.update(sql.toString(), params.toArray());
+    }
+
+    @Transactional
+    public void updateData(String tableName, UUID id, Map<String, Object> data) {
+        StringBuilder sql = new StringBuilder("UPDATE \"").append(tableName).append("\" SET ");
+        List<Object> params = new java.util.ArrayList<>();
+
+        List<String> existingColumns = getTableColumns(tableName);
+
+        data.forEach((col, val) -> {
+            if (existingColumns.contains(col) && !col.equals("submission_id")) {
+                sql.append("\"").append(col).append("\" = ?, ");
+                
+                // Convert complex types to JSON string before saving to DB
+                if (val instanceof java.util.Collection || val instanceof java.util.Map) {
+                    try {
+                        params.add(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(val));
+                    } catch (Exception e) {
+                        params.add(val.toString());
+                    }
+                } else {
+                    params.add(val);
+                }
+            }
+        });
+
+        if (params.isEmpty()) {
+            return; // No matching columns to update
+        }
+
+        sql.setLength(sql.length() - 2);
+        sql.append(" WHERE submission_id = ?");
+        params.add(id);
+
+        jdbcTemplate.update(sql.toString(), params.toArray());
+    }
+
+    public Map<String, Object> fetchData(String tableName, int page, int size, String sortBy, String sortOrder, Map<String, String> filters) {
+        StringBuilder where = new StringBuilder(" WHERE is_deleted = false");
+        List<Object> params = new java.util.ArrayList<>();
+
+        filters.forEach((col, val) -> {
+            if (val != null && !val.isBlank()) {
+                where.append(" AND \"").append(col).append("\" ILIKE ?");
+                params.add("%" + val + "%");
+            }
+        });
+
+        String countSql = "SELECT COUNT(*) FROM \"" + tableName + "\"" + where;
+        long totalElements = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
+
+        String dataSql = "SELECT * FROM \"" + tableName + "\"" + where +
+                " ORDER BY \"" + sortBy + "\" " + sortOrder +
+                " LIMIT " + size + " OFFSET " + (page * size);
+
+        List<Map<String, Object>> content = jdbcTemplate.queryForList(dataSql, params.toArray());
+
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("content", content);
+        result.put("totalElements", totalElements);
+        result.put("totalPages", (int) Math.ceil((double) totalElements / size));
+        result.put("size", size);
+        result.put("number", page);
+
+        return result;
+    }
+
+    public Map<String, Object> fetchRowById(String tableName, UUID id) {
+        String sql = "SELECT * FROM \"" + tableName + "\" WHERE submission_id = ? AND is_deleted = false";
+        return jdbcTemplate.queryForMap(sql, id);
+    }
+
+    @Transactional
+    public void deleteRow(String tableName, UUID id) {
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE submission_id = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    @Transactional
+    public void deleteRowsBulk(String tableName, List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE submission_id IN (" +
+                ids.stream().map(i -> "?").collect(java.util.stream.Collectors.joining(",")) + ")";
+        jdbcTemplate.update(sql, ids.toArray());
     }
 
     public List<String> getColumnValues(Long formId, String columnName) {
@@ -114,6 +244,11 @@ public class DynamicTableService {
         if (tableName == null || tableName.trim().isEmpty()) return;
         String sql = "DROP TABLE IF EXISTS \"" + tableName + "\" CASCADE";
         jdbcTemplate.execute(sql);
+    }
+
+    private List<String> getTableColumns(String tableName) {
+        String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ?";
+        return jdbcTemplate.queryForList(checkSql, String.class, tableName);
     }
 
     private String generateColumnName(String label) {

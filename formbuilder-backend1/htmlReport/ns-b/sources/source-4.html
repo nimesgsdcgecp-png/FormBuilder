@@ -1,0 +1,333 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormMapper</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
+</div>
+
+<h1>Coverage Summary for Class: FormMapper (com.sttl.formbuilder2.service)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormMapper</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (7/7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    64.1%
+  </span>
+  <span class="absValue">
+    (41/64)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    93%
+  </span>
+  <span class="absValue">
+    (120/129)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.databind.ObjectMapper;
+&nbsp;import com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormFieldResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormVersionResponseDTO;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormField;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormVersion;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.stereotype.Component;
+&nbsp;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Map;
+&nbsp;import java.util.stream.Collectors;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormMapper — Dedicated component for mapping between Form Entities and DTOs.
+&nbsp; */
+&nbsp;@Component
+&nbsp;@RequiredArgsConstructor
+&nbsp;public class FormMapper {
+&nbsp;
+&nbsp;    private final ObjectMapper objectMapper;
+&nbsp;
+&nbsp;    public FormSummaryResponseDTO toSummaryDTO(Form form) {
+<b class="fc">&nbsp;        return FormSummaryResponseDTO.builder()</b>
+<b class="fc">&nbsp;                .id(form.getId())</b>
+<b class="fc">&nbsp;                .title(form.getTitle())</b>
+<b class="fc">&nbsp;                .description(form.getDescription())</b>
+<b class="fc">&nbsp;                .status(form.getStatus())</b>
+<b class="fc">&nbsp;                .createdAt(form.getCreatedAt())</b>
+<b class="fc">&nbsp;                .updatedAt(form.getUpdatedAt())</b>
+<b class="fc">&nbsp;                .targetTableName(form.getTargetTableName())</b>
+<b class="fc">&nbsp;                .publicShareToken(form.getPublicShareToken())</b>
+<b class="fc">&nbsp;                .allowEditResponse(form.isAllowEditResponse())</b>
+<b class="fc">&nbsp;                .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)</b>
+<b class="fc">&nbsp;                .ownerName(form.getOwner() != null ? form.getOwner().getUsername() : &quot;Unknown&quot;)</b>
+<b class="fc">&nbsp;                .approvedByName(form.getApprovedBy() != null ? form.getApprovedBy().getUsername() : null)</b>
+<b class="fc">&nbsp;                .issuedByUsername(form.getIssuedByUsername())</b>
+<b class="fc">&nbsp;                .build();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public FormDetailResponseDTO toDetailDTO(Form form) {
+<b class="fc">&nbsp;        List&lt;FormVersionResponseDTO&gt; versionDTOs = form.getVersions().stream().map(version -&gt; {</b>
+&nbsp;            
+&nbsp;            // 1. Map all entities to DTOs first (flat list)
+<b class="fc">&nbsp;            List&lt;FormFieldResponseDTO&gt; allFieldDTOs = version.getFields().stream().map(field -&gt; {</b>
+<b class="fc">&nbsp;                Object parsedOptions = null;</b>
+<b class="pc">&nbsp;                if (field.getOptions() != null &amp;&amp; !field.getOptions().isBlank() &amp;&amp; !field.getOptions().equals(&quot;[]&quot;)) {</b>
+&nbsp;                    try {
+<b class="fc">&nbsp;                        parsedOptions = objectMapper.readValue(field.getOptions(), Object.class);</b>
+&nbsp;                    } catch (Exception e) {
+<b class="nc">&nbsp;                        parsedOptions = field.getOptions();</b>
+&nbsp;                    }
+&nbsp;                }
+<b class="fc">&nbsp;                return FormFieldResponseDTO.builder()</b>
+<b class="fc">&nbsp;                        .id(field.getId())</b>
+<b class="fc">&nbsp;                        .fieldLabel(field.getFieldLabel())</b>
+<b class="fc">&nbsp;                        .columnName(field.getColumnName())</b>
+<b class="fc">&nbsp;                        .fieldType(field.getFieldType())</b>
+<b class="fc">&nbsp;                        .isMandatory(field.getIsMandatory())</b>
+<b class="fc">&nbsp;                        .defaultValue(field.getDefaultValue())</b>
+<b class="fc">&nbsp;                        .validationRules(field.getValidationRules())</b>
+<b class="fc">&nbsp;                        .ordinalPosition(field.getOrdinalPosition())</b>
+<b class="fc">&nbsp;                        .options(parsedOptions)</b>
+<b class="fc">&nbsp;                        .calculationFormula(field.getCalculationFormula())</b>
+<b class="fc">&nbsp;                        .helpText(field.getHelpText())</b>
+<b class="fc">&nbsp;                        .isHidden(field.getIsHidden())</b>
+<b class="fc">&nbsp;                        .isReadOnly(field.getIsReadOnly())</b>
+<b class="fc">&nbsp;                        .isDisabled(field.getIsDisabled())</b>
+<b class="fc">&nbsp;                        .isMultiSelect(field.getIsMultiSelect())</b>
+<b class="fc">&nbsp;                        .children(new ArrayList&lt;&gt;())</b>
+<b class="fc">&nbsp;                        .build();</b>
+<b class="fc">&nbsp;            }).collect(Collectors.toList());</b>
+&nbsp;
+&nbsp;            // 2. Reconstruct tree structure
+<b class="fc">&nbsp;            List&lt;FormFieldResponseDTO&gt; rootFields = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;            Map&lt;String, FormFieldResponseDTO&gt; dtoMap = allFieldDTOs.stream()</b>
+<b class="fc">&nbsp;                    .collect(Collectors.toMap(FormFieldResponseDTO::getColumnName, dto -&gt; dto));</b>
+&nbsp;
+<b class="fc">&nbsp;            for (FormField entity : version.getFields()) {</b>
+<b class="fc">&nbsp;                FormFieldResponseDTO dto = dtoMap.get(entity.getColumnName());</b>
+<b class="fc">&nbsp;                if (entity.getParentColumnName() == null) {</b>
+<b class="fc">&nbsp;                    rootFields.add(dto);</b>
+&nbsp;                } else {
+<b class="fc">&nbsp;                    FormFieldResponseDTO parentDto = dtoMap.get(entity.getParentColumnName());</b>
+<b class="pc">&nbsp;                    if (parentDto != null) {</b>
+<b class="fc">&nbsp;                        parentDto.getChildren().add(dto);</b>
+&nbsp;                    } else {
+<b class="nc">&nbsp;                        rootFields.add(dto); </b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;            }
+&nbsp;
+&nbsp;            // 3. Parse rules robustly
+<b class="fc">&nbsp;            Object parsedRules = null;</b>
+<b class="pc">&nbsp;            if (version.getRules() != null &amp;&amp; !version.getRules().isBlank() &amp;&amp; !version.getRules().equals(&quot;[]&quot;)) {</b>
+&nbsp;                try {
+<b class="fc">&nbsp;                    com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(version.getRules());</b>
+<b class="pc">&nbsp;                    if (rootNode.isObject() &amp;&amp; rootNode.has(&quot;rules&quot;) &amp;&amp; rootNode.get(&quot;rules&quot;).isArray()) {</b>
+<b class="nc">&nbsp;                        parsedRules = objectMapper.convertValue(rootNode.get(&quot;rules&quot;), Object.class);</b>
+&nbsp;                    } else {
+<b class="fc">&nbsp;                        parsedRules = objectMapper.convertValue(rootNode, Object.class);</b>
+&nbsp;                    }
+&nbsp;                } catch (Exception e) {
+<b class="nc">&nbsp;                    parsedRules = new ArrayList&lt;&gt;();</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            return FormVersionResponseDTO.builder()</b>
+<b class="fc">&nbsp;                    .id(version.getId())</b>
+<b class="fc">&nbsp;                    .versionNumber(version.getVersionNumber())</b>
+<b class="fc">&nbsp;                    .changeLog(version.getChangeLog())</b>
+<b class="fc">&nbsp;                    .rules(parsedRules)</b>
+<b class="fc">&nbsp;                    .fields(rootFields)</b>
+<b class="fc">&nbsp;                    .build();</b>
+<b class="fc">&nbsp;        }).collect(Collectors.toList());</b>
+&nbsp;
+&nbsp;        // Extract theme metadata
+<b class="fc">&nbsp;        String themeColor = null;</b>
+<b class="fc">&nbsp;        String themeFont = null;</b>
+<b class="pc">&nbsp;        if (!versionDTOs.isEmpty()) {</b>
+<b class="fc">&nbsp;            Object rules = versionDTOs.get(0).getRules();</b>
+<b class="pc">&nbsp;            if (rules instanceof Map) {</b>
+<b class="fc">&nbsp;                Map&lt;String, Object&gt; rulesMap = (Map&lt;String, Object&gt;) rules;</b>
+<b class="pc">&nbsp;                if (rulesMap.containsKey(&quot;theme&quot;)) {</b>
+<b class="fc">&nbsp;                    Map&lt;String, String&gt; theme = (Map&lt;String, String&gt;) rulesMap.get(&quot;theme&quot;);</b>
+<b class="fc">&nbsp;                    themeColor = theme.get(&quot;color&quot;);</b>
+<b class="fc">&nbsp;                    themeFont = theme.get(&quot;font&quot;);</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return FormDetailResponseDTO.builder()</b>
+<b class="fc">&nbsp;                .id(form.getId())</b>
+<b class="fc">&nbsp;                .title(form.getTitle())</b>
+<b class="fc">&nbsp;                .description(form.getDescription())</b>
+<b class="fc">&nbsp;                .status(form.getStatus())</b>
+<b class="fc">&nbsp;                .createdAt(form.getCreatedAt())</b>
+<b class="fc">&nbsp;                .updatedAt(form.getUpdatedAt())</b>
+<b class="fc">&nbsp;                .publicShareToken(form.getPublicShareToken())</b>
+<b class="fc">&nbsp;                .allowEditResponse(form.isAllowEditResponse())</b>
+<b class="pc">&nbsp;                .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)</b>
+<b class="fc">&nbsp;                .themeColor(themeColor)</b>
+<b class="fc">&nbsp;                .themeFont(themeFont)</b>
+<b class="fc">&nbsp;                .issuedByUsername(form.getIssuedByUsername())</b>
+<b class="fc">&nbsp;                .approvalChain(form.getApprovalChain())</b>
+<b class="fc">&nbsp;                .versions(versionDTOs)</b>
+<b class="fc">&nbsp;                .build();</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public List&lt;FormField&gt; mapFields(List&lt;FieldDefinitionRequestDTO&gt; fieldDTOs, FormVersion version) {
+<b class="fc">&nbsp;        List&lt;FormField&gt; allEntities = new ArrayList&lt;&gt;();</b>
+<b class="fc">&nbsp;        flattenAndMapFields(fieldDTOs, version, null, allEntities);</b>
+<b class="fc">&nbsp;        return allEntities;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    private void flattenAndMapFields(List&lt;FieldDefinitionRequestDTO&gt; dtos, FormVersion version, String parentColumnName,
+&nbsp;                                    List&lt;FormField&gt; allEntities) {
+<b class="pc">&nbsp;        if (dtos == null) return;</b>
+<b class="fc">&nbsp;        for (FieldDefinitionRequestDTO dto : dtos) {</b>
+<b class="fc">&nbsp;            FormField entity = new FormField();</b>
+<b class="fc">&nbsp;            entity.setFormVersion(version);</b>
+<b class="fc">&nbsp;            entity.setFieldLabel(dto.getLabel());</b>
+<b class="fc">&nbsp;            entity.setFieldType(dto.getType());</b>
+<b class="fc">&nbsp;            entity.setIsMandatory(dto.isRequired());</b>
+<b class="fc">&nbsp;            entity.setValidationRules(dto.getValidation());</b>
+<b class="fc">&nbsp;            entity.setDefaultValue(dto.getDefaultValue());</b>
+<b class="fc">&nbsp;            entity.setCalculationFormula(dto.getCalculationFormula());</b>
+<b class="fc">&nbsp;            entity.setHelpText(dto.getHelpText());</b>
+<b class="fc">&nbsp;            entity.setIsHidden(dto.isHidden());</b>
+<b class="fc">&nbsp;            entity.setIsReadOnly(dto.isReadOnly());</b>
+<b class="fc">&nbsp;            entity.setIsDisabled(dto.isDisabled());</b>
+<b class="fc">&nbsp;            entity.setIsMultiSelect(dto.isMultiSelect());</b>
+<b class="fc">&nbsp;            entity.setParentColumnName(parentColumnName);</b>
+<b class="fc">&nbsp;            entity.setOrdinalPosition(allEntities.size());</b>
+&nbsp;
+<b class="fc">&nbsp;            if (dto.getOptions() != null) {</b>
+&nbsp;                try {
+<b class="fc">&nbsp;                    entity.setOptions(objectMapper.writeValueAsString(dto.getOptions()));</b>
+&nbsp;                } catch (Exception e) {
+<b class="nc">&nbsp;                    entity.setOptions(&quot;[]&quot;);</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;
+<b class="fc">&nbsp;            String colName = dto.getColumnName();</b>
+<b class="pc">&nbsp;            if (colName == null || colName.trim().isEmpty()) {</b>
+<b class="nc">&nbsp;                colName = dto.getLabel().trim().toLowerCase().replaceAll(&quot;[^a-z0-9]+&quot;, &quot;_&quot;);</b>
+&nbsp;            }
+<b class="pc">&nbsp;            if (colName.length() &gt; 63) {</b>
+<b class="nc">&nbsp;                colName = colName.substring(0, 59) + &quot;_&quot; + Integer.toHexString(colName.hashCode()).substring(0, 3);</b>
+&nbsp;            }
+<b class="pc">&nbsp;            if (colName.isEmpty() || colName.equals(&quot;_&quot;)) {</b>
+<b class="nc">&nbsp;                colName = dto.getType().name().toLowerCase() + &quot;_&quot; + System.nanoTime() % 10000;</b>
+&nbsp;            }
+<b class="fc">&nbsp;            entity.setColumnName(colName);</b>
+<b class="fc">&nbsp;            allEntities.add(entity);</b>
+&nbsp;
+<b class="fc">&nbsp;            if (dto.getChildren() != null &amp;&amp; !dto.getChildren().isEmpty()) {</b>
+<b class="fc">&nbsp;                flattenAndMapFields(dto.getChildren(), version, colName, allEntities);</b>
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    public String serializeRules(Object rules) {
+<b class="pc">&nbsp;        if (rules == null || (rules instanceof List &amp;&amp; ((List&lt;?&gt;) rules).isEmpty())) return &quot;[]&quot;;</b>
+&nbsp;        try {
+<b class="fc">&nbsp;            return objectMapper.writeValueAsString(rules);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return &quot;[]&quot;;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

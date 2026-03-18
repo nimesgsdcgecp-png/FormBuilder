@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > UserRepository</title>
+  <title>Coverage Report > CalculationService</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -19,19 +19,128 @@
 <div class="breadCrumbs">
 Current scope:     <a href="../../index.html">all classes</a>
     <span class="separator">|</span>
-    <a href="../index.html">com.sttl.formbuilder2.repository</a>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
 </div>
 
-<h1>Coverage Summary for Class: UserRepository (com.sttl.formbuilder2.repository)</h1>
+<h1>Coverage Summary for Class: CalculationService (com.sttl.formbuilder2.service)</h1>
 
 <table class="coverageStats">
+
 <tr>
   <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
 </tr>
 <tr>
-  <td class="name">UserRepository</td>
+  <td class="name">CalculationService</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    50%
+  </span>
+  <span class="absValue">
+    (6/12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    61.1%
+  </span>
+  <span class="absValue">
+    (11/18)
+  </span>
+</td>
 </tr>
-
+  <tr>
+    <td class="name">CalculationService$SimpleMathEvaluator</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">CalculationService$SimpleMathEvaluator$1</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (7/7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    38.5%
+  </span>
+  <span class="absValue">
+    (20/52)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    53.7%
+  </span>
+  <span class="absValue">
+    (22/41)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (10/10)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    40.6%
+  </span>
+  <span class="absValue">
+    (26/64)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    57.4%
+  </span>
+  <span class="absValue">
+    (35/61)
+  </span>
+</td>
+</tr>
 </table>
 
 <br/>
@@ -39,15 +148,138 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 
 <pre>
-<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.repository;
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
-&nbsp;import org.springframework.data.jpa.repository.JpaRepository;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormField;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.stereotype.Service;
 &nbsp;
-&nbsp;import java.util.Optional;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Map;
+&nbsp;import java.util.regex.Matcher;
+&nbsp;import java.util.regex.Pattern;
 &nbsp;
-&nbsp;public interface UserRepository extends JpaRepository&lt;AppUser, Long&gt; {
-&nbsp;    Optional&lt;AppUser&gt; findByUsername(String username);
+&nbsp;/**
+&nbsp; * CalculationService — Handles server-side expression evaluation for calculated fields.
+&nbsp; */
+&nbsp;@Service
+&nbsp;@RequiredArgsConstructor
+&nbsp;public class CalculationService {
+&nbsp;
+&nbsp;    public void recalculateCalculatedFields(Map&lt;String, Object&gt; data, List&lt;FormField&gt; activeFields) {
+<b class="fc">&nbsp;        for (FormField field : activeFields) {</b>
+<b class="fc">&nbsp;            String formula = field.getCalculationFormula();</b>
+<b class="pc">&nbsp;            if (formula != null &amp;&amp; !formula.isBlank()) {</b>
+&nbsp;                try {
+<b class="fc">&nbsp;                    String result = evaluateFormula(formula, data);</b>
+<b class="fc">&nbsp;                    data.put(field.getColumnName(), result);</b>
+&nbsp;                } catch (Exception e) {
+<b class="nc">&nbsp;                    data.put(field.getColumnName(), &quot;Error: &quot; + e.getMessage());</b>
+&nbsp;                }
+&nbsp;            }
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    private String evaluateFormula(String formula, Map&lt;String, Object&gt; data) {
+<b class="fc">&nbsp;        String processed = formula;</b>
+<b class="fc">&nbsp;        Pattern p = Pattern.compile(&quot;\\{\\{(.+?)\\}\\}&quot;);</b>
+<b class="fc">&nbsp;        Matcher m = p.matcher(formula);</b>
+<b class="pc">&nbsp;        while (m.find()) {</b>
+<b class="nc">&nbsp;            String colName = m.group(1).trim();</b>
+<b class="nc">&nbsp;            Object val = data.get(colName);</b>
+<b class="nc">&nbsp;            processed = processed.replace(m.group(0), val == null ? &quot;0&quot; : val.toString());</b>
+&nbsp;        }
+&nbsp;
+&nbsp;        try {
+<b class="fc">&nbsp;            double res = SimpleMathEvaluator.eval(processed);</b>
+<b class="nc">&nbsp;            if (res == (long) res) {</b>
+<b class="nc">&nbsp;                return String.format(&quot;%d&quot;, (long) res);</b>
+&nbsp;            } else {
+<b class="nc">&nbsp;                return String.format(&quot;%.2f&quot;, res);</b>
+&nbsp;            }
+&nbsp;        } catch (Exception e) {
+<b class="fc">&nbsp;            return &quot;0&quot;;</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Inner Utility for basic math evaluation.
+&nbsp;     */
+&nbsp;    private static class SimpleMathEvaluator {
+&nbsp;        public static double eval(final String str) {
+<b class="fc">&nbsp;            return new Object() {</b>
+<b class="fc">&nbsp;                int pos = -1, ch;</b>
+&nbsp;
+&nbsp;                void nextChar() {
+<b class="fc">&nbsp;                    ch = (++pos &lt; str.length()) ? str.charAt(pos) : -1;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                boolean eat(int charToEat) {
+<b class="fc">&nbsp;                    while (ch == &#39; &#39;) nextChar();</b>
+<b class="fc">&nbsp;                    if (ch == charToEat) {</b>
+<b class="fc">&nbsp;                        nextChar();</b>
+<b class="fc">&nbsp;                        return true;</b>
+&nbsp;                    }
+<b class="fc">&nbsp;                    return false;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                double parse() {
+<b class="fc">&nbsp;                    nextChar();</b>
+<b class="fc">&nbsp;                    double x = parseExpression();</b>
+<b class="nc">&nbsp;                    if (pos &lt; str.length()) throw new RuntimeException(&quot;Unexpected: &quot; + (char) ch);</b>
+<b class="nc">&nbsp;                    return x;</b>
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseExpression() {
+<b class="fc">&nbsp;                    double x = parseTerm();</b>
+&nbsp;                    for (;;) {
+<b class="nc">&nbsp;                        if (eat(&#39;+&#39;)) x += parseTerm();</b>
+<b class="nc">&nbsp;                        else if (eat(&#39;-&#39;)) x -= parseTerm();</b>
+<b class="nc">&nbsp;                        else return x;</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseTerm() {
+<b class="fc">&nbsp;                    double x = parseFactor();</b>
+&nbsp;                    for (;;) {
+<b class="nc">&nbsp;                        if (eat(&#39;*&#39;)) x *= parseFactor();</b>
+<b class="nc">&nbsp;                        else if (eat(&#39;/&#39;)) x /= parseFactor();</b>
+<b class="nc">&nbsp;                        else return x;</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;
+&nbsp;                double parseFactor() {
+<b class="fc">&nbsp;                    if (eat(&#39;+&#39;)) return parseFactor();</b>
+<b class="pc">&nbsp;                    if (eat(&#39;-&#39;)) return -parseFactor();</b>
+&nbsp;
+&nbsp;                    double x;
+<b class="fc">&nbsp;                    int startPos = this.pos;</b>
+<b class="pc">&nbsp;                    if (eat(&#39;(&#39;)) {</b>
+<b class="nc">&nbsp;                        x = parseExpression();</b>
+<b class="nc">&nbsp;                        eat(&#39;)&#39;);</b>
+<b class="pc">&nbsp;                    } else if ((ch &gt;= &#39;0&#39; &amp;&amp; ch &lt;= &#39;9&#39;) || ch == &#39;.&#39;) {</b>
+<b class="nc">&nbsp;                        while ((ch &gt;= &#39;0&#39; &amp;&amp; ch &lt;= &#39;9&#39;) || ch == &#39;.&#39;) nextChar();</b>
+<b class="nc">&nbsp;                        x = Double.parseDouble(str.substring(startPos, this.pos));</b>
+<b class="pc">&nbsp;                    } else if (ch &gt;= &#39;a&#39; &amp;&amp; ch &lt;= &#39;z&#39;) {</b>
+<b class="pc">&nbsp;                        while (ch &gt;= &#39;a&#39; &amp;&amp; ch &lt;= &#39;z&#39;) nextChar();</b>
+<b class="fc">&nbsp;                        String func = str.substring(startPos, this.pos);</b>
+<b class="fc">&nbsp;                        x = parseFactor();</b>
+<b class="nc">&nbsp;                        if (func.equals(&quot;sqrt&quot;)) x = Math.sqrt(x);</b>
+<b class="nc">&nbsp;                        else if (func.equals(&quot;sin&quot;)) x = Math.sin(Math.toRadians(x));</b>
+<b class="nc">&nbsp;                        else if (func.equals(&quot;cos&quot;)) x = Math.cos(Math.toRadians(x));</b>
+<b class="nc">&nbsp;                        else if (func.equals(&quot;tan&quot;)) x = Math.tan(Math.toRadians(x));</b>
+<b class="nc">&nbsp;                        else throw new RuntimeException(&quot;Unknown function: &quot; + func);</b>
+&nbsp;                    } else {
+<b class="fc">&nbsp;                        throw new RuntimeException(&quot;Unexpected: &quot; + (char) ch);</b>
+&nbsp;                    }
+&nbsp;
+<b class="nc">&nbsp;                    if (eat(&#39;^&#39;)) x = Math.pow(x, parseFactor());</b>
+&nbsp;
+<b class="nc">&nbsp;                    return x;</b>
+&nbsp;                }
+<b class="fc">&nbsp;            }.parse();</b>
+&nbsp;        }
+&nbsp;    }
 &nbsp;}
 </code>
 </pre>
@@ -72,7 +304,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

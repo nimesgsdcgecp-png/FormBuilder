@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > RuleActionRequestDTO</title>
+  <title>Coverage Report > RoleRequestDTO</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.dto.request</a>
 </div>
 
-<h1>Coverage Summary for Class: RuleActionRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
+<h1>Coverage Summary for Class: RoleRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,21 +45,21 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">RuleActionRequestDTO</td>
+  <td class="name">RoleRequestDTO</td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/1)
+    (1/1)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/1)
+    (1/1)
   </span>
 </td>
 <td class="coverageStat">
@@ -72,10 +72,10 @@ Current scope:     <a href="../../index.html">all classes</a>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/1)
+    (1/1)
   </span>
 </td>
 </tr>
@@ -89,35 +89,14 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.request;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.model.enums.ActionType;
 &nbsp;import lombok.Data;
+&nbsp;import java.util.Set;
 &nbsp;
-&nbsp;/**
-&nbsp; * RuleActionRequestDTO — The THEN Part of a Logic Rule (API Input Shape)
-&nbsp; *
-&nbsp; * What it does:
-&nbsp; * Carries a single action within a {@link FormRuleRequestDTO}. Describes what
-&nbsp; * should happen when the rule&#39;s condition is met.
-&nbsp; *
-&nbsp; * Application flow:
-&nbsp; * Frontend LogicPanel → FormRuleRequestDTO.actions → serialised to JSON
-&nbsp; * → stored in FormVersion.rules
-&nbsp; * → deserialized at submission time into dto.internal.RuleActionDTO
-&nbsp; * → executed by RuleEngineService
-&nbsp; *
-&nbsp; * Fields:
-&nbsp; * - {@code type} — the action to perform (SHOW, HIDE, REQUIRE,
-&nbsp; * VALIDATION_ERROR, SEND_EMAIL).
-&nbsp; * - {@code targetField} — SQL column name of the field to act on (for
-&nbsp; * SHOW/HIDE/REQUIRE).
-&nbsp; * - {@code message} — custom error text (for VALIDATION_ERROR) or the
-&nbsp; * email address recipient (for SEND_EMAIL).
-&nbsp; */
-<b class="nc">&nbsp;@Data</b>
-&nbsp;public class RuleActionRequestDTO {
-&nbsp;    private ActionType type;
-&nbsp;    private String targetField;
-&nbsp;    private String message;
+<b class="pc">&nbsp;@Data</b>
+&nbsp;public class RoleRequestDTO {
+&nbsp;    private String name;
+&nbsp;    private String description;
+&nbsp;    private Set&lt;Long&gt; permissionIds;
 &nbsp;}
 </code>
 </pre>
@@ -142,7 +121,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

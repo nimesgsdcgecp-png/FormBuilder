@@ -1,0 +1,389 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormService</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.service</a>
+</div>
+
+<h1>Coverage Summary for Class: FormService (com.sttl.formbuilder2.service)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">FormService</td>
+<td class="coverageStat">
+  <span class="percent">
+    63.6%
+  </span>
+  <span class="absValue">
+    (7/11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    52.1%
+  </span>
+  <span class="absValue">
+    (25/48)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    68.8%
+  </span>
+  <span class="absValue">
+    (75/109)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">FormService$$SpringCGLIB$$0</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    63.6%
+  </span>
+  <span class="absValue">
+    (7/11)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    52.1%
+  </span>
+  <span class="absValue">
+    (25/48)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    68.8%
+  </span>
+  <span class="absValue">
+    (75/109)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.dto.request.CreateFormRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
+&nbsp;import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.FormVersion;
+&nbsp;import com.sttl.formbuilder2.model.entity.UserFormRole;
+&nbsp;import com.sttl.formbuilder2.model.entity.WorkflowInstance;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import com.sttl.formbuilder2.repository.FormRepository;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import com.sttl.formbuilder2.repository.UserFormRoleRepository;
+&nbsp;import com.sttl.formbuilder2.repository.WorkflowInstanceRepository;
+&nbsp;import jakarta.persistence.EntityNotFoundException;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.security.core.context.SecurityContextHolder;
+&nbsp;import org.springframework.stereotype.Service;
+&nbsp;import org.springframework.transaction.annotation.Transactional;
+&nbsp;
+&nbsp;import java.util.List;
+&nbsp;import java.util.stream.Collectors;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormService — Core Business Logic for Form Management (Refactored)
+&nbsp; */
+&nbsp;@Service
+<b class="fc">&nbsp;@RequiredArgsConstructor</b>
+&nbsp;public class FormService {
+&nbsp;
+&nbsp;    private final FormRepository formRepository;
+&nbsp;    private final DynamicTableService dynamicTableService;
+&nbsp;    private final AuditService auditService;
+&nbsp;    private final UserRepository userRepository;
+&nbsp;    private final UserFormRoleRepository userFormRoleRepository;
+&nbsp;    private final WorkflowInstanceRepository workflowInstanceRepository;
+&nbsp;    
+&nbsp;    private final FormMapper formMapper;
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // HELPER: Get Current User
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    private AppUser getCurrentUser() {
+<b class="fc">&nbsp;        String username = SecurityContextHolder.getContext().getAuthentication().getName();</b>
+<b class="fc">&nbsp;        return userRepository.findByUsername(username)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Current user not found in database&quot;));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // CREATE (POST /api/forms)
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    @Transactional
+&nbsp;    public FormDetailResponseDTO createForm(CreateFormRequestDTO request) {
+<b class="fc">&nbsp;        Form form = new Form();</b>
+<b class="fc">&nbsp;        form.setTitle(request.getTitle());</b>
+<b class="fc">&nbsp;        form.setDescription(request.getDescription());</b>
+<b class="fc">&nbsp;        form.setAllowEditResponse(request.isAllowEditResponse());</b>
+&nbsp;
+<b class="pc">&nbsp;        FormStatus incomingStatus = request.getStatus() != null ? request.getStatus() : FormStatus.DRAFT;</b>
+<b class="fc">&nbsp;        form.setStatus(incomingStatus);</b>
+&nbsp;
+<b class="fc">&nbsp;        AppUser currentUser = getCurrentUser();</b>
+<b class="fc">&nbsp;        form.setOwner(currentUser);</b>
+<b class="fc">&nbsp;        form.setCreator(currentUser);</b>
+<b class="fc">&nbsp;        form.setIssuedByUsername(currentUser.getUsername());</b>
+&nbsp;
+<b class="fc">&nbsp;        form = formRepository.save(form);</b>
+&nbsp;
+<b class="fc">&nbsp;        FormVersion version = new FormVersion();</b>
+<b class="fc">&nbsp;        version.setForm(form);</b>
+<b class="fc">&nbsp;        version.setVersionNumber(1);</b>
+<b class="fc">&nbsp;        version.setFields(formMapper.mapFields(request.getFields(), version));</b>
+<b class="fc">&nbsp;        version.setRules(formMapper.serializeRules(request.getRules()));</b>
+&nbsp;
+<b class="fc">&nbsp;        form.getVersions().add(version);</b>
+&nbsp;
+<b class="fc">&nbsp;        String dynamicTableName = &quot;sub_&quot; + form.getId() + &quot;_u&quot; + form.getOwner().getId() + &quot;_v1&quot;;</b>
+<b class="fc">&nbsp;        form.setTargetTableName(dynamicTableName);</b>
+&nbsp;
+<b class="fc">&nbsp;        formRepository.save(form);</b>
+&nbsp;
+<b class="fc">&nbsp;        if (incomingStatus == FormStatus.PUBLISHED) {</b>
+<b class="fc">&nbsp;            dynamicTableService.createDynamicTable(dynamicTableName, request.getFields());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        auditService.log(&quot;FORM_SAVE&quot;, currentUser.getUsername(), &quot;FORM&quot;, form.getId().toString(), &quot;Form saved as &quot; + incomingStatus);</b>
+&nbsp;
+<b class="fc">&nbsp;        return formMapper.toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ ALL (GET /api/forms)
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    public List&lt;FormSummaryResponseDTO&gt; getAllForms() {
+<b class="fc">&nbsp;        AppUser currentUser = getCurrentUser();</b>
+<b class="fc">&nbsp;        boolean hasAllAccess = currentUser.getUserFormRoles().stream()</b>
+<b class="pc">&nbsp;                .anyMatch(ufr -&gt; ufr.getRole().getName().equals(&quot;ADMIN&quot;) || ufr.getRole().getName().equals(&quot;ROLE_ADMINISTRATOR&quot;));</b>
+&nbsp;
+&nbsp;        List&lt;Form&gt; forms;
+<b class="fc">&nbsp;        if (hasAllAccess) {</b>
+<b class="fc">&nbsp;            forms = formRepository.findAllByStatusNotOrderByUpdatedAtDesc(FormStatus.ARCHIVED);</b>
+&nbsp;        } else {
+<b class="fc">&nbsp;            forms = formRepository.findByAccessAndStatusNot(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return forms.stream()</b>
+<b class="fc">&nbsp;                .map(formMapper::toSummaryDTO)</b>
+<b class="fc">&nbsp;                .collect(Collectors.toList());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    public List&lt;FormSummaryResponseDTO&gt; getArchivedForms() {
+<b class="nc">&nbsp;        AppUser currentUser = getCurrentUser();</b>
+<b class="nc">&nbsp;        boolean hasAllAccess = currentUser.getUserFormRoles().stream()</b>
+<b class="nc">&nbsp;                .anyMatch(ufr -&gt; ufr.getRole().getName().equals(&quot;ADMIN&quot;) || ufr.getRole().getName().equals(&quot;ROLE_ADMINISTRATOR&quot;));</b>
+&nbsp;
+&nbsp;        List&lt;Form&gt; forms;
+<b class="nc">&nbsp;        if (hasAllAccess) {</b>
+<b class="nc">&nbsp;            forms = formRepository.findByStatusOrderByUpdatedAtDesc(FormStatus.ARCHIVED);</b>
+&nbsp;        } else {
+<b class="nc">&nbsp;            forms = formRepository.findByAccessAndStatus(currentUser, currentUser.getUsername(), FormStatus.ARCHIVED);</b>
+&nbsp;        }
+&nbsp;
+<b class="nc">&nbsp;        return forms.stream()</b>
+<b class="nc">&nbsp;                .map(formMapper::toSummaryDTO)</b>
+<b class="nc">&nbsp;                .collect(Collectors.toList());</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ ONE (GET /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    @Transactional(readOnly = true)
+&nbsp;    public FormDetailResponseDTO getFormById(Long id) {
+<b class="fc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new EntityNotFoundException(&quot;Form not found with ID: &quot; + id));</b>
+<b class="fc">&nbsp;        return formMapper.toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // READ BY TOKEN (GET /api/forms/public/{token})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    @Transactional(readOnly = true)
+&nbsp;    public FormDetailResponseDTO getFormByToken(String token) {
+<b class="fc">&nbsp;        Form form = formRepository.findByPublicShareToken(token)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found or link is invalid.&quot;));</b>
+&nbsp;
+<b class="fc">&nbsp;        if (form.getStatus() != FormStatus.PUBLISHED) {</b>
+&nbsp;            // Allow access if user is logged in as owner or administrator (for preview)
+&nbsp;            try {
+<b class="fc">&nbsp;                org.springframework.security.core.Authentication auth = SecurityContextHolder.getContext().getAuthentication();</b>
+<b class="pc">&nbsp;                if (auth != null &amp;&amp; auth.isAuthenticated() &amp;&amp; !(auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)) {</b>
+<b class="fc">&nbsp;                    AppUser currentUser = getCurrentUser();</b>
+<b class="fc">&nbsp;                    boolean isAdmin = currentUser.getUserFormRoles().stream()</b>
+<b class="pc">&nbsp;                            .anyMatch(ufr -&gt; ufr.getRole().getName().equals(&quot;ADMIN&quot;) || ufr.getRole().getName().equals(&quot;ROLE_ADMINISTRATOR&quot;));</b>
+&nbsp;                    
+<b class="pc">&nbsp;                    if (form.getOwner().getId().equals(currentUser.getId()) || isAdmin) {</b>
+<b class="fc">&nbsp;                        return formMapper.toDetailDTO(form);</b>
+&nbsp;                    }
+&nbsp;                }
+&nbsp;            } catch (Exception e) {
+&nbsp;                // Not logged in or error getting user -&gt; falls through to restriction
+&nbsp;            }
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;This form is not currently accepting submissions.&quot;);</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return formMapper.toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // UPDATE (PUT /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    @Transactional
+&nbsp;    public FormDetailResponseDTO updateForm(Long formId, UpdateFormRequestDTO request) {
+<b class="fc">&nbsp;        Form form = formRepository.findById(formId)</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+&nbsp;
+<b class="fc">&nbsp;        FormStatus oldStatus = form.getStatus();</b>
+<b class="pc">&nbsp;        FormStatus newStatus = request.getStatus() != null ? request.getStatus() : oldStatus;</b>
+&nbsp;
+<b class="fc">&nbsp;        form.setTitle(request.getTitle());</b>
+<b class="fc">&nbsp;        form.setDescription(request.getDescription());</b>
+<b class="fc">&nbsp;        form.setStatus(newStatus);</b>
+<b class="fc">&nbsp;        form.setAllowEditResponse(request.isAllowEditResponse());</b>
+&nbsp;
+<b class="fc">&nbsp;        int nextVersionNum = form.getVersions().size() + 1;</b>
+<b class="fc">&nbsp;        FormVersion newVersion = new FormVersion();</b>
+<b class="fc">&nbsp;        newVersion.setForm(form);</b>
+<b class="fc">&nbsp;        newVersion.setVersionNumber(nextVersionNum);</b>
+<b class="fc">&nbsp;        newVersion.setChangeLog(&quot;Updated via Builder&quot;);</b>
+<b class="fc">&nbsp;        newVersion.setFields(formMapper.mapFields(request.getFields(), newVersion));</b>
+<b class="fc">&nbsp;        newVersion.setRules(formMapper.serializeRules(request.getRules()));</b>
+&nbsp;
+<b class="fc">&nbsp;        form.getVersions().add(newVersion);</b>
+<b class="fc">&nbsp;        form = formRepository.save(form);</b>
+&nbsp;
+<b class="pc">&nbsp;        if ((oldStatus == null || oldStatus == FormStatus.DRAFT) &amp;&amp; newStatus == FormStatus.PUBLISHED) {</b>
+<b class="fc">&nbsp;            form.setApprovedBy(getCurrentUser());</b>
+<b class="fc">&nbsp;            formRepository.save(form);</b>
+<b class="fc">&nbsp;            dynamicTableService.createDynamicTable(form.getTargetTableName(), request.getFields());</b>
+<b class="fc">&nbsp;        } else if (oldStatus == FormStatus.PUBLISHED &amp;&amp; newStatus == FormStatus.PUBLISHED) {</b>
+<b class="fc">&nbsp;            dynamicTableService.alterDynamicTable(form.getTargetTableName(), request.getFields());</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        return formMapper.toDetailDTO(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    // DELETE / ARCHIVE (DELETE /api/forms/{id})
+&nbsp;    // ─────────────────────────────────────────────
+&nbsp;    @Transactional
+&nbsp;    public void deleteForm(Long id) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+<b class="nc">&nbsp;        form.setStatus(FormStatus.ARCHIVED);</b>
+<b class="nc">&nbsp;        formRepository.save(form);</b>
+&nbsp;        
+<b class="nc">&nbsp;        String actor = SecurityContextHolder.getContext().getAuthentication().getName();</b>
+<b class="nc">&nbsp;        auditService.log(&quot;FORM_ARCHIVE&quot;, actor, &quot;FORM&quot;, id.toString(), &quot;Form archived&quot;);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @Transactional
+&nbsp;    public void hardDeleteForm(Long id) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new EntityNotFoundException(&quot;Form not found with ID: &quot; + id));</b>
+&nbsp;        
+<b class="nc">&nbsp;        String tableName = form.getTargetTableName();</b>
+<b class="nc">&nbsp;        String actor = SecurityContextHolder.getContext().getAuthentication().getName();</b>
+&nbsp;        
+<b class="nc">&nbsp;        auditService.log(&quot;FORM_HARD_DELETE&quot;, actor, &quot;FORM&quot;, id.toString(), &quot;Form permanently deleted: &quot; + form.getTitle());</b>
+&nbsp;        
+<b class="nc">&nbsp;        List&lt;WorkflowInstance&gt; instances = workflowInstanceRepository.findAllByFormId(id);</b>
+<b class="nc">&nbsp;        workflowInstanceRepository.deleteAll(instances);</b>
+&nbsp;        
+<b class="nc">&nbsp;        List&lt;UserFormRole&gt; roles = userFormRoleRepository.findAllByFormId(id);</b>
+<b class="nc">&nbsp;        userFormRoleRepository.deleteAll(roles);</b>
+&nbsp;        
+<b class="nc">&nbsp;        if (tableName != null) {</b>
+<b class="nc">&nbsp;            dynamicTableService.dropTable(tableName);</b>
+&nbsp;        }
+&nbsp;        
+<b class="nc">&nbsp;        formRepository.delete(form);</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @Transactional
+&nbsp;    public void restoreForm(Long id) {
+<b class="nc">&nbsp;        Form form = formRepository.findById(id)</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
+<b class="nc">&nbsp;        if (form.getStatus() != FormStatus.ARCHIVED) {</b>
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;Only archived forms can be restored.&quot;);</b>
+&nbsp;        }
+<b class="nc">&nbsp;        form.setStatus(FormStatus.DRAFT);</b>
+<b class="nc">&nbsp;        formRepository.save(form);</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

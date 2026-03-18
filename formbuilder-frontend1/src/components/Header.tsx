@@ -21,28 +21,8 @@ export default function Header({ username, breadcrumbs, title, badge }: HeaderPr
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { hasPermission, assignments, clearCache } = usePermissions();
-  const { toggleMobileMenu } = useUIStore();
-  const [pendingCount, setPendingCount] = useState(0);
+  const { toggleMobileMenu, pendingApprovalsCount } = useUIStore();
 
-  useEffect(() => {
-    const fetchPendingCount = async () => {
-      try {
-        const res = await fetch('http://localhost:8080/api/workflows/my-pending', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setPendingCount(data.length);
-        }
-      } catch (err) {
-        console.error("Failed to fetch pending approvals count", err);
-      }
-    };
-
-    if (assignments.length > 0) {
-      fetchPendingCount();
-      const interval = setInterval(fetchPendingCount, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [assignments]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,7 +46,7 @@ export default function Header({ username, breadcrumbs, title, badge }: HeaderPr
   };
 
   const isAdmin = assignments.some(a => a.role.name === 'ADMIN' || a.role.name === 'ROLE_ADMINISTRATOR');
-  const totalNotifications = pendingCount;
+  const totalNotifications = pendingApprovalsCount;
 
   return (
     <header className="sticky top-0 z-40 border-b backdrop-blur-md" style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}>

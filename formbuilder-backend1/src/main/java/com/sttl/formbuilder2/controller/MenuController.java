@@ -1,6 +1,6 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.MenuDTO;
+import com.sttl.formbuilder2.dto.response.MenuDTO;
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.service.ModuleService;

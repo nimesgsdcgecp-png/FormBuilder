@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > FormController</title>
+  <title>Coverage Report > FileUploadController</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.controller</a>
 </div>
 
-<h1>Coverage Summary for Class: FormController (com.sttl.formbuilder2.controller)</h1>
+<h1>Coverage Summary for Class: FileUploadController (com.sttl.formbuilder2.controller)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -37,11 +37,15 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 <th class="coverageStat 
 ">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
   Line, %
 </th>
 </tr>
 <tr>
-  <td class="name">FormController</td>
+  <td class="name">FileUploadController</td>
 <td class="coverageStat">
   <span class="percent">
     100%
@@ -52,18 +56,26 @@ Current scope:     <a href="../../index.html">all classes</a>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    47.1%
+    66.7%
   </span>
   <span class="absValue">
-    (8/17)
+    (2/3)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    41.4%
+    33.3%
   </span>
   <span class="absValue">
-    (12/29)
+    (2/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    53.8%
+  </span>
+  <span class="absValue">
+    (14/26)
   </span>
 </td>
 </tr>
@@ -77,282 +89,112 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.controller;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.dto.request.CreateFormRequestDTO;
-&nbsp;import com.sttl.formbuilder2.dto.request.SubmissionRequestDTO;
-&nbsp;import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
-&nbsp;import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
-&nbsp;import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
-&nbsp;import com.sttl.formbuilder2.model.entity.Form;
-&nbsp;import com.sttl.formbuilder2.service.DynamicTableService;
-&nbsp;import com.sttl.formbuilder2.service.FormService;
-&nbsp;import com.sttl.formbuilder2.service.SubmissionService;
-&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.core.io.Resource;
+&nbsp;import org.springframework.core.io.UrlResource;
+&nbsp;import org.springframework.http.HttpHeaders;
+&nbsp;import org.springframework.http.MediaType;
 &nbsp;import org.springframework.http.ResponseEntity;
 &nbsp;import org.springframework.web.bind.annotation.*;
+&nbsp;import org.springframework.web.multipart.MultipartFile;
 &nbsp;
-&nbsp;import java.util.List;
+&nbsp;import java.io.IOException;
+&nbsp;import java.net.MalformedURLException;
+&nbsp;import java.nio.file.Files;
+&nbsp;import java.nio.file.Path;
+&nbsp;import java.nio.file.Paths;
+&nbsp;import java.nio.file.StandardCopyOption;
+&nbsp;import java.util.HashMap;
 &nbsp;import java.util.Map;
 &nbsp;import java.util.UUID;
 &nbsp;
 &nbsp;/**
-&nbsp; * FormController — REST Controller for Forms and Submissions
-&nbsp; *
-&nbsp; * What it does:
-&nbsp; * Exposes the primary REST API of the FormBuilder backend under the base path
-&nbsp; * {@code /api/forms}. It acts as a thin routing layer — all business logic is
-&nbsp; * delegated to {@code FormService}, {@code SubmissionService}, and
-&nbsp; * {@code DynamicTableService}.
-&nbsp; *
-&nbsp; * CORS is configured globally in {@code WebConfig} (allows origin:
-&nbsp; * localhost:3000).
-&nbsp; *
-&nbsp; * Grouped endpoints:
-&nbsp; *
-&nbsp; * Form CRUD (authenticated / builder use):
-&nbsp; * GET /api/forms — List (dashboard, lightweight)
-&nbsp; * POST /api/forms — Create a new form
-&nbsp; * GET /api/forms/{id} — Full form detail with schema + versions
-&nbsp; * PUT /api/forms/{id} — Update form title, fields, rules, etc.
-&nbsp; * DELETE /api/forms/{id} — Soft-delete (archive)
-&nbsp; *
-&nbsp; * Submissions (authenticated responses table):
-&nbsp; * GET /api/forms/{id}/submissions — All rows for a form
-&nbsp; * POST /api/forms/{id}/submissions — New submission (by form ID)
-&nbsp; * GET /api/forms/{id}/submissions/{subId} — Single row lookup
-&nbsp; * PUT /api/forms/{id}/submissions/{subId} — Edit an existing submission
-&nbsp; * DELETE /api/forms/{id}/submissions/{subId} — Delete a submission row
-&nbsp; *
-&nbsp; * Lookup (for the LOOKUP field type):
-&nbsp; * GET /api/forms/{id}/columns/{col}/values — Distinct column values
-&nbsp; *
-&nbsp; * Public (token-based, no auth):
-&nbsp; * GET /api/forms/public/{token} — Resolve token → form schema
-&nbsp; * POST /api/forms/public/{token}/submissions — Submit via public share link
+&nbsp; * REST Controller for File Upload and Serving.
+&nbsp; * Handles the FILE field type, saving uploads to the local filesystem
+&nbsp; * and serving them for download.
 &nbsp; */
 &nbsp;@RestController
-&nbsp;@RequestMapping(&quot;/api/forms&quot;)
-<b class="fc">&nbsp;@RequiredArgsConstructor</b>
-&nbsp;public class FormController {
-&nbsp;
-&nbsp;    private final FormService formService;
-&nbsp;    private final SubmissionService submissionService;
-&nbsp;    private final DynamicTableService dynamicTableService;
-&nbsp;
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;    // Form CRUD
-&nbsp;    // ─────────────────────────────────────────────────────────
+&nbsp;@RequestMapping(&quot;/api&quot;)
+&nbsp;@CrossOrigin(origins = &quot;http://localhost:3000&quot;, allowCredentials = &quot;true&quot;)
+&nbsp;public class FileUploadController {
 &nbsp;
 &nbsp;    /**
-&nbsp;     * GET /api/forms
-&nbsp;     * Returns a lightweight list of all non-archived forms for the dashboard.
-&nbsp;     * Uses {@code FormSummaryResponseDTO} to avoid over-fetching field/version
-&nbsp;     * data.
+&nbsp;     * Absolute path to the local upload directory (created on startup if absent).
 &nbsp;     */
-&nbsp;    @GetMapping
-&nbsp;    public ResponseEntity&lt;List&lt;FormSummaryResponseDTO&gt;&gt; getAllForms() {
-<b class="fc">&nbsp;        return ResponseEntity.ok(formService.getAllForms());</b>
+<b class="fc">&nbsp;    private final Path fileStorageLocation = Paths.get(&quot;uploads&quot;).toAbsolutePath().normalize();</b>
+&nbsp;
+<b class="fc">&nbsp;    public FileUploadController() {</b>
+&nbsp;        try {
+<b class="fc">&nbsp;            Files.createDirectories(this.fileStorageLocation);</b>
+&nbsp;        } catch (Exception ex) {
+<b class="nc">&nbsp;            throw new RuntimeException(&quot;Could not create the directory where the uploaded files will be stored.&quot;, ex);</b>
+&nbsp;        }
 &nbsp;    }
 &nbsp;
 &nbsp;    /**
-&nbsp;     * POST /api/forms
-&nbsp;     * Creates a brand-new form (DRAFT status). Does NOT create a submission table
-&nbsp;     * yet — that only happens on Publish (PUT with status=PUBLISHED).
+&nbsp;     * POST /api/upload
+&nbsp;     *
+&nbsp;     * Accepts a multipart file upload. Generates a UUID-based filename to avoid
+&nbsp;     * collisions while preserving the original extension. Returns a JSON body:
+&nbsp;     * {@code {&quot;url&quot;: &quot;/api/files/&lt;uuid.ext&gt;&quot;, &quot;fileName&quot;: &quot;&lt;original name&gt;&quot;}}
+&nbsp;     *
+&nbsp;     * @param file The uploaded {@code MultipartFile} sent with the key &quot;file&quot;.
+&nbsp;     * @return A map containing the relative access URL and the original filename.
 &nbsp;     */
-&nbsp;    @PostMapping
-&nbsp;    public ResponseEntity&lt;Form&gt; createForm(@RequestBody CreateFormRequestDTO request) {
-<b class="fc">&nbsp;        return ResponseEntity.ok(formService.createForm(request));</b>
+&nbsp;    @PostMapping(&quot;/upload&quot;)
+&nbsp;    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; uploadFile(@RequestParam(&quot;file&quot;) MultipartFile file) {
+&nbsp;        try {
+&nbsp;            // Preserve the original file extension
+<b class="fc">&nbsp;            String originalFileName = file.getOriginalFilename();</b>
+<b class="fc">&nbsp;            String fileExtension = &quot;&quot;;</b>
+<b class="pc">&nbsp;            if (originalFileName != null &amp;&amp; originalFileName.contains(&quot;.&quot;)) {</b>
+<b class="fc">&nbsp;                fileExtension = originalFileName.substring(originalFileName.lastIndexOf(&quot;.&quot;));</b>
+&nbsp;            }
+&nbsp;
+&nbsp;            // UUID filename prevents collisions and hides original names
+<b class="fc">&nbsp;            String fileName = UUID.randomUUID().toString() + fileExtension;</b>
+&nbsp;
+&nbsp;            // Write the uploaded bytes to the local uploads/ directory
+<b class="fc">&nbsp;            Path targetLocation = this.fileStorageLocation.resolve(fileName);</b>
+<b class="fc">&nbsp;            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);</b>
+&nbsp;
+&nbsp;            // Return a relative URL — the frontend prefixes it with the backend base URL
+<b class="fc">&nbsp;            Map&lt;String, String&gt; response = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;            response.put(&quot;url&quot;, &quot;/api/files/&quot; + fileName);</b>
+<b class="fc">&nbsp;            response.put(&quot;fileName&quot;, originalFileName);</b>
+&nbsp;
+<b class="fc">&nbsp;            return ResponseEntity.ok(response);</b>
+&nbsp;        } catch (IOException ex) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, &quot;Could not upload file&quot;));</b>
+&nbsp;        }
 &nbsp;    }
 &nbsp;
 &nbsp;    /**
-&nbsp;     * GET /api/forms/{id}
-&nbsp;     * Returns the full form detail including the current version&#39;s fields and
-&nbsp;     * logic rules. Used by the builder when loading an existing form to edit,
-&nbsp;     * and by the responses page to build the table column headers.
+&nbsp;     * GET /api/files/{fileName}
+&nbsp;     *
+&nbsp;     * Serves a previously uploaded file as an octet-stream download. The filename
+&nbsp;     * in the path is the UUID-based name generated at upload time.
+&nbsp;     *
+&nbsp;     * @param fileName The UUID-based filename (e.g. &quot;3f2e...abc.pdf&quot;).
+&nbsp;     * @return The file as a downloadable binary response, or 404 if not found.
 &nbsp;     */
-&nbsp;    @GetMapping(&quot;/{id}&quot;)
-&nbsp;    public ResponseEntity&lt;FormDetailResponseDTO&gt; getForm(@PathVariable(&quot;id&quot;) Long id) {
-<b class="fc">&nbsp;        return ResponseEntity.ok(formService.getFormById(id));</b>
-&nbsp;    }
+&nbsp;    @GetMapping(&quot;/files/{fileName:.+}&quot;)
+&nbsp;    public ResponseEntity&lt;Resource&gt; downloadFile(@PathVariable(&quot;fileName&quot;) String fileName) {
+&nbsp;        try {
+<b class="nc">&nbsp;            Path filePath = this.fileStorageLocation.resolve(fileName).normalize();</b>
+<b class="nc">&nbsp;            Resource resource = new UrlResource(filePath.toUri());</b>
 &nbsp;
-&nbsp;    /**
-&nbsp;     * PUT /api/forms/{id}
-&nbsp;     * Updates an existing form. If the status is changing to PUBLISHED, this also
-&nbsp;     * creates or alters the dynamic submission table via
-&nbsp;     * {@code DynamicTableService}.
-&nbsp;     */
-&nbsp;    @PutMapping(&quot;/{id}&quot;)
-&nbsp;    public ResponseEntity&lt;Form&gt; updateForm(@PathVariable(&quot;id&quot;) Long id, @RequestBody UpdateFormRequestDTO request) {
-<b class="nc">&nbsp;        return ResponseEntity.ok(formService.updateForm(id, request));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * DELETE /api/forms/{id}
-&nbsp;     * Soft-deletes a form by setting its status to ARCHIVED. The form data and
-&nbsp;     * all submissions remain in the database.
-&nbsp;     */
-&nbsp;    @DeleteMapping(&quot;/{id}&quot;)
-&nbsp;    public ResponseEntity&lt;Void&gt; deleteForm(@PathVariable(&quot;id&quot;) Long id) {
-<b class="nc">&nbsp;        formService.deleteForm(id);</b>
-<b class="nc">&nbsp;        return ResponseEntity.noContent().build();</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;    // Submission endpoints
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/forms/{id}/submissions
-&nbsp;     * Returns all rows from the form&#39;s dynamic submission table, ordered
-&nbsp;     * newest-first.
-&nbsp;     * Used by the responses admin page to populate the data table.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/{id}/submissions&quot;)
-&nbsp;    public ResponseEntity&lt;List&lt;Map&lt;String, Object&gt;&gt;&gt; getSubmissions(@PathVariable(&quot;id&quot;) Long id) {
-<b class="fc">&nbsp;        return ResponseEntity.ok(submissionService.getSubmissions(id));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * POST /api/forms/{id}/submissions
-&nbsp;     * Accepts a JSON map of {columnName: value} pairs and inserts a new row into
-&nbsp;     * the dynamic submissions table. Runs rule validation before inserting. Returns
-&nbsp;     * the generated {@code submissionId} (UUID) so the frontend can offer an edit
-&nbsp;     * link.
-&nbsp;     */
-&nbsp;    @PostMapping(&quot;/{id}/submissions&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; submitForm(
-&nbsp;            @PathVariable(&quot;id&quot;) Long id,
-&nbsp;            @RequestBody SubmissionRequestDTO request) {
-&nbsp;
-<b class="nc">&nbsp;        UUID submissionId = submissionService.submitData(id, request.getData(), request.getStatus());</b>
-<b class="nc">&nbsp;        return ResponseEntity.ok(Map.of(</b>
-<b class="nc">&nbsp;                &quot;message&quot;, &quot;Submission successful&quot;,</b>
-<b class="nc">&nbsp;                &quot;submissionId&quot;, submissionId));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/forms/{formId}/submissions/{submissionId}
-&nbsp;     * Retrieves a single submission row by its UUID. Used by the public form page
-&nbsp;     * to pre-fill the form when a respondent clicks &quot;Edit your response&quot;.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/{formId}/submissions/{submissionId}&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; getSubmission(
-&nbsp;            @PathVariable(&quot;formId&quot;) Long formId,
-&nbsp;            @PathVariable(&quot;submissionId&quot;) UUID submissionId) {
-<b class="nc">&nbsp;        return ResponseEntity.ok(submissionService.getSubmissionById(formId, submissionId));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * PUT /api/forms/{formId}/submissions/{submissionId}
-&nbsp;     * Updates an existing submission row with new answer values. Only columns
-&nbsp;     * present in the current form version are included in the UPDATE statement.
-&nbsp;     */
-&nbsp;    @PutMapping(&quot;/{formId}/submissions/{submissionId}&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; updateSubmission(
-&nbsp;            @PathVariable(&quot;formId&quot;) Long formId,
-&nbsp;            @PathVariable(&quot;submissionId&quot;) UUID submissionId,
-&nbsp;            @RequestBody SubmissionRequestDTO request) {
-<b class="nc">&nbsp;        UUID id = submissionService.updateSubmission(formId, submissionId, request.getData(), request.getStatus());</b>
-<b class="nc">&nbsp;        return ResponseEntity.ok(Map.of(&quot;submissionId&quot;, id, &quot;message&quot;, &quot;Update successful&quot;));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * DELETE /api/forms/{formId}/submissions/{submissionId}
-&nbsp;     * Hard-deletes a submission row from the dynamic table. Used by the admin
-&nbsp;     * responses page. This action is irreversible.
-&nbsp;     */
-&nbsp;    @DeleteMapping(&quot;/{formId}/submissions/{submissionId}&quot;)
-&nbsp;    public ResponseEntity&lt;Void&gt; deleteSubmission(
-&nbsp;            @PathVariable(&quot;formId&quot;) Long formId,
-&nbsp;            @PathVariable(&quot;submissionId&quot;) UUID submissionId) {
-<b class="nc">&nbsp;        submissionService.deleteSubmission(formId, submissionId);</b>
-<b class="nc">&nbsp;        return ResponseEntity.ok().build();</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * DELETE /api/forms/{formId}/submissions/bulk
-&nbsp;     * Hard-deletes multiple submission rows in one call.
-&nbsp;     */
-&nbsp;    @DeleteMapping(&quot;/{formId}/submissions/bulk&quot;)
-&nbsp;    public ResponseEntity&lt;Void&gt; deleteSubmissionsBulk(
-&nbsp;            @PathVariable(&quot;formId&quot;) Long formId,
-&nbsp;            @RequestBody List&lt;UUID&gt; submissionIds) {
-<b class="fc">&nbsp;        submissionService.deleteSubmissionsBulk(formId, submissionIds);</b>
-<b class="fc">&nbsp;        return ResponseEntity.ok().build();</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;    // Lookup values (for LOOKUP field type)
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/forms/{id}/columns/{columnName}/values
-&nbsp;     * Returns distinct non-null values for a given column in the form&#39;s submission
-&nbsp;     * table. Drives the dropdown choices for LOOKUP fields at form-fill time.
-&nbsp;     * The column name is validated against the form schema to prevent SQL
-&nbsp;     * injection.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/{id}/columns/{columnName}/values&quot;)
-&nbsp;    public ResponseEntity&lt;List&lt;String&gt;&gt; getLookupValues(
-&nbsp;            @PathVariable(&quot;id&quot;) Long id,
-&nbsp;            @PathVariable(&quot;columnName&quot;) String columnName) {
-<b class="nc">&nbsp;        return ResponseEntity.ok(dynamicTableService.getColumnValues(id, columnName));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;    // Public (token-based) form access — no authentication required
-&nbsp;    // ─────────────────────────────────────────────────────────
-&nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/forms/public/{token}
-&nbsp;     * Resolves a UUID share token to the full form schema. Called by the public
-&nbsp;     * form page ({@code /f/[token]}) before rendering the form to respondents.
-&nbsp;     * Uses a token instead of an ID to prevent enumeration attacks.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/public/{token}&quot;)
-&nbsp;    public ResponseEntity&lt;FormDetailResponseDTO&gt; getPublicForm(@PathVariable(&quot;token&quot;) String token) {
-<b class="fc">&nbsp;        return ResponseEntity.ok(formService.getFormByToken(token));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * POST /api/forms/public/{token}/submissions
-&nbsp;     * Accepts a submission from a public respondent (identified by share token, no
-&nbsp;     * auth required). Resolves the token to a form ID then delegates to the
-&nbsp;     * standard
-&nbsp;     * submitData flow, including rule validation and workflow execution.
-&nbsp;     */
-&nbsp;    @PostMapping(&quot;/public/{token}/submissions&quot;)
-&nbsp;    public ResponseEntity&lt;?&gt; submitPublicForm(
-&nbsp;            @PathVariable(&quot;token&quot;) String token,
-&nbsp;            @RequestBody SubmissionRequestDTO request) {
-<b class="fc">&nbsp;        UUID submissionId = submissionService.submitDataByToken(token, request.getData(), request.getStatus());</b>
-<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(</b>
-<b class="fc">&nbsp;                &quot;message&quot;, &quot;Submission successful&quot;,</b>
-<b class="fc">&nbsp;                &quot;submissionId&quot;, submissionId));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/forms/public/{token}/submissions/{submissionId}
-&nbsp;     * Publicly retrieve a single submission for editing.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/public/{token}/submissions/{submissionId}&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; getPublicSubmission(
-&nbsp;            @PathVariable(&quot;token&quot;) String token,
-&nbsp;            @PathVariable(&quot;submissionId&quot;) UUID submissionId) {
-<b class="nc">&nbsp;        return ResponseEntity.ok(submissionService.getSubmissionByToken(token, submissionId));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    /**
-&nbsp;     * PUT /api/forms/public/{token}/submissions/{submissionId}
-&nbsp;     * Publicly update an existing submission.
-&nbsp;     */
-&nbsp;    @PutMapping(&quot;/public/{token}/submissions/{submissionId}&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, Object&gt;&gt; updatePublicSubmission(
-&nbsp;            @PathVariable(&quot;token&quot;) String token,
-&nbsp;            @PathVariable(&quot;submissionId&quot;) UUID submissionId,
-&nbsp;            @RequestBody SubmissionRequestDTO request) {
-<b class="nc">&nbsp;        UUID id = submissionService.updateSubmissionByToken(token, submissionId, request.getData(),</b>
-<b class="nc">&nbsp;                request.getStatus());</b>
-<b class="nc">&nbsp;        return ResponseEntity.ok(Map.of(&quot;submissionId&quot;, id, &quot;message&quot;, &quot;Update successful&quot;));</b>
+<b class="nc">&nbsp;            if (resource.exists()) {</b>
+<b class="nc">&nbsp;                return ResponseEntity.ok()</b>
+<b class="nc">&nbsp;                        .contentType(MediaType.parseMediaType(&quot;application/octet-stream&quot;))</b>
+<b class="nc">&nbsp;                        .header(HttpHeaders.CONTENT_DISPOSITION,</b>
+<b class="nc">&nbsp;                                &quot;attachment; filename=\&quot;&quot; + resource.getFilename() + &quot;\&quot;&quot;)</b>
+<b class="nc">&nbsp;                        .body(resource);</b>
+&nbsp;            } else {
+<b class="nc">&nbsp;                return ResponseEntity.notFound().build();</b>
+&nbsp;            }
+&nbsp;        } catch (MalformedURLException ex) {
+<b class="nc">&nbsp;            return ResponseEntity.notFound().build();</b>
+&nbsp;        }
 &nbsp;    }
 &nbsp;}
 </code>
@@ -378,7 +220,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

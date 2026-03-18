@@ -1,0 +1,148 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > RoleModule</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.entity</a>
+</div>
+
+<h1>Coverage Summary for Class: RoleModule (com.sttl.formbuilder2.model.entity)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">RoleModule</td>
+<td class="coverageStat">
+  <span class="percent">
+    75%
+  </span>
+  <span class="absValue">
+    (3/4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    83.3%
+  </span>
+  <span class="absValue">
+    (5/6)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">RoleModule$HibernateInstantiator</td>
+  </tr>
+  <tr>
+    <td class="name">RoleModule$HibernateProxy</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    75%
+  </span>
+  <span class="absValue">
+    (3/4)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    83.3%
+  </span>
+  <span class="absValue">
+    (5/6)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.entity;
+&nbsp;
+&nbsp;import jakarta.persistence.*;
+&nbsp;import lombok.Getter;
+&nbsp;import lombok.NoArgsConstructor;
+&nbsp;import lombok.Setter;
+&nbsp;
+&nbsp;@Entity
+&nbsp;@Table(name = &quot;role_modules&quot;)
+<b class="fc">&nbsp;@Getter</b>
+<b class="nc">&nbsp;@Setter</b>
+<b class="fc">&nbsp;@NoArgsConstructor</b>
+&nbsp;public class RoleModule {
+&nbsp;
+&nbsp;    @Id
+&nbsp;    @GeneratedValue(strategy = GenerationType.IDENTITY)
+&nbsp;    private Long id;
+&nbsp;
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;role_id&quot;, nullable = false)
+&nbsp;    private Role role;
+&nbsp;
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;module_id&quot;, nullable = false)
+&nbsp;    private Module module;
+&nbsp;
+<b class="fc">&nbsp;    public RoleModule(Role role, Module module) {</b>
+<b class="fc">&nbsp;        this.role = role;</b>
+<b class="fc">&nbsp;        this.module = module;</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

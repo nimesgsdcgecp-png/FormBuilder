@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > SubmissionRequestDTO</title>
+  <title>Coverage Report > UpdateFormRequestDTO</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.dto.request</a>
 </div>
 
-<h1>Coverage Summary for Class: SubmissionRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
+<h1>Coverage Summary for Class: UpdateFormRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,7 +45,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">SubmissionRequestDTO</td>
+  <td class="name">UpdateFormRequestDTO</td>
 <td class="coverageStat">
   <span class="percent">
     100%
@@ -67,7 +67,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/22)
+    (0/50)
   </span>
 </td>
 <td class="coverageStat">
@@ -89,16 +89,55 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.request;
 &nbsp;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
 &nbsp;import lombok.Data;
-&nbsp;import java.util.Map;
+&nbsp;
+&nbsp;import jakarta.validation.Valid;
+&nbsp;import jakarta.validation.constraints.NotBlank;
+&nbsp;import jakarta.validation.constraints.NotEmpty;
+&nbsp;import jakarta.validation.constraints.NotNull;
+&nbsp;import java.util.List;
 &nbsp;
 &nbsp;/**
-&nbsp; * SubmissionRequestDTO — Request body for form submissions.
+&nbsp; * UpdateFormRequestDTO — Request Body for PUT /api/forms/{id}
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Represents the JSON payload sent by the builder when saving changes to an
+&nbsp; * existing form (re-publish or save draft). Structurally identical to
+&nbsp; * {@link CreateFormRequestDTO} but used on a different endpoint.
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * Frontend api.ts saveForm() → PUT /api/forms/{id} →
+&nbsp; * FormController.updateForm()
+&nbsp; * → FormService.updateForm(id, request)
+&nbsp; * - Updates Form metadata (title, description, allowEditResponse, status).
+&nbsp; * - Creates a new FormVersion snapshot with the updated field list.
+&nbsp; * - If status = PUBLISHED: calls DynamicTableService.createDynamicTable()
+&nbsp; * (idempotent — uses IF NOT EXISTS) and alterDynamicTable() to add any
+&nbsp; * new columns to the existing submission table.
+&nbsp; *
+&nbsp; * Note:
+&nbsp; * Schema changes (new fields) only ADD columns — existing data is never lost.
+&nbsp; * Renamed or removed fields become &quot;ghost columns&quot; visible in the responses
+&nbsp; * page.
 &nbsp; */
 <b class="pc">&nbsp;@Data</b>
-&nbsp;public class SubmissionRequestDTO {
-&nbsp;    private Map&lt;String, Object&gt; data;
-&nbsp;    private String status; // DRAFT or FINAL
+&nbsp;public class UpdateFormRequestDTO {
+&nbsp;    @NotBlank(message = &quot;Title is required&quot;)
+&nbsp;    private String title;
+&nbsp;
+&nbsp;    private String description;
+&nbsp;
+&nbsp;    private boolean allowEditResponse;
+&nbsp;
+&nbsp;    @NotNull(message = &quot;Status is required&quot;)
+&nbsp;    private FormStatus status;
+&nbsp;
+&nbsp;    private Object rules;
+&nbsp;
+&nbsp;    @NotEmpty(message = &quot;At least one field is required&quot;)
+&nbsp;    @Valid
+&nbsp;    private List&lt;FieldDefinitionRequestDTO&gt; fields;
 &nbsp;}
 </code>
 </pre>
@@ -123,7 +162,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

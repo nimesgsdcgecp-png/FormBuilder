@@ -1,0 +1,236 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > WorkflowInstance</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.model.entity</a>
+</div>
+
+<h1>Coverage Summary for Class: WorkflowInstance (com.sttl.formbuilder2.model.entity)</h1>
+
+<table class="coverageStats">
+
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WorkflowInstance</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (5/5)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (5/5)
+  </span>
+</td>
+</tr>
+  <tr>
+    <td class="name">WorkflowInstance$HibernateInstantiator</td>
+  </tr>
+  <tr>
+    <td class="name">WorkflowInstance$HibernateProxy</td>
+  </tr>
+  <tr>
+    <td class="name">WorkflowInstance$WorkflowInstanceBuilder</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    50%
+  </span>
+  <span class="absValue">
+    (3/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+  </tr>
+  <tr>
+    <td class="name">WorkflowInstance$WorkflowStatus</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (2/2)
+  </span>
+</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (7/7)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    50%
+  </span>
+  <span class="absValue">
+    (3/6)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (8/8)
+  </span>
+</td>
+</tr>
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.model.entity;
+&nbsp;
+&nbsp;import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+&nbsp;import jakarta.persistence.*;
+&nbsp;import lombok.*;
+&nbsp;import java.time.LocalDateTime;
+&nbsp;import java.util.ArrayList;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;@Entity
+&nbsp;@Table(name = &quot;workflow_instances&quot;)
+<b class="fc">&nbsp;@Getter</b>
+<b class="fc">&nbsp;@Setter</b>
+<b class="fc">&nbsp;@NoArgsConstructor</b>
+<b class="fc">&nbsp;@AllArgsConstructor</b>
+<b class="pc">&nbsp;@Builder</b>
+&nbsp;public class WorkflowInstance {
+&nbsp;
+&nbsp;    @Id
+&nbsp;    @GeneratedValue(strategy = GenerationType.IDENTITY)
+&nbsp;    private Long id;
+&nbsp;
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;form_id&quot;, nullable = false)
+&nbsp;    private Form form;
+&nbsp;
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;creator_id&quot;, nullable = false)
+&nbsp;    private AppUser creator;
+&nbsp;
+&nbsp;    @ManyToOne(fetch = FetchType.LAZY)
+&nbsp;    @JoinColumn(name = &quot;target_builder_id&quot;, nullable = false)
+&nbsp;    private AppUser targetBuilder;
+&nbsp;
+&nbsp;    @Column(name = &quot;current_step_index&quot;)
+&nbsp;    private int currentStepIndex;
+&nbsp;
+&nbsp;    @Column(name = &quot;total_steps&quot;)
+&nbsp;    private int totalSteps;
+&nbsp;
+&nbsp;    @Enumerated(EnumType.STRING)
+&nbsp;    private WorkflowStatus status;
+&nbsp;
+&nbsp;    @Builder.Default
+&nbsp;    @Column(name = &quot;created_at&quot;)
+&nbsp;    private LocalDateTime createdAt = LocalDateTime.now();
+&nbsp;
+&nbsp;    @Builder.Default
+&nbsp;    @Column(name = &quot;updated_at&quot;)
+&nbsp;    private LocalDateTime updatedAt = LocalDateTime.now();
+&nbsp;
+&nbsp;    @Builder.Default
+&nbsp;    @OneToMany(mappedBy = &quot;instance&quot;, cascade = CascadeType.ALL, orphanRemoval = true)
+&nbsp;    @OrderBy(&quot;stepIndex ASC&quot;)
+&nbsp;    @JsonIgnoreProperties(&quot;instance&quot;)
+&nbsp;    private List&lt;WorkflowStep&gt; steps = new ArrayList&lt;&gt;();
+&nbsp;
+<b class="fc">&nbsp;    public enum WorkflowStatus {</b>
+<b class="fc">&nbsp;        ACTIVE, COMPLETED, REJECTED, CANCELLED</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

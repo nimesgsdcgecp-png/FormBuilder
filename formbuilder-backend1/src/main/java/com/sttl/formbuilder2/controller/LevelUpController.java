@@ -1,6 +1,6 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.RoleAssignmentDTO;
+import com.sttl.formbuilder2.dto.request.RoleAssignmentDTO;
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.model.entity.LevelUpRequest;
 import com.sttl.formbuilder2.model.entity.Role;

@@ -11,7 +11,7 @@ A full-stack enterprise-grade **Dynamic Form Builder** with drag-and-drop form c
 | Frontend    | Next.js 14 (App Router), TypeScript, Tailwind CSS            |
 | State Mgmt  | Zustand                                                      |
 | Drag & Drop | @dnd-kit/core, @dnd-kit/sortable                             |
-| Backend     | Spring Boot 3, Java 21                                       |
+| Backend     | Spring Boot 3, Java 17                                       |
 | ORM         | Spring Data JPA / Hibernate, Spring JDBC                     |
 | Database    | PostgreSQL (with JSONB for validation rules)                 |
 | Build       | Maven (backend), npm (frontend)                              |
@@ -24,20 +24,32 @@ FormBuilder3 operates on a unified model separated into **Metadata** and **Dynam
 
 ### 1. Form Creation & Management
 - **Frontend**: The `builder/page.tsx` handles drag-and-drop creation via `Canvas.tsx` and `Sidebar.tsx`. Field configuration happens in `PropertiesPanel.tsx`.
-- **Backend**: Saving the form calls `FormController` > `FormService`. The form's state is saved in the `forms` table. Each save generates a new version in `form_versions` for full traceability. Individual fields mirror the `FieldType` enum.
+- **Backend (Modular Architecture)**: Logic is decoupled into dedicated services:
+    - `FormService`: Core lifecycle (CRUD/Archive).
+    - `FormMapper`: Centralized Entity-to-DTO conversion.
+    - `FormWorkflowService`: Specialized form state transitions.
 
 ### 2. Publishing & Dynamic Tables
 - **Action**: When a form's status changes to `PUBLISHED`, the system prepares it to receive public submissions.
-- **Dynamic DDL (`DynamicTableService.java`)**: Instead of relying on a slow, monolithic NoSQL structure or gigantic EAV tables, FormBuilder3 executes raw `CREATE TABLE` and `ALTER TABLE` DDL directly against PostgreSQL.
-    - Example: Publishing Form ID 5 creates a real table named `sub_5_v1`.
-    - Evolving schemas: Adding a new field to a published form will execute `ALTER TABLE sub_5_v1 ADD COLUMN ...`.
+- **Dynamic DDL (`DynamicTableService.java`)**: 
+    - FormBuilder3 executes raw `CREATE TABLE` and `ALTER TABLE` DDL directly against PostgreSQL for high-performance structured storage.
+    - `DynamicTableService` also acts as a generic Data Access Object (DAO) for dynamic tables, handling all custom JDBC I/O.
 
 ### 3. Submission & Validation (Rule Engine)
 - **Public Entry (`f/[token]/page.tsx`)**: Forms generate a UUID token for public sharing.
 - **Execution**: When a user submits data, it hits `SubmissionService.java`.
-- **Validation Phase**: Before data is saved, `RuleEngineService.java` intercepts the request. It evaluates the pre-configured JSON rules (IF→THEN statements).
-    - If a `REQUIRE` or `VALIDATION_ERROR` action triggers, a HTTP 400 stops the submission entirely.
-- **Data Insertion**: Validated data is serialized dynamically (arrays into JSON strings) and explicitly inserted using raw Spring JDBC against the dynamic table (`INSERT INTO "sub_5_v1" ...`). SQL identifiers are strictly double-quoted to defend against reserved postgres keywords.
+- **Validation phase**: `RuleEngineService.java` evaluates pre-configured JSON rules (IF→THEN).
+- **Calculation Phase**: `CalculationService.java` evaluates server-side math expressions for calculated field types before insertion.
+- **Data Insertion**: Validated data is explicitly inserted into the dynamic table.SQL identifiers are strictly double-quoted to defend against reserved postgres keywords.
+
+---
+
+## ⚡ Performance Optimization
+
+### Smart Polling & Tab-Visibility
+The frontend implements a visibility-aware polling system:
+- **Redundancy Reduction**: Redundant background polling is consolidated into a single global state in `useUIStore.ts`.
+- **Visibility Detection**: Background requests pause automatically when the tab is inactive (via `visibilitychange` API), significantly reducing unnecessary server load and database queries.
 
 ---
 
@@ -45,10 +57,10 @@ FormBuilder3 operates on a unified model separated into **Metadata** and **Dynam
 
 | System Component | Key Files | Description |
 |------------------|-----------|-------------|
-| **Types & API Layer** | `schema.ts`, `api.ts` | The frontend single-source of truth. `schema.ts` explicitly mirrors backend Java enums (`FieldType`, `ActionType`). |
-| **API Endpoints** | `FormController.java`, `FileUploadController.java` | The routing layer on the backend. Files are uploaded directly to the local filesystem for dev (via `uploads/`). |
-| **Data Manipulation** | `SubmissionService.java`, `DynamicTableService.java` | Core business logic using `JdbcTemplate` to execute dynamic DML and DDL. |
-| **Validation Engine** | `RuleEngineService.java` | Handles the synchronous checking of `FormRuleDTO` logic before any insert operations. |
+| **Types & API Layer** | `schema.ts`, `api.ts` | The frontend single-source of truth. |
+| **Data Manipulation** | `SubmissionService.java`, `CalculationService.java` | Submission pipeline with server-side math evaluation. |
+| **Logic Engine** | `RuleEngineService.java`, `FormMapper.java` | Rule validation and Entity-DTO mapping. |
+| **Table Management** | `DynamicTableService.java` | Core business logic for executing dynamic DML and DDL via `JdbcTemplate`. |
 
 ---
 

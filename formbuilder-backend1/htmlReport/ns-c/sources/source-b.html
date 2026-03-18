@@ -1,0 +1,96 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > RoleModuleRepository</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.repository</a>
+</div>
+
+<h1>Coverage Summary for Class: RoleModuleRepository (com.sttl.formbuilder2.repository)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+</tr>
+<tr>
+  <td class="name">RoleModuleRepository</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.repository;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.entity.RoleModule;
+&nbsp;import org.springframework.data.jpa.repository.JpaRepository;
+&nbsp;import org.springframework.stereotype.Repository;
+&nbsp;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;@Repository
+&nbsp;public interface RoleModuleRepository extends JpaRepository&lt;RoleModule, Long&gt; {
+&nbsp;    
+&nbsp;    @org.springframework.data.jpa.repository.Query(&quot;SELECT rm FROM RoleModule rm JOIN FETCH rm.module WHERE rm.role.id = :roleId&quot;)
+&nbsp;    List&lt;RoleModule&gt; findByRoleId(@org.springframework.data.repository.query.Param(&quot;roleId&quot;) Long roleId);
+&nbsp;
+&nbsp;    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+&nbsp;    @org.springframework.transaction.annotation.Transactional
+&nbsp;    @org.springframework.data.jpa.repository.Query(&quot;DELETE FROM RoleModule rm WHERE rm.role.id = :roleId&quot;)
+&nbsp;    void deleteByRoleId(@org.springframework.data.repository.query.Param(&quot;roleId&quot;) Long roleId);
+&nbsp;    
+&nbsp;    // Find modules for a specific role that are active
+&nbsp;    @org.springframework.data.jpa.repository.Query(&quot;SELECT rm FROM RoleModule rm JOIN FETCH rm.module WHERE rm.role.id = :roleId AND rm.module.active = true&quot;)
+&nbsp;    List&lt;RoleModule&gt; findByRoleIdAndModuleActiveTrue(@org.springframework.data.repository.query.Param(&quot;roleId&quot;) Long roleId);
+&nbsp;
+&nbsp;    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+&nbsp;    @org.springframework.transaction.annotation.Transactional
+&nbsp;    @org.springframework.data.jpa.repository.Query(&quot;DELETE FROM RoleModule rm WHERE rm.module.id = :moduleId&quot;)
+&nbsp;    void deleteByModuleId(@org.springframework.data.repository.query.Param(&quot;moduleId&quot;) Long moduleId);
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

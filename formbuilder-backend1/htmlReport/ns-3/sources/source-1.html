@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > AuthController</title>
+  <title>Coverage Report > AuditController</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,22 +22,15 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.controller</a>
 </div>
 
-<h1>Coverage Summary for Class: AuthController (com.sttl.formbuilder2.controller)</h1>
+<h1>Coverage Summary for Class: AuditController (com.sttl.formbuilder2.controller)</h1>
 
 <table class="coverageStats">
+
 <tr>
   <th class="name">Class</th>
 <th class="coverageStat 
 ">
-  Class, %
-</th>
-<th class="coverageStat 
-">
   Method, %
-</th>
-<th class="coverageStat 
-">
-  Branch, %
 </th>
 <th class="coverageStat 
 ">
@@ -45,41 +38,46 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">AuthController</td>
+  <td class="name">AuditController</td>
 <td class="coverageStat">
   <span class="percent">
-    100%
+    66.7%
   </span>
   <span class="absValue">
-    (1/1)
+    (2/3)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    100%
+    25%
   </span>
   <span class="absValue">
-    (5/5)
-  </span>
-</td>
-<td class="coverageStat">
-  <span class="percent">
-    50%
-  </span>
-  <span class="absValue">
-    (8/16)
-  </span>
-</td>
-<td class="coverageStat">
-  <span class="percent">
-    90.2%
-  </span>
-  <span class="absValue">
-    (37/41)
+    (2/8)
   </span>
 </td>
 </tr>
-
+  <tr>
+    <td class="name">AuditController$$SpringCGLIB$$0</td>
+  </tr>
+<tr>
+  <td class="name"><strong>Total</strong></td>
+<td class="coverageStat">
+  <span class="percent">
+    66.7%
+  </span>
+  <span class="absValue">
+    (2/3)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    25%
+  </span>
+  <span class="absValue">
+    (2/8)
+  </span>
+</td>
+</tr>
 </table>
 
 <br/>
@@ -89,112 +87,43 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.controller;
 &nbsp;
-&nbsp;import jakarta.servlet.http.HttpServletRequest;
-&nbsp;import jakarta.servlet.http.HttpSession;
-&nbsp;import org.springframework.http.HttpStatus;
+&nbsp;import com.sttl.formbuilder2.service.AuditService;
+&nbsp;import lombok.RequiredArgsConstructor;
 &nbsp;import org.springframework.http.ResponseEntity;
-&nbsp;import org.springframework.security.authentication.AuthenticationManager;
-&nbsp;import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-&nbsp;import org.springframework.security.core.Authentication;
-&nbsp;import org.springframework.security.core.AuthenticationException;
-&nbsp;import org.springframework.security.core.context.SecurityContext;
-&nbsp;import org.springframework.security.core.context.SecurityContextHolder;
-&nbsp;import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-&nbsp;import org.springframework.security.crypto.password.PasswordEncoder;
-&nbsp;import org.springframework.web.bind.annotation.*;
-&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
-&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
-&nbsp;
-&nbsp;import java.util.Map;
+&nbsp;import org.springframework.security.access.prepost.PreAuthorize;
+&nbsp;import org.springframework.web.bind.annotation.DeleteMapping;
+&nbsp;import org.springframework.web.bind.annotation.GetMapping;
+&nbsp;import org.springframework.web.bind.annotation.RequestMapping;
+&nbsp;import org.springframework.web.bind.annotation.RestController;
 &nbsp;
 &nbsp;@RestController
-&nbsp;@RequestMapping(&quot;/api/auth&quot;)
-&nbsp;public class AuthController {
+&nbsp;@RequestMapping(&quot;/api/admin/audit&quot;)
+<b class="fc">&nbsp;@RequiredArgsConstructor</b>
+&nbsp;public class AuditController {
 &nbsp;
-&nbsp;    private final AuthenticationManager authenticationManager;
-&nbsp;    private final UserRepository userRepository;
-&nbsp;    private final PasswordEncoder passwordEncoder;
+&nbsp;    private final AuditService auditService;
 &nbsp;
-<b class="fc">&nbsp;    public AuthController(AuthenticationManager authenticationManager, UserRepository userRepository,</b>
-&nbsp;            PasswordEncoder passwordEncoder) {
-<b class="fc">&nbsp;        this.authenticationManager = authenticationManager;</b>
-<b class="fc">&nbsp;        this.userRepository = userRepository;</b>
-<b class="fc">&nbsp;        this.passwordEncoder = passwordEncoder;</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    @PostMapping(&quot;/login&quot;)
-&nbsp;    public ResponseEntity&lt;?&gt; login(@RequestBody Map&lt;String, String&gt; credentials, HttpServletRequest request) {
+&nbsp;    @GetMapping
+&nbsp;    @PreAuthorize(&quot;hasRole(&#39;ADMIN&#39;) or hasRole(&#39;ROLE_ADMINISTRATOR&#39;) or hasRole(&#39;ROLE_ADMIN&#39;)&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getLogs() {
 &nbsp;        try {
-<b class="fc">&nbsp;            String username = credentials.get(&quot;username&quot;);</b>
-<b class="fc">&nbsp;            String password = credentials.get(&quot;password&quot;);</b>
-&nbsp;
-&nbsp;            // 1. Perform Authentication
-<b class="fc">&nbsp;            UsernamePasswordAuthenticationToken authRequest = new UsernamePasswordAuthenticationToken(username,</b>
-<b class="fc">&nbsp;                    password);</b>
-<b class="fc">&nbsp;            Authentication authentication = authenticationManager.authenticate(authRequest);</b>
-&nbsp;
-&nbsp;            // 2. Establish Security Context
-<b class="fc">&nbsp;            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();</b>
-<b class="fc">&nbsp;            securityContext.setAuthentication(authentication);</b>
-<b class="fc">&nbsp;            SecurityContextHolder.setContext(securityContext);</b>
-&nbsp;
-&nbsp;            // 3. Save Security Context to Http Session (crucial for JSESSIONID cookie
-&nbsp;            // generation)
-<b class="fc">&nbsp;            HttpSession session = request.getSession(true);</b>
-<b class="fc">&nbsp;            session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);</b>
-&nbsp;
-<b class="fc">&nbsp;            return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Login successful&quot;, &quot;username&quot;, username));</b>
-&nbsp;
-&nbsp;        } catch (AuthenticationException e) {
-<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(&quot;error&quot;, &quot;Invalid username or password&quot;));</b>
+<b class="fc">&nbsp;            return ResponseEntity.ok(auditService.getAllLogs());</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            System.err.println(&quot;!!! AUDIT ERROR: &quot; + e.getMessage());</b>
+<b class="nc">&nbsp;            e.printStackTrace();</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(&quot;Error fetching audit logs: &quot; + e.getMessage());</b>
 &nbsp;        }
 &nbsp;    }
 &nbsp;
-&nbsp;    @PostMapping(&quot;/logout&quot;)
-&nbsp;    public ResponseEntity&lt;?&gt; logout(HttpServletRequest request) {
-<b class="fc">&nbsp;        HttpSession session = request.getSession(false);</b>
-<b class="pc">&nbsp;        if (session != null) {</b>
-<b class="fc">&nbsp;            session.invalidate();</b>
+&nbsp;    @DeleteMapping(&quot;/clear&quot;)
+&nbsp;    @PreAuthorize(&quot;hasRole(&#39;ADMIN&#39;)&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; clearLogs() {
+&nbsp;        try {
+<b class="nc">&nbsp;            auditService.clearLogs();</b>
+<b class="nc">&nbsp;            return ResponseEntity.ok(&quot;Audit logs cleared successfully (Soft Delete)&quot;);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(&quot;Error clearing audit logs: &quot; + e.getMessage());</b>
 &nbsp;        }
-<b class="fc">&nbsp;        SecurityContextHolder.clearContext();</b>
-<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Logout successful&quot;));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    @PostMapping(&quot;/register&quot;)
-&nbsp;    public ResponseEntity&lt;?&gt; register(@RequestBody Map&lt;String, String&gt; payload) {
-<b class="fc">&nbsp;        String username = payload.get(&quot;username&quot;);</b>
-<b class="fc">&nbsp;        String password = payload.get(&quot;password&quot;);</b>
-&nbsp;
-<b class="pc">&nbsp;        if (username == null || username.isBlank() || password == null || password.isBlank()) {</b>
-<b class="nc">&nbsp;            return ResponseEntity.badRequest().body(Map.of(&quot;error&quot;, &quot;Username and password are required&quot;));</b>
-&nbsp;        }
-&nbsp;
-<b class="pc">&nbsp;        if (userRepository.findByUsername(username).isPresent()) {</b>
-<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(&quot;error&quot;, &quot;Username already exists&quot;));</b>
-&nbsp;        }
-&nbsp;
-<b class="fc">&nbsp;        AppUser newUser = new AppUser();</b>
-<b class="fc">&nbsp;        newUser.setUsername(username);</b>
-<b class="fc">&nbsp;        newUser.setPasswordHash(passwordEncoder.encode(password));</b>
-<b class="fc">&nbsp;        newUser.setRole(&quot;ROLE_USER&quot;);</b>
-&nbsp;
-<b class="fc">&nbsp;        userRepository.save(newUser);</b>
-&nbsp;
-<b class="fc">&nbsp;        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(&quot;message&quot;, &quot;User registered successfully&quot;));</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    @GetMapping(&quot;/me&quot;)
-&nbsp;    public ResponseEntity&lt;?&gt; getCurrentUser(Authentication authentication) {
-<b class="pc">&nbsp;        if (authentication == null || !authentication.isAuthenticated()) {</b>
-<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();</b>
-&nbsp;        }
-<b class="fc">&nbsp;        AppUser user = userRepository.findByUsername(authentication.getName())</b>
-<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
-&nbsp;
-<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(</b>
-<b class="fc">&nbsp;                &quot;id&quot;, user.getId(),</b>
-<b class="fc">&nbsp;                &quot;username&quot;, user.getUsername(),</b>
-<b class="fc">&nbsp;                &quot;roles&quot;, authentication.getAuthorities()));</b>
 &nbsp;    }
 &nbsp;}
 </code>
@@ -220,7 +149,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

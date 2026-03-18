@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.service;
 
+import com.sttl.formbuilder2.dto.request.WorkflowRequestDTO;
+import com.sttl.formbuilder2.dto.response.UserSummaryDTO;
 import com.sttl.formbuilder2.model.entity.*;
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import com.sttl.formbuilder2.repository.*;
@@ -20,7 +22,7 @@ public class WorkflowService {
     private final FormRepository formRepository;
     private final UserRepository userRepository;
 
-    private final FormService formService;
+    private final FormWorkflowService formWorkflowService;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final AuditService auditService;
 
@@ -45,7 +47,7 @@ public class WorkflowService {
     }
 
     @Transactional
-    public WorkflowInstance initiateWorkflow(AppUser creator, com.sttl.formbuilder2.dto.request.WorkflowRequestDTO request) {
+    public WorkflowInstance initiateWorkflow(AppUser creator, WorkflowRequestDTO request) {
         Form form = formRepository.findById(request.getFormId())
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         
@@ -134,7 +136,7 @@ public class WorkflowService {
             instance.setUpdatedAt(LocalDateTime.now());
             instanceRepository.save(instance);
 
-            formService.finalizeWorkflowForm(instance.getForm().getId(), instance.getTargetBuilder(), actor);
+            formWorkflowService.finalizeWorkflowForm(instance.getForm().getId(), instance.getTargetBuilder(), actor);
         }
     }
 
@@ -192,7 +194,7 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public List<com.sttl.formbuilder2.dto.UserSummaryDTO> getAvailableAuthorities(Long formId) {
+    public List<UserSummaryDTO> getAvailableAuthorities(Long formId) {
         return userRepository.findAll().stream()
                 .filter(user -> {
                     // Always show users with Global roles
@@ -206,7 +208,7 @@ public class WorkflowService {
                     
                     return false;
                 })
-                .map(user -> com.sttl.formbuilder2.dto.UserSummaryDTO.builder()
+                .map(user -> UserSummaryDTO.builder()
                         .id(user.getId())
                         .username(user.getUsername())
                         .roles(user.getUserFormRoles().stream()

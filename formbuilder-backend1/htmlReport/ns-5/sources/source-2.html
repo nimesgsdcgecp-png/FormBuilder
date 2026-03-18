@@ -67,7 +67,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/74)
+    (0/98)
   </span>
 </td>
 <td class="coverageStat">
@@ -89,7 +89,11 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.request;
 &nbsp;
+&nbsp;import com.fasterxml.jackson.annotation.JsonProperty;
 &nbsp;import com.sttl.formbuilder2.model.enums.FieldType;
+&nbsp;import jakarta.validation.Valid;
+&nbsp;import jakarta.validation.constraints.NotBlank;
+&nbsp;import jakarta.validation.constraints.NotNull;
 &nbsp;import lombok.Data;
 &nbsp;
 &nbsp;import java.util.Map;
@@ -125,15 +129,27 @@ Current scope:     <a href="../../index.html">all classes</a>
 &nbsp; */
 <b class="pc">&nbsp;@Data</b>
 &nbsp;public class FieldDefinitionRequestDTO {
+&nbsp;    @NotBlank(message = &quot;Field label is required&quot;)
 &nbsp;    private String label;
+&nbsp;
 &nbsp;    private String columnName;
+&nbsp;
+&nbsp;    @NotNull(message = &quot;Field type is required&quot;)
 &nbsp;    private FieldType type;
+&nbsp;
 &nbsp;    private boolean required;
 &nbsp;    private Object options;
 &nbsp;    private Map&lt;String, Object&gt; validation;
 &nbsp;    private String defaultValue;
 &nbsp;    private String calculationFormula;
+&nbsp;    private String helpText;
 &nbsp;    private boolean hidden;
+&nbsp;    private boolean readOnly;
+&nbsp;    private boolean disabled;
+&nbsp;    @JsonProperty(&quot;isMultiSelect&quot;)
+&nbsp;    private boolean isMultiSelect;
+&nbsp;
+&nbsp;    @Valid
 &nbsp;    private java.util.List&lt;FieldDefinitionRequestDTO&gt; children;
 &nbsp;}
 </code>
@@ -159,7 +175,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

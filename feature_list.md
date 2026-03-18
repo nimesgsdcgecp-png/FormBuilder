@@ -38,3 +38,9 @@
 - [ ] Insert new facts (Set calculation outputs)
 - [ ] Call functions / methods (Trigger backend processes)
 - [ ] Fire other rules (Cascade rule execution)
+
+## ⚡ Performance & Architecture
+- [x] **Smart Polling**: Consolidated background requests and implemented tab-visibility detection to reduce server load.
+- [x] **Service Deconstruction**: Refactored monolithic services into focused units (`FormMapper`, `CalculationService`, `FormWorkflowService`).
+- [x] **Real-time Auth Sync**: Updated `/api/auth/me` to bypass stale session data for immediate permission updates.
+- [x] **Dynamic Table DAO**: Unified dynamic table I/O operations in `DynamicTableService`.

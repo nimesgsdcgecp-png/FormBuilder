@@ -1,6 +1,6 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.PermissionResponseDTO;
+import com.sttl.formbuilder2.dto.response.PermissionResponseDTO;
 import com.sttl.formbuilder2.service.PermissionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

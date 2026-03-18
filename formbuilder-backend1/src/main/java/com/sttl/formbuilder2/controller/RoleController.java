@@ -1,6 +1,9 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.*;
+import com.sttl.formbuilder2.dto.request.RoleAssignmentDTO;
+import com.sttl.formbuilder2.dto.request.RoleRequestDTO;
+import com.sttl.formbuilder2.dto.response.RoleResponseDTO;
+import com.sttl.formbuilder2.dto.response.UserRoleAssignmentResponseDTO;
 import com.sttl.formbuilder2.service.RoleService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

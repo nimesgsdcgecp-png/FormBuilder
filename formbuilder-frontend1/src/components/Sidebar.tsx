@@ -65,10 +65,9 @@ interface MenuNode {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useUIStore();
+  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen, pendingApprovalsCount, setPendingApprovalsCount } = useUIStore();
   const { assignments } = usePermissions();
   const [menuTree, setMenuTree] = useState<MenuNode[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
   const [expandedIds, setExpandedIds] = useState<number[]>([]);
 
   // Close mobile menu on route change
@@ -120,14 +119,16 @@ export default function Sidebar() {
       }
     }
   }, [pathname, menuTree]);
-
   useEffect(() => {
     const fetchCounts = async () => {
+      // Don't fetch if tab is hidden
+      if (document.visibilityState !== 'visible') return;
+
       try {
         const res = await fetch('http://localhost:8080/api/workflows/my-pending', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
-          setPendingCount(data.length);
+          setPendingApprovalsCount(data.length);
         }
       } catch (err) {
         console.error("Failed to fetch pending counts", err);
@@ -137,9 +138,22 @@ export default function Sidebar() {
     if (assignments.length > 0) {
       fetchCounts();
       const interval = setInterval(fetchCounts, 30000);
-      return () => clearInterval(interval);
+
+      // Handle visibility change: resume fetching when tab becomes visible
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          fetchCounts();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
-  }, [assignments]);
+  }, [assignments, setPendingApprovalsCount]);
 
   const isAdmin = assignments.some(a => a.role.name === 'ADMIN' || a.role.name === 'ROLE_ADMINISTRATOR');
   const isOnlyUser = assignments.length === 1 && assignments[0].role.name === 'USER';
@@ -157,7 +171,7 @@ export default function Sidebar() {
       icon: ShieldAlert,
       href: isOnlyUser ? '/forms/status' : '/admin/approvals',
       show: assignments.length > 0,
-      badge: !isOnlyUser && pendingCount > 0 ? pendingCount : null,
+      badge: !isOnlyUser && pendingApprovalsCount > 0 ? pendingApprovalsCount : null,
       color: 'text-amber-500'
     },
     {

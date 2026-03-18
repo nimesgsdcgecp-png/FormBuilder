@@ -1,6 +1,7 @@
 package com.sttl.formbuilder2.controller;
 
-import com.sttl.formbuilder2.dto.UserResponseDTO;
+import com.sttl.formbuilder2.dto.response.UserResponseDTO;
+import com.sttl.formbuilder2.dto.response.UserSummaryDTO;
 import com.sttl.formbuilder2.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,7 +27,7 @@ public class UserController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<List<com.sttl.formbuilder2.dto.UserSummaryDTO>> getUserSummaries() {
+    public ResponseEntity<List<UserSummaryDTO>> getUserSummaries() {
         return ResponseEntity.ok(userService.getUserSummaries());
     }
 

@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > DynamicTableService</title>
+  <title>Coverage Report > CustomPermissionEvaluator</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -19,15 +19,18 @@
 <div class="breadCrumbs">
 Current scope:     <a href="../../index.html">all classes</a>
     <span class="separator">|</span>
-    <a href="../index.html">com.sttl.formbuilder2.service</a>
+    <a href="../index.html">com.sttl.formbuilder2.security</a>
 </div>
 
-<h1>Coverage Summary for Class: DynamicTableService (com.sttl.formbuilder2.service)</h1>
+<h1>Coverage Summary for Class: CustomPermissionEvaluator (com.sttl.formbuilder2.security)</h1>
 
 <table class="coverageStats">
-
 <tr>
   <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
 <th class="coverageStat 
 ">
   Method, %
@@ -42,62 +45,41 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">DynamicTableService</td>
+  <td class="name">CustomPermissionEvaluator</td>
 <td class="coverageStat">
   <span class="percent">
-    62.5%
+    100%
   </span>
   <span class="absValue">
-    (5/8)
+    (1/1)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    25.8%
+    33.3%
   </span>
   <span class="absValue">
-    (16/62)
+    (1/3)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    40.9%
+    0%
   </span>
   <span class="absValue">
-    (27/66)
-  </span>
-</td>
-</tr>
-  <tr>
-    <td class="name">DynamicTableService$$SpringCGLIB$$0</td>
-  </tr>
-<tr>
-  <td class="name"><strong>Total</strong></td>
-<td class="coverageStat">
-  <span class="percent">
-    62.5%
-  </span>
-  <span class="absValue">
-    (5/8)
+    (0/18)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    25.8%
+    13.3%
   </span>
   <span class="absValue">
-    (16/62)
-  </span>
-</td>
-<td class="coverageStat">
-  <span class="percent">
-    40.9%
-  </span>
-  <span class="absValue">
-    (27/66)
+    (2/15)
   </span>
 </td>
 </tr>
+
 </table>
 
 <br/>
@@ -105,141 +87,54 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 
 <pre>
-<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.service;
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.security;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO;
-&nbsp;import com.sttl.formbuilder2.model.entity.Form;
-&nbsp;import com.sttl.formbuilder2.model.enums.FieldType;
-&nbsp;import com.sttl.formbuilder2.repository.FormRepository;
-&nbsp;import lombok.RequiredArgsConstructor;
-&nbsp;import org.springframework.jdbc.core.JdbcTemplate;
-&nbsp;import org.springframework.stereotype.Service;
-&nbsp;import org.springframework.transaction.annotation.Transactional;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import org.springframework.security.access.PermissionEvaluator;
+&nbsp;import org.springframework.security.core.Authentication;
+&nbsp;import org.springframework.stereotype.Component;
 &nbsp;
-&nbsp;import java.util.List;
+&nbsp;import java.io.Serializable;
 &nbsp;
-&nbsp;/**
-&nbsp; * DynamicTableService — DDL Management for Form Submission Tables
-&nbsp; */
-&nbsp;@Service
-<b class="fc">&nbsp;@RequiredArgsConstructor</b>
-<b class="fc">&nbsp;public class DynamicTableService {</b>
+&nbsp;@Component
+&nbsp;public class CustomPermissionEvaluator implements PermissionEvaluator {
 &nbsp;
-&nbsp;    private final JdbcTemplate jdbcTemplate;
-&nbsp;    private final FormRepository formRepository;
+&nbsp;    private final UserRepository userRepository;
 &nbsp;
-&nbsp;    @Transactional
-&nbsp;    public void createDynamicTable(String tableName, List&lt;FieldDefinitionRequestDTO&gt; fields) {
-<b class="fc">&nbsp;        StringBuilder sql = new StringBuilder();</b>
-<b class="fc">&nbsp;        sql.append(&quot;CREATE TABLE IF NOT EXISTS &quot;).append(tableName).append(&quot; (&quot;);</b>
-&nbsp;
-<b class="fc">&nbsp;        sql.append(&quot;submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), &quot;);</b>
-<b class="fc">&nbsp;        sql.append(&quot;submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, &quot;);</b>
-<b class="fc">&nbsp;        sql.append(&quot;submission_status VARCHAR(20) DEFAULT &#39;FINAL&#39;, &quot;);</b>
-&nbsp;
-<b class="fc">&nbsp;        List&lt;FieldDefinitionRequestDTO&gt; allFields = new java.util.ArrayList&lt;&gt;();</b>
-<b class="fc">&nbsp;        flattenFields(fields, allFields);</b>
-&nbsp;
-<b class="fc">&nbsp;        for (FieldDefinitionRequestDTO field : allFields) {</b>
-<b class="pc">&nbsp;            if (field.getType() == FieldType.SECTION_HEADER || field.getType() == FieldType.INFO_LABEL</b>
-<b class="pc">&nbsp;                    || field.getType() == FieldType.PAGE_BREAK) {</b>
-&nbsp;                continue;
-&nbsp;            }
-<b class="fc">&nbsp;            String columnName = field.getColumnName();</b>
-<b class="pc">&nbsp;            if (columnName == null || columnName.trim().isEmpty()) {</b>
-<b class="nc">&nbsp;                columnName = generateColumnName(field.getLabel());</b>
-&nbsp;            }
-<b class="fc">&nbsp;            String sqlType = mapToSqlType(field.getType());</b>
-<b class="fc">&nbsp;            sql.append(columnName).append(&quot; &quot;).append(sqlType).append(&quot;, &quot;);</b>
-&nbsp;        }
-&nbsp;
-<b class="pc">&nbsp;        if (!allFields.isEmpty()) {</b>
-<b class="fc">&nbsp;            sql.setLength(sql.length() - 2);</b>
-&nbsp;        }
-<b class="fc">&nbsp;        sql.append(&quot;);&quot;);</b>
-&nbsp;
-<b class="fc">&nbsp;        jdbcTemplate.execute(sql.toString());</b>
+<b class="fc">&nbsp;    public CustomPermissionEvaluator(UserRepository userRepository) {</b>
+<b class="fc">&nbsp;        this.userRepository = userRepository;</b>
 &nbsp;    }
 &nbsp;
-&nbsp;    @Transactional
-&nbsp;    public void alterDynamicTable(String tableName, List&lt;FieldDefinitionRequestDTO&gt; newFields) {
-<b class="nc">&nbsp;        String checkSql = &quot;SELECT column_name FROM information_schema.columns WHERE table_name = ?&quot;;</b>
-<b class="nc">&nbsp;        List&lt;String&gt; existingColumns = jdbcTemplate.queryForList(checkSql, String.class, tableName);</b>
-&nbsp;
-<b class="nc">&nbsp;        List&lt;FieldDefinitionRequestDTO&gt; allNewFields = new java.util.ArrayList&lt;&gt;();</b>
-<b class="nc">&nbsp;        flattenFields(newFields, allNewFields);</b>
-&nbsp;
-<b class="nc">&nbsp;        for (FieldDefinitionRequestDTO field : allNewFields) {</b>
-<b class="nc">&nbsp;            if (field.getType() == FieldType.SECTION_HEADER || field.getType() == FieldType.INFO_LABEL</b>
-<b class="nc">&nbsp;                    || field.getType() == FieldType.PAGE_BREAK) {</b>
-&nbsp;                continue;
-&nbsp;            }
-<b class="nc">&nbsp;            String columnName = field.getColumnName();</b>
-<b class="nc">&nbsp;            if (columnName == null || columnName.trim().isEmpty()) {</b>
-<b class="nc">&nbsp;                columnName = generateColumnName(field.getLabel());</b>
-&nbsp;            }
-<b class="nc">&nbsp;            if (!existingColumns.contains(columnName)) {</b>
-<b class="nc">&nbsp;                String sql = &quot;ALTER TABLE &quot; + tableName</b>
-<b class="nc">&nbsp;                        + &quot; ADD COLUMN &quot; + columnName</b>
-<b class="nc">&nbsp;                        + &quot; &quot; + mapToSqlType(field.getType());</b>
-<b class="nc">&nbsp;                jdbcTemplate.execute(sql);</b>
-&nbsp;            }
+&nbsp;    @Override
+&nbsp;    public boolean hasPermission(Authentication authentication, Object targetDomainObject, Object permission) {
+<b class="nc">&nbsp;        if (authentication == null || targetDomainObject == null || !(permission instanceof String)) {</b>
+<b class="nc">&nbsp;            return false;</b>
 &nbsp;        }
-&nbsp;
-<b class="nc">&nbsp;        if (!existingColumns.contains(&quot;submission_status&quot;)) {</b>
-<b class="nc">&nbsp;            String sql = &quot;ALTER TABLE &quot; + tableName + &quot; ADD COLUMN submission_status VARCHAR(20) DEFAULT &#39;FINAL&#39;&quot;;</b>
-<b class="nc">&nbsp;            jdbcTemplate.execute(sql);</b>
-&nbsp;        }
+&nbsp;        // This method can be implemented if passing the actual target object
+<b class="nc">&nbsp;        return false;</b>
 &nbsp;    }
 &nbsp;
-&nbsp;    public List&lt;String&gt; getColumnValues(Long formId, String columnName) {
-<b class="nc">&nbsp;        Form form = formRepository.findById(formId)</b>
-<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;Form not found&quot;));</b>
-&nbsp;
-<b class="nc">&nbsp;        boolean columnExists = form.getVersions().get(0).getFields().stream()</b>
-<b class="nc">&nbsp;                .anyMatch(f -&gt; f.getColumnName().equals(columnName));</b>
-&nbsp;
-<b class="nc">&nbsp;        if (!columnExists) {</b>
-<b class="nc">&nbsp;            throw new RuntimeException(&quot;Invalid column name: &quot; + columnName);</b>
+&nbsp;    @Override
+&nbsp;    public boolean hasPermission(Authentication authentication, Serializable targetId, String targetType, Object permission) {
+<b class="nc">&nbsp;        if (authentication == null || targetId == null || targetType == null || !(permission instanceof String)) {</b>
+<b class="nc">&nbsp;            return false;</b>
 &nbsp;        }
 &nbsp;
-<b class="nc">&nbsp;        String tableName = form.getTargetTableName();</b>
-<b class="nc">&nbsp;        String sql = &quot;SELECT DISTINCT &quot; + columnName + &quot; FROM &quot; + tableName</b>
-<b class="nc">&nbsp;                + &quot; WHERE &quot; + columnName + &quot; IS NOT NULL&quot;;</b>
+<b class="nc">&nbsp;        AppUser user = userRepository.findByUsername(authentication.getName())</b>
+<b class="nc">&nbsp;                .orElse(null);</b>
+&nbsp;        
+<b class="nc">&nbsp;        if (user == null) return false;</b>
 &nbsp;
-<b class="nc">&nbsp;        return jdbcTemplate.queryForList(sql, String.class);</b>
-&nbsp;    }
+<b class="nc">&nbsp;        String permissionName = (String) permission;</b>
 &nbsp;
-&nbsp;    private String generateColumnName(String label) {
-<b class="nc">&nbsp;        return label.trim().toLowerCase().replaceAll(&quot;[^a-z0-9]+&quot;, &quot;_&quot;);</b>
-&nbsp;    }
-&nbsp;
-&nbsp;    private String mapToSqlType(FieldType type) {
-<b class="pc">&nbsp;        return switch (type) {</b>
-<b class="fc">&nbsp;            case TEXT, DROPDOWN, RADIO, FILE, LOOKUP -&gt; &quot;VARCHAR(500)&quot;;</b>
-<b class="fc">&nbsp;            case NUMERIC, RATING, SCALE -&gt; &quot;INTEGER&quot;;</b>
-<b class="nc">&nbsp;            case DATE -&gt; &quot;DATE&quot;;</b>
-<b class="nc">&nbsp;            case TIME -&gt; &quot;TIME&quot;;</b>
-<b class="nc">&nbsp;            case DATE_TIME -&gt; &quot;TIMESTAMP&quot;;</b>
-<b class="nc">&nbsp;            case BOOLEAN -&gt; &quot;BOOLEAN&quot;;</b>
-&nbsp;            case TEXTAREA, CHECKBOX_GROUP,
-&nbsp;                    GRID_RADIO, GRID_CHECK -&gt;
-<b class="nc">&nbsp;                &quot;TEXT&quot;;</b>
-<b class="nc">&nbsp;            case SECTION_HEADER, INFO_LABEL, PAGE_BREAK -&gt; null;</b>
-<b class="nc">&nbsp;            case CALCULATED -&gt; &quot;DOUBLE PRECISION&quot;;</b>
-<b class="nc">&nbsp;            default -&gt; &quot;VARCHAR(255)&quot;;</b>
-&nbsp;        };
-&nbsp;    }
-&nbsp;
-&nbsp;    private void flattenFields(List&lt;FieldDefinitionRequestDTO&gt; fields, List&lt;FieldDefinitionRequestDTO&gt; allFields) {
-<b class="pc">&nbsp;        if (fields == null)</b>
-&nbsp;            return;
-<b class="fc">&nbsp;        for (FieldDefinitionRequestDTO field : fields) {</b>
-<b class="fc">&nbsp;            allFields.add(field);</b>
-<b class="pc">&nbsp;            if (field.getChildren() != null &amp;&amp; !field.getChildren().isEmpty()) {</b>
-<b class="nc">&nbsp;                flattenFields(field.getChildren(), allFields);</b>
-&nbsp;            }
+<b class="nc">&nbsp;        if (&quot;FORM&quot;.equalsIgnoreCase(targetType)) {</b>
+<b class="nc">&nbsp;            Long formId = (Long) targetId;</b>
+<b class="nc">&nbsp;            return user.hasPermission(permissionName, formId);</b>
 &nbsp;        }
+&nbsp;
+&nbsp;        // Generic global check
+<b class="nc">&nbsp;        return user.hasPermission(permissionName, null);</b>
 &nbsp;    }
 &nbsp;}
 </code>
@@ -265,7 +160,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

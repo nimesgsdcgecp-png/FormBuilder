@@ -1,0 +1,86 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > UserFormRoleRepository</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.repository</a>
+</div>
+
+<h1>Coverage Summary for Class: UserFormRoleRepository (com.sttl.formbuilder2.repository)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+</tr>
+<tr>
+  <td class="name">UserFormRoleRepository</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.repository;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.entity.UserFormRole;
+&nbsp;import org.springframework.data.jpa.repository.JpaRepository;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;public interface UserFormRoleRepository extends JpaRepository&lt;UserFormRole, Long&gt; {
+&nbsp;    List&lt;UserFormRole&gt; findByUserId(Long userId);
+&nbsp;    List&lt;UserFormRole&gt; findByUserIdAndFormId(Long userId, Long formId);
+&nbsp;    List&lt;UserFormRole&gt; findByUserIdAndFormIdIsNull(Long userId);
+&nbsp;    List&lt;UserFormRole&gt; findByRoleId(Long roleId);
+&nbsp;    
+&nbsp;    List&lt;UserFormRole&gt; findAllByFormId(Long formId);
+&nbsp;
+&nbsp;    @org.springframework.data.jpa.repository.Modifying
+&nbsp;    @org.springframework.transaction.annotation.Transactional
+&nbsp;    void deleteByUserId(Long userId);
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

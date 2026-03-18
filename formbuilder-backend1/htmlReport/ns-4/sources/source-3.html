@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > RuleActionDTO</title>
+  <title>Coverage Report > RuleConditionDTO</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.dto.internal</a>
 </div>
 
-<h1>Coverage Summary for Class: RuleActionDTO (com.sttl.formbuilder2.dto.internal)</h1>
+<h1>Coverage Summary for Class: RuleConditionDTO (com.sttl.formbuilder2.dto.internal)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,7 +45,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">RuleActionDTO</td>
+  <td class="name">RuleConditionDTO</td>
 <td class="coverageStat">
   <span class="percent">
     0%
@@ -59,7 +59,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/1)
+    (0/2)
   </span>
 </td>
 <td class="coverageStat">
@@ -67,7 +67,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/30)
+    (0/40)
   </span>
 </td>
 <td class="coverageStat">
@@ -75,7 +75,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/1)
+    (0/2)
   </span>
 </td>
 </tr>
@@ -89,36 +89,37 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.internal;
 &nbsp;
-&nbsp;import com.sttl.formbuilder2.model.enums.ActionType;
+&nbsp;import com.sttl.formbuilder2.model.enums.RuleOperator;
 &nbsp;import lombok.Data;
 &nbsp;
 &nbsp;/**
-&nbsp; * RuleActionDTO — Internal Action Representation for the Rule Engine
+&nbsp; * RuleConditionDTO — Internal Condition Representation for the Rule Engine
 &nbsp; *
 &nbsp; * What it does:
 &nbsp; * Deserialized from the JSON rules stored in
 &nbsp; * {@link com.sttl.formbuilder2.model.entity.FormVersion#rules}. Represents the
-&nbsp; * THEN part of a single rule executed by {@code RuleEngineService} when the
-&nbsp; * associated condition evaluates to {@code true}.
+&nbsp; * IF part of a single rule evaluated by
+&nbsp; * {@code RuleEngineService.evaluateCondition()}.
 &nbsp; *
 &nbsp; * Why it&#39;s in {@code dto.internal}:
 &nbsp; * The API-facing equivalent is
-&nbsp; * {@link com.sttl.formbuilder2.dto.request.RuleActionRequestDTO}, used when
-&nbsp; * saving form rules from the builder. This DTO is only used during submission
-&nbsp; * processing — never received directly from an HTTP request.
+&nbsp; * {@link com.sttl.formbuilder2.dto.request.RuleConditionRequestDTO}, used when
+&nbsp; * saving form rules from the builder. This DTO is only used to read rules from
+&nbsp; * the database during form submission processing.
 &nbsp; *
 &nbsp; * Fields:
-&nbsp; * - {@code type} — what to do (REQUIRE, VALIDATION_ERROR, SEND_EMAIL, etc.)
-&nbsp; * - {@code targetField} — the columnName of the field to act on (for
-&nbsp; * SHOW/HIDE/REQUIRE).
-&nbsp; * - {@code message} — custom error text for VALIDATION_ERROR, or the recipient
-&nbsp; * email address for SEND_EMAIL.
+&nbsp; * - {@code field} — the SQL columnName of the answer to evaluate.
+&nbsp; * - {@code operator} — comparison type (EQUALS, CONTAINS, GREATER_THAN, etc.)
+&nbsp; * - {@code value} — the target value to compare against
+&nbsp; * (String/Number/Boolean).
 &nbsp; */
 <b class="nc">&nbsp;@Data</b>
-&nbsp;public class RuleActionDTO {
-&nbsp;    private ActionType type;
-&nbsp;    private String targetField;
-&nbsp;    private String message;
+<b class="nc">&nbsp;@lombok.EqualsAndHashCode(callSuper = true)</b>
+&nbsp;public class RuleConditionDTO extends RuleConditionEntryDTO {
+&nbsp;    private String field;
+&nbsp;    private RuleOperator operator;
+&nbsp;    private Object value; // Could be String, Integer, or Boolean
+&nbsp;    private String valueType; // &quot;STATIC&quot; or &quot;FIELD&quot;
 &nbsp;}
 </code>
 </pre>
@@ -143,7 +144,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

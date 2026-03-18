@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > FileUploadController</title>
+  <title>Coverage Report > AuthController</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.controller</a>
 </div>
 
-<h1>Coverage Summary for Class: FileUploadController (com.sttl.formbuilder2.controller)</h1>
+<h1>Coverage Summary for Class: AuthController (com.sttl.formbuilder2.controller)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,7 +45,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">FileUploadController</td>
+  <td class="name">AuthController</td>
 <td class="coverageStat">
   <span class="percent">
     100%
@@ -56,26 +56,26 @@ Current scope:     <a href="../../index.html">all classes</a>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    33.3%
+    100%
   </span>
   <span class="absValue">
-    (1/3)
+    (7/7)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    50%
   </span>
   <span class="absValue">
-    (0/6)
+    (12/24)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    11.5%
+    93.4%
   </span>
   <span class="absValue">
-    (3/26)
+    (57/61)
   </span>
 </td>
 </tr>
@@ -89,138 +89,157 @@ Current scope:     <a href="../../index.html">all classes</a>
 <pre>
 <code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.controller;
 &nbsp;
-&nbsp;import org.springframework.core.io.Resource;
-&nbsp;import org.springframework.core.io.UrlResource;
-&nbsp;import org.springframework.http.HttpHeaders;
-&nbsp;import org.springframework.http.MediaType;
+&nbsp;import jakarta.servlet.http.HttpServletRequest;
+&nbsp;import jakarta.servlet.http.HttpSession;
+&nbsp;import org.springframework.http.HttpStatus;
 &nbsp;import org.springframework.http.ResponseEntity;
+&nbsp;import org.springframework.security.authentication.AuthenticationManager;
+&nbsp;import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+&nbsp;import org.springframework.security.core.Authentication;
+&nbsp;import org.springframework.security.core.AuthenticationException;
+&nbsp;import org.springframework.security.core.authority.SimpleGrantedAuthority;
+&nbsp;import org.springframework.security.core.context.SecurityContext;
+&nbsp;import org.springframework.security.core.context.SecurityContextHolder;
+&nbsp;import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+&nbsp;import org.springframework.security.crypto.password.PasswordEncoder;
 &nbsp;import org.springframework.web.bind.annotation.*;
-&nbsp;import org.springframework.web.multipart.MultipartFile;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import com.sttl.formbuilder2.service.UserService;
+&nbsp;import com.sttl.formbuilder2.service.AuditService;
 &nbsp;
-&nbsp;import java.io.IOException;
-&nbsp;import java.net.MalformedURLException;
-&nbsp;import java.nio.file.Files;
-&nbsp;import java.nio.file.Path;
-&nbsp;import java.nio.file.Paths;
-&nbsp;import java.nio.file.StandardCopyOption;
-&nbsp;import java.util.HashMap;
+&nbsp;import java.util.Collection;
 &nbsp;import java.util.Map;
-&nbsp;import java.util.UUID;
+&nbsp;import java.util.Set;
+&nbsp;import java.util.stream.Collectors;
+&nbsp;import java.util.stream.Stream;
 &nbsp;
-&nbsp;/**
-&nbsp; * FileUploadController — REST Controller for File Upload and Serving
-&nbsp; *
-&nbsp; * What it does:
-&nbsp; * Handles the FILE field type used in forms. When a respondent uploads a file,
-&nbsp; * it is stored on the local filesystem under an {@code uploads/} folder in the
-&nbsp; * project root. The backend returns a relative URL that the frontend stores as
-&nbsp; * the submission value, and the file can later be downloaded via the serve
-&nbsp; * endpoint.
-&nbsp; *
-&nbsp; * Endpoints:
-&nbsp; * POST /api/upload — Accept a multipart file, save it with a UUID
-&nbsp; * filename, return {url, fileName}.
-&nbsp; * GET /api/files/{fileName} — Stream a previously uploaded file as a download.
-&nbsp; *
-&nbsp; * Application flow for a FILE field:
-&nbsp; * 1. Respondent selects a file on the public form page.
-&nbsp; * 2. Frontend sends a POST /api/upload request.
-&nbsp; * 3. This controller saves the file and returns
-&nbsp; * {@code &quot;/api/files/&lt;uuid&gt;.ext&quot;}.
-&nbsp; * 4. The frontend stores that URL as the field value and submits the form.
-&nbsp; * 5. On the responses page, the file URL is rendered as a Download link that
-&nbsp; * calls GET /api/files/{fileName}.
-&nbsp; *
-&nbsp; * Production note:
-&nbsp; * File storage on the local filesystem is suitable for development only. In
-&nbsp; * production, replace with cloud storage (e.g. AWS S3, Google Cloud Storage).
-&nbsp; *
-&nbsp; * CORS: explicitly set on this controller to align with the global WebConfig
-&nbsp; * setting.
-&nbsp; */
 &nbsp;@RestController
-&nbsp;@RequestMapping(&quot;/api&quot;)
-&nbsp;@CrossOrigin(origins = &quot;http://localhost:3000&quot;, allowCredentials = &quot;true&quot;)
-&nbsp;public class FileUploadController {
+&nbsp;@RequestMapping(&quot;/api/auth&quot;)
+&nbsp;public class AuthController {
 &nbsp;
-&nbsp;    /**
-&nbsp;     * Absolute path to the local upload directory (created on startup if absent).
-&nbsp;     */
-<b class="fc">&nbsp;    private final Path fileStorageLocation = Paths.get(&quot;uploads&quot;).toAbsolutePath().normalize();</b>
+&nbsp;    private final AuthenticationManager authenticationManager;
+&nbsp;    private final UserRepository userRepository;
+&nbsp;    private final PasswordEncoder passwordEncoder;
+&nbsp;    private final UserService userService;
+&nbsp;    private final AuditService auditService;
 &nbsp;
-<b class="fc">&nbsp;    public FileUploadController() {</b>
+<b class="fc">&nbsp;    public AuthController(AuthenticationManager authenticationManager, </b>
+&nbsp;                          UserRepository userRepository,
+&nbsp;                          PasswordEncoder passwordEncoder,
+&nbsp;                          UserService userService,
+&nbsp;                          AuditService auditService) {
+<b class="fc">&nbsp;        this.authenticationManager = authenticationManager;</b>
+<b class="fc">&nbsp;        this.userRepository = userRepository;</b>
+<b class="fc">&nbsp;        this.passwordEncoder = passwordEncoder;</b>
+<b class="fc">&nbsp;        this.userService = userService;</b>
+<b class="fc">&nbsp;        this.auditService = auditService;</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @PostMapping(&quot;/login&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; login(@RequestBody Map&lt;String, String&gt; credentials, HttpServletRequest request) {
 &nbsp;        try {
-<b class="fc">&nbsp;            Files.createDirectories(this.fileStorageLocation);</b>
-&nbsp;        } catch (Exception ex) {
-<b class="nc">&nbsp;            throw new RuntimeException(&quot;Could not create the directory where the uploaded files will be stored.&quot;, ex);</b>
+<b class="fc">&nbsp;            String username = credentials.get(&quot;username&quot;);</b>
+<b class="fc">&nbsp;            String password = credentials.get(&quot;password&quot;);</b>
+&nbsp;
+&nbsp;            // 1. Perform Authentication
+<b class="fc">&nbsp;            UsernamePasswordAuthenticationToken authRequest = new UsernamePasswordAuthenticationToken(username,</b>
+<b class="fc">&nbsp;                    password);</b>
+<b class="fc">&nbsp;            Authentication authentication = authenticationManager.authenticate(authRequest);</b>
+&nbsp;
+&nbsp;            // 2. Establish Security Context
+<b class="fc">&nbsp;            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();</b>
+<b class="fc">&nbsp;            securityContext.setAuthentication(authentication);</b>
+<b class="fc">&nbsp;            SecurityContextHolder.setContext(securityContext);</b>
+&nbsp;
+&nbsp;            // 3. Save Security Context to Http Session (crucial for JSESSIONID cookie
+&nbsp;            // generation)
+<b class="fc">&nbsp;            HttpSession session = request.getSession(true);</b>
+<b class="fc">&nbsp;            session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);</b>
+&nbsp;
+<b class="fc">&nbsp;            auditService.log(&quot;LOGIN&quot;, username, &quot;USER&quot;, null, &quot;User logged in successfully&quot;);</b>
+<b class="fc">&nbsp;            return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Login successful&quot;, &quot;username&quot;, username));</b>
+&nbsp;
+&nbsp;        } catch (AuthenticationException e) {
+<b class="fc">&nbsp;            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(&quot;error&quot;, &quot;Invalid username or password&quot;));</b>
 &nbsp;        }
 &nbsp;    }
 &nbsp;
-&nbsp;    /**
-&nbsp;     * POST /api/upload
-&nbsp;     *
-&nbsp;     * Accepts a multipart file upload. Generates a UUID-based filename to avoid
-&nbsp;     * collisions while preserving the original extension. Returns a JSON body:
-&nbsp;     * {@code {&quot;url&quot;: &quot;/api/files/&lt;uuid.ext&gt;&quot;, &quot;fileName&quot;: &quot;&lt;original name&gt;&quot;}}
-&nbsp;     *
-&nbsp;     * @param file The uploaded {@code MultipartFile} sent with the key &quot;file&quot;.
-&nbsp;     * @return A map containing the relative access URL and the original filename.
-&nbsp;     */
-&nbsp;    @PostMapping(&quot;/upload&quot;)
-&nbsp;    public ResponseEntity&lt;Map&lt;String, String&gt;&gt; uploadFile(@RequestParam(&quot;file&quot;) MultipartFile file) {
-&nbsp;        try {
-&nbsp;            // Preserve the original file extension
-<b class="nc">&nbsp;            String originalFileName = file.getOriginalFilename();</b>
-<b class="nc">&nbsp;            String fileExtension = &quot;&quot;;</b>
-<b class="nc">&nbsp;            if (originalFileName != null &amp;&amp; originalFileName.contains(&quot;.&quot;)) {</b>
-<b class="nc">&nbsp;                fileExtension = originalFileName.substring(originalFileName.lastIndexOf(&quot;.&quot;));</b>
-&nbsp;            }
-&nbsp;
-&nbsp;            // UUID filename prevents collisions and hides original names
-<b class="nc">&nbsp;            String fileName = UUID.randomUUID().toString() + fileExtension;</b>
-&nbsp;
-&nbsp;            // Write the uploaded bytes to the local uploads/ directory
-<b class="nc">&nbsp;            Path targetLocation = this.fileStorageLocation.resolve(fileName);</b>
-<b class="nc">&nbsp;            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);</b>
-&nbsp;
-&nbsp;            // Return a relative URL — the frontend prefixes it with the backend base URL
-<b class="nc">&nbsp;            Map&lt;String, String&gt; response = new HashMap&lt;&gt;();</b>
-<b class="nc">&nbsp;            response.put(&quot;url&quot;, &quot;/api/files/&quot; + fileName);</b>
-<b class="nc">&nbsp;            response.put(&quot;fileName&quot;, originalFileName);</b>
-&nbsp;
-<b class="nc">&nbsp;            return ResponseEntity.ok(response);</b>
-&nbsp;        } catch (IOException ex) {
-<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, &quot;Could not upload file&quot;));</b>
+&nbsp;    @PostMapping(&quot;/logout&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; logout(HttpServletRequest request) {
+<b class="fc">&nbsp;        HttpSession session = request.getSession(false);</b>
+<b class="pc">&nbsp;        if (session != null) {</b>
+<b class="pc">&nbsp;            String username = SecurityContextHolder.getContext().getAuthentication() != null ? </b>
+<b class="fc">&nbsp;                             SecurityContextHolder.getContext().getAuthentication().getName() : &quot;unknown&quot;;</b>
+<b class="fc">&nbsp;            auditService.log(&quot;LOGOUT&quot;, username, &quot;USER&quot;, null, &quot;User logged out&quot;);</b>
+<b class="fc">&nbsp;            session.invalidate();</b>
 &nbsp;        }
+<b class="fc">&nbsp;        SecurityContextHolder.clearContext();</b>
+<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Logout successful&quot;));</b>
 &nbsp;    }
 &nbsp;
-&nbsp;    /**
-&nbsp;     * GET /api/files/{fileName}
-&nbsp;     *
-&nbsp;     * Serves a previously uploaded file as an octet-stream download. The filename
-&nbsp;     * in the path is the UUID-based name generated at upload time.
-&nbsp;     *
-&nbsp;     * @param fileName The UUID-based filename (e.g. &quot;3f2e...abc.pdf&quot;).
-&nbsp;     * @return The file as a downloadable binary response, or 404 if not found.
-&nbsp;     */
-&nbsp;    @GetMapping(&quot;/files/{fileName:.+}&quot;)
-&nbsp;    public ResponseEntity&lt;Resource&gt; downloadFile(@PathVariable String fileName) {
-&nbsp;        try {
-<b class="nc">&nbsp;            Path filePath = this.fileStorageLocation.resolve(fileName).normalize();</b>
-<b class="nc">&nbsp;            Resource resource = new UrlResource(filePath.toUri());</b>
+&nbsp;    @PostMapping(&quot;/register&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; register(@RequestBody Map&lt;String, String&gt; payload) {
+<b class="fc">&nbsp;        String username = payload.get(&quot;username&quot;);</b>
+<b class="fc">&nbsp;        String password = payload.get(&quot;password&quot;);</b>
 &nbsp;
-<b class="nc">&nbsp;            if (resource.exists()) {</b>
-<b class="nc">&nbsp;                return ResponseEntity.ok()</b>
-<b class="nc">&nbsp;                        .contentType(MediaType.parseMediaType(&quot;application/octet-stream&quot;))</b>
-<b class="nc">&nbsp;                        .header(HttpHeaders.CONTENT_DISPOSITION,</b>
-<b class="nc">&nbsp;                                &quot;attachment; filename=\&quot;&quot; + resource.getFilename() + &quot;\&quot;&quot;)</b>
-<b class="nc">&nbsp;                        .body(resource);</b>
-&nbsp;            } else {
-<b class="nc">&nbsp;                return ResponseEntity.notFound().build();</b>
-&nbsp;            }
-&nbsp;        } catch (MalformedURLException ex) {
-<b class="nc">&nbsp;            return ResponseEntity.notFound().build();</b>
+<b class="pc">&nbsp;        if (username == null || username.isBlank() || password == null || password.isBlank()) {</b>
+<b class="nc">&nbsp;            return ResponseEntity.badRequest().body(Map.of(&quot;error&quot;, &quot;Username and password are required&quot;));</b>
 &nbsp;        }
+&nbsp;
+<b class="pc">&nbsp;        if (userRepository.findByUsername(username).isPresent()) {</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(&quot;error&quot;, &quot;Username already exists&quot;));</b>
+&nbsp;        }
+&nbsp;
+<b class="fc">&nbsp;        AppUser newUser = new AppUser();</b>
+<b class="fc">&nbsp;        newUser.setUsername(username);</b>
+<b class="fc">&nbsp;        newUser.setPasswordHash(passwordEncoder.encode(password));</b>
+&nbsp;
+<b class="fc">&nbsp;        newUser = userRepository.save(newUser);</b>
+&nbsp;        
+&nbsp;        // Assign default role
+<b class="fc">&nbsp;        userService.assignDefaultRole(newUser);</b>
+&nbsp;
+<b class="fc">&nbsp;        auditService.log(&quot;REGISTER&quot;, username, &quot;USER&quot;, newUser.getId().toString(), &quot;New user registered&quot;);</b>
+&nbsp;
+<b class="fc">&nbsp;        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(&quot;message&quot;, &quot;User registered successfully&quot;));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/me&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getCurrentUser(Authentication authentication) {
+<b class="pc">&nbsp;        if (authentication == null || !authentication.isAuthenticated()) {</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();</b>
+&nbsp;        }
+<b class="fc">&nbsp;        AppUser user = userRepository.findByUsername(authentication.getName())</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;
+&nbsp;        // Fetch fresh authorities from DB to avoid session staleness
+<b class="fc">&nbsp;        Set&lt;SimpleGrantedAuthority&gt; permissions = user.getPermissions().stream()</b>
+<b class="fc">&nbsp;                .map(SimpleGrantedAuthority::new)</b>
+<b class="fc">&nbsp;                .collect(Collectors.toSet());</b>
+&nbsp;        
+<b class="fc">&nbsp;        Set&lt;SimpleGrantedAuthority&gt; roles = user.getUserFormRoles().stream()</b>
+<b class="fc">&nbsp;                .map(ufr -&gt; {</b>
+<b class="fc">&nbsp;                    String roleName = ufr.getRole().getName();</b>
+<b class="pc">&nbsp;                    return new SimpleGrantedAuthority(roleName.startsWith(&quot;ROLE_&quot;) ? roleName : &quot;ROLE_&quot; + roleName);</b>
+&nbsp;                })
+<b class="fc">&nbsp;                .collect(Collectors.toSet());</b>
+&nbsp;
+<b class="fc">&nbsp;        Collection&lt;SimpleGrantedAuthority&gt; authorities = Stream.concat(permissions.stream(), roles.stream())</b>
+<b class="fc">&nbsp;                .collect(Collectors.toSet());</b>
+&nbsp;
+<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(</b>
+<b class="fc">&nbsp;                &quot;id&quot;, user.getId(),</b>
+<b class="fc">&nbsp;                &quot;username&quot;, user.getUsername(),</b>
+<b class="fc">&nbsp;                &quot;roles&quot;, authorities));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/permissions&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getUserPermissions(Authentication authentication) {
+<b class="pc">&nbsp;        if (authentication == null || !authentication.isAuthenticated()) {</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();</b>
+&nbsp;        }
+<b class="fc">&nbsp;        return ResponseEntity.ok(userService.getUserPermissions(authentication.getName()));</b>
 &nbsp;    }
 &nbsp;}
 </code>
@@ -246,7 +265,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-package com.sttl.formbuilder2.dto;
+package com.sttl.formbuilder2.dto.response;
 
 import lombok.Data;
 

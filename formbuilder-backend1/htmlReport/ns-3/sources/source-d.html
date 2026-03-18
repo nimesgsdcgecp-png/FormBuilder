@@ -1,0 +1,301 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > WorkflowController</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.controller</a>
+</div>
+
+<h1>Coverage Summary for Class: WorkflowController (com.sttl.formbuilder2.controller)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+<th class="coverageStat 
+">
+  Class, %
+</th>
+<th class="coverageStat 
+">
+  Method, %
+</th>
+<th class="coverageStat 
+">
+  Branch, %
+</th>
+<th class="coverageStat 
+">
+  Line, %
+</th>
+</tr>
+<tr>
+  <td class="name">WorkflowController</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    75%
+  </span>
+  <span class="absValue">
+    (9/12)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    12.5%
+  </span>
+  <span class="absValue">
+    (1/8)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    71.3%
+  </span>
+  <span class="absValue">
+    (62/87)
+  </span>
+</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.controller;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.dto.request.WorkflowRequestDTO;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.WorkflowInstance;
+&nbsp;import com.sttl.formbuilder2.model.entity.WorkflowStep;
+&nbsp;import com.sttl.formbuilder2.repository.UserRepository;
+&nbsp;import com.sttl.formbuilder2.service.WorkflowService;
+&nbsp;import lombok.RequiredArgsConstructor;
+&nbsp;import org.springframework.http.ResponseEntity;
+&nbsp;import org.springframework.security.core.annotation.AuthenticationPrincipal;
+&nbsp;import org.springframework.security.core.userdetails.UserDetails;
+&nbsp;import org.springframework.web.bind.annotation.*;
+&nbsp;
+&nbsp;import java.util.HashMap;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Map;
+&nbsp;
+&nbsp;@RestController
+&nbsp;@RequestMapping(&quot;/api/workflows&quot;)
+<b class="fc">&nbsp;@RequiredArgsConstructor</b>
+&nbsp;public class WorkflowController {
+&nbsp;
+&nbsp;    private final WorkflowService workflowService;
+&nbsp;    private final UserRepository userRepository;
+&nbsp;
+&nbsp;    @PostMapping(&quot;/initiate&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; initiate(@RequestBody WorkflowRequestDTO request, @AuthenticationPrincipal UserDetails userDetails) {
+<b class="fc">&nbsp;        AppUser creator = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="fc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;        
+<b class="fc">&nbsp;        WorkflowInstance instance = workflowService.initiateWorkflow(creator, request);</b>
+<b class="fc">&nbsp;        return ResponseEntity.ok(Map.of(</b>
+<b class="fc">&nbsp;            &quot;message&quot;, &quot;Workflow initiated successfully&quot;,</b>
+<b class="fc">&nbsp;            &quot;id&quot;, instance.getId(),</b>
+<b class="fc">&nbsp;            &quot;status&quot;, instance.getStatus().name()</b>
+&nbsp;        ));
+&nbsp;    }
+&nbsp;
+&nbsp;    @PostMapping(&quot;/steps/{id}/approve&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; approve(@PathVariable(&quot;id&quot;) Long id, @RequestBody Map&lt;String, String&gt; payload, @AuthenticationPrincipal UserDetails userDetails) {
+&nbsp;        try {
+<b class="fc">&nbsp;            AppUser actor = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="fc">&nbsp;                    .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;            
+<b class="fc">&nbsp;            workflowService.approveStep(id, payload.get(&quot;comments&quot;), actor);</b>
+<b class="fc">&nbsp;            return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Step approved successfully&quot;));</b>
+&nbsp;        } catch (RuntimeException e) {
+<b class="nc">&nbsp;            String msg = e.getMessage();</b>
+<b class="nc">&nbsp;            if (msg.contains(&quot;Unauthorized&quot;) || msg.contains(&quot;assigned approver&quot;)) {</b>
+<b class="nc">&nbsp;                return ResponseEntity.status(403).body(Map.of(&quot;error&quot;, msg));</b>
+&nbsp;            }
+<b class="nc">&nbsp;            if (msg.contains(&quot;not found&quot;)) {</b>
+<b class="nc">&nbsp;                return ResponseEntity.status(404).body(Map.of(&quot;error&quot;, msg));</b>
+&nbsp;            }
+<b class="nc">&nbsp;            System.err.println(&quot;&gt;&gt;&gt; RuntimeException in approve: &quot; + msg);</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(400).body(Map.of(&quot;error&quot;, msg));</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            System.err.println(&quot;&gt;&gt;&gt; Unexpected Error in approve: &quot; + e.getMessage());</b>
+<b class="nc">&nbsp;            e.printStackTrace();</b>
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, &quot;An unexpected error occurred: &quot; + e.getMessage()));</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    @PostMapping(&quot;/steps/{id}/reject&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; reject(@PathVariable(&quot;id&quot;) Long id, @RequestBody Map&lt;String, String&gt; payload, @AuthenticationPrincipal UserDetails userDetails) {
+<b class="nc">&nbsp;        AppUser actor = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="nc">&nbsp;                .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;
+<b class="nc">&nbsp;        workflowService.rejectStep(id, payload.get(&quot;comments&quot;), actor);</b>
+<b class="nc">&nbsp;        return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Workflow rejected&quot;));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/available-authorities&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getAvailableAuthorities(@RequestParam(value = &quot;formId&quot;, required = false) Long formId) {
+<b class="fc">&nbsp;        return ResponseEntity.ok(workflowService.getAvailableAuthorities(formId));</b>
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/fix-db&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; fixDb() {
+&nbsp;        try {
+<b class="nc">&nbsp;            workflowService.fixDatabaseConstraints();</b>
+<b class="nc">&nbsp;            return ResponseEntity.ok(Map.of(&quot;message&quot;, &quot;Database constraints fixed manually&quot;));</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, e.getMessage()));</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/my-submissions&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getMySubmissions(@AuthenticationPrincipal UserDetails userDetails) {
+&nbsp;        try {
+<b class="fc">&nbsp;            AppUser creator = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="fc">&nbsp;                    .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;            
+<b class="fc">&nbsp;            List&lt;WorkflowInstance&gt; instances = workflowService.getWorkflowsCreatedByUser(creator);</b>
+&nbsp;            
+<b class="fc">&nbsp;            List&lt;Map&lt;String, Object&gt;&gt; response = instances.stream().map(this::mapInstanceToDetailedMap).toList();</b>
+<b class="fc">&nbsp;            return ResponseEntity.ok(response);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, e.getMessage()));</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/my-handled&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getMyHandledWorkflows(@AuthenticationPrincipal UserDetails userDetails) {
+&nbsp;        try {
+<b class="nc">&nbsp;            AppUser actor = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="nc">&nbsp;                    .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;            
+<b class="nc">&nbsp;            List&lt;WorkflowInstance&gt; instances = workflowService.getWorkflowsHandledByUser(actor);</b>
+&nbsp;            
+<b class="nc">&nbsp;            List&lt;Map&lt;String, Object&gt;&gt; response = instances.stream().map(this::mapInstanceToDetailedMap).toList();</b>
+<b class="nc">&nbsp;            return ResponseEntity.ok(response);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, e.getMessage()));</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    @GetMapping(&quot;/my-pending&quot;)
+&nbsp;    public ResponseEntity&lt;?&gt; getMyPendingSteps(@AuthenticationPrincipal UserDetails userDetails) {
+&nbsp;        try {
+<b class="fc">&nbsp;            AppUser actor = userRepository.findByUsername(userDetails.getUsername())</b>
+<b class="fc">&nbsp;                    .orElseThrow(() -&gt; new RuntimeException(&quot;User not found&quot;));</b>
+&nbsp;            
+<b class="fc">&nbsp;            List&lt;WorkflowStep&gt; steps = workflowService.getPendingStepsForUser(actor);</b>
+&nbsp;            
+<b class="fc">&nbsp;            List&lt;Map&lt;String, Object&gt;&gt; response = steps.stream().map(step -&gt; {</b>
+<b class="fc">&nbsp;                Map&lt;String, Object&gt; stepMap = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;                stepMap.put(&quot;id&quot;, step.getId());</b>
+<b class="fc">&nbsp;                stepMap.put(&quot;stepIndex&quot;, step.getStepIndex());</b>
+<b class="fc">&nbsp;                stepMap.put(&quot;status&quot;, step.getStatus().name());</b>
+<b class="fc">&nbsp;                stepMap.put(&quot;instance&quot;, mapInstanceToDetailedMap(step.getInstance()));</b>
+<b class="fc">&nbsp;                return stepMap;</b>
+<b class="fc">&nbsp;            }).toList();</b>
+&nbsp;
+<b class="fc">&nbsp;            return ResponseEntity.ok(response);</b>
+&nbsp;        } catch (Exception e) {
+<b class="nc">&nbsp;            return ResponseEntity.status(500).body(Map.of(&quot;error&quot;, e.getMessage()));</b>
+&nbsp;        }
+&nbsp;    }
+&nbsp;
+&nbsp;    private Map&lt;String, Object&gt; mapInstanceToDetailedMap(WorkflowInstance instance) {
+<b class="fc">&nbsp;        Form form = instance.getForm();</b>
+&nbsp;        
+<b class="fc">&nbsp;        Map&lt;String, Object&gt; formMap = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;        formMap.put(&quot;id&quot;, form.getId());</b>
+<b class="fc">&nbsp;        formMap.put(&quot;title&quot;, form.getTitle());</b>
+<b class="pc">&nbsp;        formMap.put(&quot;description&quot;, form.getDescription() == null ? &quot;&quot; : form.getDescription());</b>
+&nbsp;
+<b class="fc">&nbsp;        Map&lt;String, Object&gt; creatorMap = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;        creatorMap.put(&quot;username&quot;, instance.getCreator().getUsername());</b>
+&nbsp;
+<b class="fc">&nbsp;        List&lt;Map&lt;String, Object&gt;&gt; stepHistory = instance.getSteps().stream().map(s -&gt; {</b>
+<b class="fc">&nbsp;            Map&lt;String, Object&gt; sMap = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;            sMap.put(&quot;id&quot;, s.getId());</b>
+<b class="fc">&nbsp;            sMap.put(&quot;stepIndex&quot;, s.getStepIndex());</b>
+<b class="fc">&nbsp;            sMap.put(&quot;status&quot;, s.getStatus().name());</b>
+<b class="fc">&nbsp;            sMap.put(&quot;approver&quot;, s.getApprover().getUsername());</b>
+&nbsp;            
+&nbsp;            // Add roles in brackets style for easier display
+<b class="fc">&nbsp;            String rolesStr = s.getApprover().getUserFormRoles().stream()</b>
+<b class="fc">&nbsp;                .map(ufr -&gt; ufr.getRole().getName())</b>
+<b class="fc">&nbsp;                .collect(java.util.stream.Collectors.joining(&quot;, &quot;));</b>
+<b class="fc">&nbsp;            sMap.put(&quot;approverRole&quot;, rolesStr);</b>
+&nbsp;            
+<b class="fc">&nbsp;            sMap.put(&quot;comments&quot;, s.getComments());</b>
+<b class="fc">&nbsp;            sMap.put(&quot;decidedAt&quot;, s.getDecidedAt());</b>
+<b class="fc">&nbsp;            return sMap;</b>
+<b class="fc">&nbsp;        }).toList();</b>
+&nbsp;
+<b class="fc">&nbsp;        Map&lt;String, Object&gt; instanceMap = new HashMap&lt;&gt;();</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;id&quot;, instance.getId());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;currentStepIndex&quot;, instance.getCurrentStepIndex());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;totalSteps&quot;, instance.getTotalSteps());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;status&quot;, instance.getStatus().name());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;createdAt&quot;, instance.getCreatedAt());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;updatedAt&quot;, instance.getUpdatedAt());</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;form&quot;, formMap);</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;creator&quot;, creatorMap);</b>
+<b class="fc">&nbsp;        instanceMap.put(&quot;history&quot;, stepHistory);</b>
+&nbsp;        
+<b class="fc">&nbsp;        return instanceMap;</b>
+&nbsp;    }
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

@@ -92,6 +92,10 @@ Current scope:     <a href="../../index.html">all classes</a>
 &nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
 &nbsp;import lombok.Data;
 &nbsp;
+&nbsp;import jakarta.validation.Valid;
+&nbsp;import jakarta.validation.constraints.NotBlank;
+&nbsp;import jakarta.validation.constraints.NotEmpty;
+&nbsp;import jakarta.validation.constraints.NotNull;
 &nbsp;import java.util.List;
 &nbsp;
 &nbsp;/**
@@ -115,11 +119,20 @@ Current scope:     <a href="../../index.html">all classes</a>
 &nbsp; */
 <b class="pc">&nbsp;@Data</b>
 &nbsp;public class CreateFormRequestDTO {
+&nbsp;    @NotBlank(message = &quot;Title is required&quot;)
 &nbsp;    private String title;
+&nbsp;
 &nbsp;    private String description;
+&nbsp;
 &nbsp;    private boolean allowEditResponse;
+&nbsp;
+&nbsp;    @NotNull(message = &quot;Status is required&quot;)
 &nbsp;    private FormStatus status;
+&nbsp;
 &nbsp;    private Object rules;
+&nbsp;
+&nbsp;    @NotEmpty(message = &quot;At least one field is required&quot;)
+&nbsp;    @Valid
 &nbsp;    private List&lt;FieldDefinitionRequestDTO&gt; fields;
 &nbsp;}
 </code>
@@ -145,7 +158,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

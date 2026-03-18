@@ -5,7 +5,7 @@
 <html id="htmlId">
 <head>
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
-  <title>Coverage Report > FormRuleRequestDTO</title>
+  <title>Coverage Report > RoleAssignmentDTO</title>
   <style type="text/css">
     @import "../../css/coverage.css";
     @import "../../css/idea.min.css";
@@ -22,7 +22,7 @@ Current scope:     <a href="../../index.html">all classes</a>
     <a href="../index.html">com.sttl.formbuilder2.dto.request</a>
 </div>
 
-<h1>Coverage Summary for Class: FormRuleRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
+<h1>Coverage Summary for Class: RoleAssignmentDTO (com.sttl.formbuilder2.dto.request)</h1>
 
 <table class="coverageStats">
 <tr>
@@ -45,13 +45,21 @@ Current scope:     <a href="../../index.html">all classes</a>
 </th>
 </tr>
 <tr>
-  <td class="name">FormRuleRequestDTO</td>
+  <td class="name">RoleAssignmentDTO</td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/1)
+    (1/1)
+  </span>
+</td>
+<td class="coverageStat">
+  <span class="percent">
+    100%
+  </span>
+  <span class="absValue">
+    (1/1)
   </span>
 </td>
 <td class="coverageStat">
@@ -59,23 +67,15 @@ Current scope:     <a href="../../index.html">all classes</a>
     0%
   </span>
   <span class="absValue">
-    (0/1)
+    (0/30)
   </span>
 </td>
 <td class="coverageStat">
   <span class="percent">
-    0%
+    100%
   </span>
   <span class="absValue">
-    (0/46)
-  </span>
-</td>
-<td class="coverageStat">
-  <span class="percent">
-    0%
-  </span>
-  <span class="absValue">
-    (0/1)
+    (1/1)
   </span>
 </td>
 </tr>
@@ -91,36 +91,11 @@ Current scope:     <a href="../../index.html">all classes</a>
 &nbsp;
 &nbsp;import lombok.Data;
 &nbsp;
-&nbsp;import java.util.List;
-&nbsp;
-&nbsp;/**
-&nbsp; * FormRuleRequestDTO — Represents a Single Logic Rule in a Form Request
-&nbsp; *
-&nbsp; * What it does:
-&nbsp; * Carries a complete IF→THEN logic rule as part of the create/update payload
-&nbsp; * sent
-&nbsp; * by the frontend builder&#39;s Logic Panel. Multiple rules are included in
-&nbsp; * {@link CreateFormRequestDTO#rules} and {@link UpdateFormRequestDTO#rules}.
-&nbsp; *
-&nbsp; * Application flow:
-&nbsp; * Frontend LogicPanel → POST/PUT /api/forms
-&nbsp; * └── List&lt;FormRuleRequestDTO&gt; → FormService → serialised as JSON →
-&nbsp; * FormVersion.rules (TEXT column)
-&nbsp; * └── At submission time: SubmissionService deserialises →
-&nbsp; * dto.internal.FormRuleDTO → RuleEngineService
-&nbsp; *
-&nbsp; * Design note:
-&nbsp; * This DTO is the API-facing representation. At submission time the rules JSON
-&nbsp; * string is deserialized into {@code dto.internal.FormRuleDTO} (not this
-&nbsp; * class).
-&nbsp; */
-<b class="nc">&nbsp;@Data</b>
-&nbsp;public class FormRuleRequestDTO {
-&nbsp;    private String id;
-&nbsp;    private String name;
-&nbsp;    private String conditionLogic;
-&nbsp;    private List&lt;RuleConditionRequestDTO&gt; conditions;
-&nbsp;    private List&lt;RuleActionRequestDTO&gt; actions;
+<b class="pc">&nbsp;@Data</b>
+&nbsp;public class RoleAssignmentDTO {
+&nbsp;    private Long userId;
+&nbsp;    private Long roleId;
+&nbsp;    private Long formId;
 &nbsp;}
 </code>
 </pre>
@@ -145,7 +120,7 @@ Current scope:     <a href="../../index.html">all classes</a>
 
 <div class="footer">
     
-    <div style="float:right;">generated on 2026-03-11 14:46</div>
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
 </div>
 </body>
 </html>

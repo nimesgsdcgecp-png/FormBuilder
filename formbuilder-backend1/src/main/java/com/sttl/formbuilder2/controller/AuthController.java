@@ -8,6 +8,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -18,7 +19,11 @@ import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.service.UserService;
 import com.sttl.formbuilder2.service.AuditService;
 
+import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -119,10 +124,25 @@ public class AuthController {
         AppUser user = userRepository.findByUsername(authentication.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // Fetch fresh authorities from DB to avoid session staleness
+        Set<SimpleGrantedAuthority> permissions = user.getPermissions().stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toSet());
+        
+        Set<SimpleGrantedAuthority> roles = user.getUserFormRoles().stream()
+                .map(ufr -> {
+                    String roleName = ufr.getRole().getName();
+                    return new SimpleGrantedAuthority(roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName);
+                })
+                .collect(Collectors.toSet());
+
+        Collection<SimpleGrantedAuthority> authorities = Stream.concat(permissions.stream(), roles.stream())
+                .collect(Collectors.toSet());
+
         return ResponseEntity.ok(Map.of(
                 "id", user.getId(),
                 "username", user.getUsername(),
-                "roles", authentication.getAuthorities()));
+                "roles", authorities));
     }
 
     @GetMapping("/permissions")

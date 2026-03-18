@@ -1,0 +1,108 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormRuleRequestDTO</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.dto.request</a>
+</div>
+
+<h1>Coverage Summary for Class: FormRuleRequestDTO (com.sttl.formbuilder2.dto.request)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+</tr>
+<tr>
+  <td class="name">FormRuleRequestDTO</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.dto.request;
+&nbsp;
+&nbsp;import jakarta.validation.Valid;
+&nbsp;import jakarta.validation.constraints.NotBlank;
+&nbsp;import lombok.Data;
+&nbsp;
+&nbsp;import java.util.List;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormRuleRequestDTO — Represents a Single Logic Rule in a Form Request
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Carries a complete IF→THEN logic rule as part of the create/update payload
+&nbsp; * sent
+&nbsp; * by the frontend builder&#39;s Logic Panel. Multiple rules are included in
+&nbsp; * {@link CreateFormRequestDTO#rules} and {@link UpdateFormRequestDTO#rules}.
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * Frontend LogicPanel → POST/PUT /api/forms
+&nbsp; * └── List&lt;FormRuleRequestDTO&gt; → FormService → serialised as JSON →
+&nbsp; * FormVersion.rules (TEXT column)
+&nbsp; * └── At submission time: SubmissionService deserialises →
+&nbsp; * dto.internal.FormRuleDTO → RuleEngineService
+&nbsp; *
+&nbsp; * Design note:
+&nbsp; * This DTO is the API-facing representation. At submission time the rules JSON
+&nbsp; * string is deserialized into {@code dto.internal.FormRuleDTO} (not this
+&nbsp; * class).
+&nbsp; */
+&nbsp;@Data
+&nbsp;public class FormRuleRequestDTO {
+&nbsp;    private String id;
+&nbsp;    @NotBlank(message = &quot;Rule name is required&quot;)
+&nbsp;    private String name;
+&nbsp;    private String conditionLogic;
+&nbsp;    @Valid
+&nbsp;    private List&lt;RuleConditionRequestDTO&gt; conditions;
+&nbsp;    @Valid
+&nbsp;    private List&lt;RuleActionRequestDTO&gt; actions;
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>

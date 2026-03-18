@@ -1,0 +1,143 @@
+
+
+
+<!DOCTYPE html>
+<html id="htmlId">
+<head>
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> 
+  <title>Coverage Report > FormRepository</title>
+  <style type="text/css">
+    @import "../../css/coverage.css";
+    @import "../../css/idea.min.css";
+  </style>
+  <script type="text/javascript" src="../../js/highlight.min.js"></script>
+  <script type="text/javascript" src="../../js/highlightjs-line-numbers.min.js"></script>
+</head>
+
+<body>
+<div class="content">
+<div class="breadCrumbs">
+Current scope:     <a href="../../index.html">all classes</a>
+    <span class="separator">|</span>
+    <a href="../index.html">com.sttl.formbuilder2.repository</a>
+</div>
+
+<h1>Coverage Summary for Class: FormRepository (com.sttl.formbuilder2.repository)</h1>
+
+<table class="coverageStats">
+<tr>
+  <th class="name">Class</th>
+</tr>
+<tr>
+  <td class="name">FormRepository</td>
+</tr>
+
+</table>
+
+<br/>
+<br/>
+
+
+<pre>
+<code class="sourceCode" id="sourceCode">&nbsp;package com.sttl.formbuilder2.repository;
+&nbsp;
+&nbsp;import com.sttl.formbuilder2.model.entity.Form;
+&nbsp;import com.sttl.formbuilder2.model.entity.AppUser;
+&nbsp;import com.sttl.formbuilder2.model.enums.FormStatus;
+&nbsp;import org.springframework.data.jpa.repository.JpaRepository;
+&nbsp;import org.springframework.data.jpa.repository.Query;
+&nbsp;import org.springframework.data.repository.query.Param;
+&nbsp;import org.springframework.stereotype.Repository;
+&nbsp;
+&nbsp;import java.util.List;
+&nbsp;import java.util.Optional;
+&nbsp;
+&nbsp;/**
+&nbsp; * FormRepository — Data Access Layer for the {@link Form} entity
+&nbsp; *
+&nbsp; * What it does:
+&nbsp; * Extends Spring Data JPA&#39;s {@code JpaRepository}, which provides
+&nbsp; * out-of-the-box
+&nbsp; * CRUD operations (save, findById, findAll, delete, etc.) for the {@code forms}
+&nbsp; * table — no SQL boilerplate required.
+&nbsp; *
+&nbsp; * Custom queries:
+&nbsp; * Spring Data JPA auto-generates these from the method name using its
+&nbsp; * &quot;query derivation&quot; mechanism:
+&nbsp; *
+&nbsp; * - {@link #findByStatusNotOrderByUpdatedAtDesc} — fetches all non-archived
+&nbsp; * forms
+&nbsp; * for the dashboard, sorted newest-first.
+&nbsp; * - {@link #findByPublicShareToken} — resolves a UUID share token (from the
+&nbsp; * public /f/{token} URL) to the matching Form, used by the public form page and
+&nbsp; * public submission endpoint.
+&nbsp; *
+&nbsp; * Application flow:
+&nbsp; * FormController → FormService / SubmissionService → FormRepository →
+&nbsp; * PostgreSQL
+&nbsp; */
+&nbsp;@Repository
+&nbsp;public interface FormRepository extends JpaRepository&lt;Form, Long&gt; {
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Returns all forms whose status is NOT the given value, ordered by most
+&nbsp;     * recently updated. Used by the dashboard to exclude ARCHIVED forms.
+&nbsp;     */
+&nbsp;    List&lt;Form&gt; findAllByStatusNotOrderByUpdatedAtDesc(FormStatus status);
+&nbsp;
+&nbsp;    List&lt;Form&gt; findByStatusOrderByUpdatedAtDesc(FormStatus status);
+&nbsp;
+&nbsp;    // Find all forms for a specific user, excluding a specific status (e.g. ARCHIVED)
+&nbsp;    List&lt;Form&gt; findByOwnerAndStatusNotOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
+&nbsp;
+&nbsp;    // Find all forms for a specific user with a specific status (e.g. ARCHIVED)
+&nbsp;    List&lt;Form&gt; findByOwnerAndStatusOrderByUpdatedAtDesc(AppUser owner, FormStatus status);
+&nbsp;
+&nbsp;    @Query(&quot;SELECT DISTINCT f FROM Form f &quot; +
+&nbsp;           &quot;LEFT JOIN UserFormRole ufr ON f.id = ufr.formId &quot; +
+&nbsp;           &quot;WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) &quot; +
+&nbsp;           &quot;AND f.status &lt;&gt; :status &quot; +
+&nbsp;           &quot;ORDER BY f.updatedAt DESC&quot;)
+&nbsp;    List&lt;Form&gt; findByAccessAndStatusNot(@Param(&quot;user&quot;) AppUser user, @Param(&quot;username&quot;) String username, @Param(&quot;status&quot;) FormStatus status);
+&nbsp;
+&nbsp;    @Query(&quot;SELECT DISTINCT f FROM Form f &quot; +
+&nbsp;           &quot;LEFT JOIN UserFormRole ufr ON f.id = ufr.formId &quot; +
+&nbsp;           &quot;WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) &quot; +
+&nbsp;           &quot;AND f.status = :status &quot; +
+&nbsp;           &quot;ORDER BY f.updatedAt DESC&quot;)
+&nbsp;    List&lt;Form&gt; findByAccessAndStatus(@Param(&quot;user&quot;) AppUser user, @Param(&quot;username&quot;) String username, @Param(&quot;status&quot;) FormStatus status);
+&nbsp;
+&nbsp;    /**
+&nbsp;     * Looks up a form by its public share token (a UUID stored in the {@code forms}
+&nbsp;     * table). Returns {@code Optional.empty()} if no match is found, which causes
+&nbsp;     * the service layer to throw a 404-equivalent error.
+&nbsp;     */
+&nbsp;    Optional&lt;Form&gt; findByPublicShareToken(String publicShareToken);
+&nbsp;}
+</code>
+</pre>
+</div>
+
+<script type="text/javascript">
+(function() {
+    var msie = false, msie9 = false;
+    /*@cc_on
+      msie = true;
+      @if (@_jscript_version >= 9)
+        msie9 = true;
+      @end
+    @*/
+
+    if (!msie || msie && msie9) {
+      hljs.highlightAll()
+      hljs.initLineNumbersOnLoad();
+    }
+})();
+</script>
+
+<div class="footer">
+    
+    <div style="float:right;">generated on 2026-03-18 11:26</div>
+</div>
+</body>
+</html>
