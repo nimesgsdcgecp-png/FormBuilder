@@ -23,7 +23,8 @@ import {
   UserPlus,
   Send,
   ShieldCheck,
-  ChevronDown
+  ChevronDown,
+  Clock
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useUIStore } from '@/store/useUIStore';
@@ -172,7 +173,15 @@ export default function Sidebar() {
       href: isOnlyUser ? '/forms/status' : '/admin/approvals',
       show: assignments.length > 0,
       badge: !isOnlyUser && pendingApprovalsCount > 0 ? pendingApprovalsCount : null,
-      color: 'text-amber-500'
+      color: 'text-amber-500',
+      matchExact: true
+    },
+    {
+      label: 'Past History',
+      icon: History,
+      href: '/admin/approvals/history',
+      show: !isOnlyUser && assignments.length > 0,
+      color: 'text-blue-500'
     },
     {
       label: 'Users',
@@ -212,18 +221,21 @@ export default function Sidebar() {
     const label = isDynamic ? item.name : item.label;
     const url = isDynamic ? item.url : item.href;
     const Icon = isDynamic ? (IconMap[item.icon] || FileText) : item.icon;
-    const isActive = url && url !== '#' ? (url === '/' ? pathname === '/' : pathname.startsWith(url)) : false;
-    const hasChildren = isDynamic && item.children && item.children.length > 0;
-    const isExpanded = expandedIds.includes(item.id);
+    const isActive = url && url !== '#' 
+      ? (item.matchExact ? pathname === url : (url === '/' ? pathname === '/' : pathname.startsWith(url))) 
+      : false;
+    const hasChildren = item.children && item.children.length > 0;
+    const isExpanded = expandedIds.includes(item.id) || (item.label && expandedIds.includes(item.label as any));
     const badge = item.badge;
 
     const toggleExpand = (e: React.MouseEvent) => {
       if (hasChildren) {
         e.preventDefault();
         e.stopPropagation();
-        setExpandedIds(prev => 
-          isExpanded ? prev.filter(id => id !== item.id) : [...prev, item.id]
-        );
+        setExpandedIds(prev => {
+          const id = isDynamic ? item.id : item.label;
+          return prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
+        });
       }
     };
 
@@ -278,7 +290,7 @@ export default function Sidebar() {
         
         {!sidebarCollapsed && hasChildren && isExpanded && (
           <div className="space-y-1 mt-1 transition-all">
-            {item.children.map((child: any) => renderMenuItem(child, depth + 1, true))}
+            {item.children.map((child: any) => renderMenuItem(child, depth + 1, isDynamic))}
           </div>
         )}
       </div>

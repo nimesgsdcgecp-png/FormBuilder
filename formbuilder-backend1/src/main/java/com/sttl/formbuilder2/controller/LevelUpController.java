@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -34,21 +35,23 @@ public class LevelUpController {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.roleService = roleService;
+
+
     }
 
     @PostMapping("/profile/level-up")
     public ResponseEntity<?> requestLevelUp(Authentication auth) {
         AppUser user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
+        
         // Check if user is already a builder or admin/administrator
         boolean isPrivileged = user.getUserFormRoles().stream()
-                .anyMatch(ufr -> 
-                    ufr.getRole().getName().equals("BUILDER") || 
-                    ufr.getRole().getName().equals("ADMIN") ||
-                    ufr.getRole().getName().equals("ROLE_ADMINISTRATOR")
+                .anyMatch(ufr ->
+                        ufr.getRole().getName().equals("BUILDER") ||
+                                ufr.getRole().getName().equals("ADMIN") ||
+                                ufr.getRole().getName().equals("ROLE_ADMINISTRATOR")
                 );
-        
+
         if (isPrivileged) {
             return ResponseEntity.badRequest().body(Map.of("error", "User already has elevated permissions"));
         }
@@ -92,12 +95,12 @@ public class LevelUpController {
         if (action.equals("APPROVE")) {
             Role builderRole = roleRepository.findByName("BUILDER")
                     .orElseThrow(() -> new RuntimeException("Role 'BUILDER' not found"));
-            
+
             RoleAssignmentDTO dto = new RoleAssignmentDTO();
             dto.setUserId(request.getUser().getId());
             dto.setRoleId(builderRole.getId());
             dto.setFormId(null); // Global promotion
-            
+
             roleService.assignRole(dto, auth.getName());
         }
 

@@ -176,12 +176,28 @@ public class DynamicTableService {
         StringBuilder where = new StringBuilder(" WHERE is_deleted = false");
         List<Object> params = new java.util.ArrayList<>();
 
+        List<String> existingColumns = getTableColumns(tableName);
+        String globalSearch = filters.get("q");
+
         filters.forEach((col, val) -> {
-            if (val != null && !val.isBlank()) {
+            if (val != null && !val.isBlank() && !col.equals("q") && existingColumns.contains(col)) {
                 where.append(" AND \"").append(col).append("\" ILIKE ?");
                 params.add("%" + val + "%");
             }
         });
+
+        if (globalSearch != null && !globalSearch.isBlank()) {
+            where.append(" AND (");
+            for (int i = 0; i < existingColumns.size(); i++) {
+                String column = existingColumns.get(i);
+                where.append("CAST(\"").append(column).append("\" AS TEXT) ILIKE ?");
+                params.add("%" + globalSearch + "%");
+                if (i < existingColumns.size() - 1) {
+                    where.append(" OR ");
+                }
+            }
+            where.append(")");
+        }
 
         String countSql = "SELECT COUNT(*) FROM \"" + tableName + "\"" + where;
         long totalElements = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
@@ -258,7 +274,7 @@ public class DynamicTableService {
     private String mapToSqlType(FieldType type) {
         return switch (type) {
             case TEXT, RADIO, FILE, LOOKUP, HIDDEN -> "VARCHAR(500)";
-            case NUMERIC, RATING, SCALE -> "INTEGER";
+            case NUMERIC, RATING, SCALE, CALCULATED -> "DOUBLE PRECISION";
             case DATE -> "DATE";
             case TIME -> "TIME";
             case DATE_TIME -> "TIMESTAMP";
@@ -267,7 +283,6 @@ public class DynamicTableService {
                     GRID_RADIO, GRID_CHECK ->
                 "TEXT";
             case SECTION_HEADER, INFO_LABEL, PAGE_BREAK -> null;
-            case CALCULATED -> "DOUBLE PRECISION";
             default -> "VARCHAR(255)";
         };
     }

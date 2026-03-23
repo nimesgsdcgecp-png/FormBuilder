@@ -10,6 +10,7 @@ import com.sttl.formbuilder2.model.entity.Permission;
 import com.sttl.formbuilder2.model.entity.Role;
 import com.sttl.formbuilder2.model.entity.UserFormRole;
 import com.sttl.formbuilder2.repository.PermissionRepository;
+import com.sttl.formbuilder2.repository.RoleModuleRepository;
 import com.sttl.formbuilder2.repository.RoleRepository;
 import com.sttl.formbuilder2.repository.UserFormRoleRepository;
 import com.sttl.formbuilder2.repository.UserRepository;
@@ -30,15 +31,18 @@ public class RoleService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final UserFormRoleRepository userFormRoleRepository;
+    private final RoleModuleRepository roleModuleRepository;
     private final UserRepository userRepository;
 
     public RoleService(RoleRepository roleRepository,
                        PermissionRepository permissionRepository,
                        UserFormRoleRepository userFormRoleRepository,
+                       RoleModuleRepository roleModuleRepository,
                        UserRepository userRepository) {
         this.roleRepository = roleRepository;
         this.permissionRepository = permissionRepository;
         this.userFormRoleRepository = userFormRoleRepository;
+        this.roleModuleRepository = roleModuleRepository;
         this.userRepository = userRepository;
     }
 
@@ -162,6 +166,9 @@ public class RoleService {
 
         Role userRole = roleRepository.findByName("USER")
                 .orElseThrow(() -> new RuntimeException("Fallback role 'USER' not found"));
+
+        // Clear role-module mappings first to avoid FK violation
+        roleModuleRepository.deleteByRoleId(id);
 
         // Reassign all users holding this role to USER
         List<UserFormRole> assignments = userFormRoleRepository.findByRoleId(role.getId());

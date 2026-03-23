@@ -430,7 +430,7 @@ export default function ResponsesPage() {
 
       {/* ── SaaS Toolbar ── */}
       <div className="max-w-[1600px] mx-auto px-8 py-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-2xl border shadow-sm mb-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
           <div className="relative group w-full md:w-96">
             <Search
               size={18}
@@ -445,8 +445,8 @@ export default function ResponsesPage() {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-12 pr-4 py-3 rounded-xl text-sm border-0 bg-slate-50 transition-all focus:ring-2 focus:ring-blue-500/20 focus:bg-white"
-              style={{ color: '#0f172a' }}
+              className="w-full pl-12 pr-4 py-3 rounded-xl text-sm border-0 transition-all focus:ring-2 focus:ring-blue-500/20"
+              style={{ background: 'var(--bg-muted)', color: 'var(--text-primary)' }}
             />
           </div>
 
@@ -456,8 +456,13 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                  Object.keys(columnFilters).length > 0 || showFilterPanel ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600'
-                } hover:border-blue-400`}
+                  Object.keys(columnFilters).length > 0 || showFilterPanel ? 'bg-blue-600 border-blue-600 text-white' : 'hover:border-blue-400'
+                }`}
+                style={{ 
+                  background: Object.keys(columnFilters).length > 0 || showFilterPanel ? '#2563eb' : 'var(--bg-surface)',
+                  borderColor: Object.keys(columnFilters).length > 0 || showFilterPanel ? '#2563eb' : 'var(--border)',
+                  color: Object.keys(columnFilters).length > 0 || showFilterPanel ? 'white' : 'var(--text-muted)'
+                }}
               >
                 <Filter size={16} /> 
                 <span className="hidden lg:inline">Filters</span>
@@ -469,11 +474,11 @@ export default function ResponsesPage() {
               {showFilterPanel && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setShowFilterPanel(false)} />
-                  <div className="absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6">
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                  <div className="absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Advanced Filtering</span>
-                        <span className="text-[9px] text-slate-400">Match specific column values</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Advanced Filtering</span>
+                        <span className="text-[9px]" style={{ color: 'var(--text-faint)' }}>Match specific column values</span>
                       </div>
                       <button 
                         onClick={() => { setColumnFilters({}); setCurrentPage(1); }} 
@@ -482,10 +487,10 @@ export default function ResponsesPage() {
                         Reset
                       </button>
                     </div>
-                    <div className="max-h-80 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                    <div className="max-h-80 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-[var(--border)]">
                       {headers.filter(h => h.key !== 'serial_no').map(header => (
                         <div key={header.key} className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{header.label}</label>
+                          <label className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-muted)' }}>{header.label}</label>
                           <input
                             type="text"
                             placeholder={`Filter ${header.label}...`}
@@ -500,7 +505,8 @@ export default function ResponsesPage() {
                               });
                               setCurrentPage(1);
                             }}
-                            className="w-full px-3 py-2 rounded-lg text-xs border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all outline-none"
+                            className="w-full px-3 py-2 rounded-lg text-xs border transition-all outline-none"
+                            style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                           />
                         </div>
                       ))}
@@ -510,18 +516,20 @@ export default function ResponsesPage() {
               )}
             </div>
 
-            {/* View Toggle - Hidden on mobile, force GRID */}
-            <div className="hidden sm:flex bg-slate-100 p-1 rounded-xl border border-slate-200 mr-2 shadow-inner">
+            {/* View Toggle */}
+            <div className="hidden sm:flex p-1 rounded-xl border mr-2 shadow-inner" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
               <button
                 onClick={() => setViewMode('TABLE')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'TABLE' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'TABLE' ? 'shadow-sm text-blue-600' : ''}`}
+                style={{ background: viewMode === 'TABLE' ? 'var(--bg-surface)' : 'transparent', color: viewMode === 'TABLE' ? '#2563eb' : 'var(--text-faint)' }}
                 title="Table View"
               >
                 <List size={18} />
               </button>
               <button
                 onClick={() => setViewMode('GRID')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'shadow-sm text-blue-600' : ''}`}
+                style={{ background: viewMode === 'GRID' ? 'var(--bg-surface)' : 'transparent', color: viewMode === 'GRID' ? '#2563eb' : 'var(--text-faint)' }}
                 title="Grid View"
               >
                 <LayoutGrid size={18} />
@@ -533,8 +541,13 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setShowColumnConfig(!showColumnConfig)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                  showColumnConfig ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600'
-                } hover:border-slate-300`}
+                  showColumnConfig ? '' : 'hover:border-slate-300'
+                }`}
+                style={{
+                  background: showColumnConfig ? 'var(--text-primary)' : 'var(--bg-surface)',
+                  borderColor: showColumnConfig ? 'var(--text-primary)' : 'var(--border)',
+                  color: showColumnConfig ? 'var(--bg-surface)' : 'var(--text-muted)'
+                }}
               >
                 <Settings2 size={16} /> 
                 <span className="hidden lg:inline">Columns</span>
@@ -543,18 +556,19 @@ export default function ResponsesPage() {
               {showColumnConfig && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setShowColumnConfig(false)} />
-                  <div className="absolute right-0 mt-3 w-72 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6">
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Layout Settings</span>
+                  <div className="absolute right-0 mt-3 w-72 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 p-6" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                      <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Layout Settings</span>
                       <button onClick={() => setVisibleColumns(new Set(headers.map(h => h.key)))} className="text-[10px] font-bold text-blue-600 hover:underline">Reset</button>
                     </div>
-                    <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                    <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[var(--border)]">
                       {headers.map(header => (
                         <label key={header.key} className="flex items-center justify-between cursor-pointer group">
-                          <span className="text-xs font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{header.label}</span>
+                          <span className="text-xs font-medium transition-colors" style={{ color: 'var(--text-muted)' }}>{header.label}</span>
                           <input
                             type="checkbox"
                             className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
+                            style={{ borderColor: 'var(--border)' }}
                             checked={visibleColumns.has(header.key)}
                             onChange={() => {
                               const newVisible = new Set(visibleColumns);
@@ -580,7 +594,8 @@ export default function ResponsesPage() {
               <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 transition-all hover:border-slate-300"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all hover:border-slate-300"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                 >
                   <Download size={16} /> 
                   <span className="hidden lg:inline">Export</span>
@@ -590,16 +605,16 @@ export default function ResponsesPage() {
                 {showExportMenu && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
-                    <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border bg-white border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                       <div className="p-2">
-                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
+                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
                         </button>
-                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
+                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
                         </button>
-                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-slate-50 text-slate-700">
-                          <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
+                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                          <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
                         </button>
                       </div>
                     </div>
@@ -628,10 +643,10 @@ export default function ResponsesPage() {
             {Object.entries(columnFilters).map(([key, value]) => {
               const header = headers.find(h => h.key === key);
               return (
-                <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold shadow-sm">
-                  <Filter size={12} className="text-slate-400" />
-                  <span className="text-slate-500 font-medium">{header?.label || key}:</span>
-                  <span className="text-slate-900">{value}</span>
+                <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold shadow-sm" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                  <Filter size={12} style={{ color: 'var(--text-muted)' }} />
+                  <span className="font-medium" style={{ color: 'var(--text-muted)' }}>{header?.label || key}:</span>
+                  <span>{value}</span>
                   <button 
                     onClick={() => {
                       setColumnFilters(prev => {
@@ -669,7 +684,7 @@ export default function ResponsesPage() {
             </div>
           </div>
 
-          {(viewMode === 'TABLE' && !globalThis.window?.innerWidth || globalThis.window?.innerWidth >= 640) ? (
+          {viewMode === 'TABLE' ? (
           <div className="rounded-3xl border shadow-sm overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full border-separate border-spacing-0">
@@ -705,15 +720,15 @@ export default function ResponsesPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
                   {paginatedData.length === 0 ? (
                     <tr>
                       <td colSpan={visibleColumns.size + 2} className="px-6 py-24 text-center">
                         <div className="flex flex-col items-center justify-center space-y-4">
-                          <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300">
+                          <div className="w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
                             <Search size={32} />
                           </div>
-                          <p className="text-sm font-medium text-slate-500">
+                          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
                             {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
                           </p>
                         </div>
@@ -727,13 +742,13 @@ export default function ResponsesPage() {
                         <tr
                           key={row.submission_id}
                           className="group/row transition-colors hover:bg-slate-50/50"
-                          style={{ background: isSelected ? '#f1f5f9' : 'white' }} 
+                          style={{ background: isSelected ? 'var(--bg-muted)' : 'var(--bg-surface)' }} 
                         >
                           <td className="px-6 py-4 border-b border-slate-100">
                             <button
                               onClick={() => toggleSelect(row.submission_id)}
                               className="p-2 rounded-lg transition-all"
-                              style={{ color: isSelected ? '#2563eb' : '#cbd5e1' }}
+                              style={{ color: isSelected ? 'var(--accent)' : 'var(--text-faint)' }}
                             >
                               {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                             </button>
@@ -741,8 +756,8 @@ export default function ResponsesPage() {
                           {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
                             <td
                               key={`${row.submission_id}-${header.key}`}
-                              className="px-6 py-4 text-sm border-b border-slate-100 whitespace-nowrap"
-                              style={{ color: '#334155' }} 
+                              className="px-6 py-4 text-sm border-b whitespace-nowrap"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }} 
                             >
                               {header.key === 'serial_no' ? (
                                 <span className="font-mono text-slate-400">{globalIdx + 1}</span>
@@ -765,28 +780,31 @@ export default function ResponsesPage() {
                               )}
                             </td>
                           ))}
-                          <td className="px-6 py-4 border-b border-slate-100 text-right sticky right-0 z-10 bg-inherit">
+                          <td className="px-6 py-4 border-b text-right sticky right-0 z-10 bg-inherit" style={{ borderColor: 'var(--border)' }}>
                             <div className="flex justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
                               <button
                                 onClick={() => {
                                   setSelectedSubmission(row);
                                   setIsDrawerOpen(true);
                                 }}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: 'var(--text-faint)' }}
                                 title="View Details"
                               >
                                 <Eye size={16} />
                               </button>
                               <a
                                 href={`/f/${publicToken}?edit=${row.submission_id}`}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all"
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: 'var(--text-faint)' }}
                                 title="Edit"
                               >
                                 <Edit size={16} />
                               </a>
                               <button
                                 onClick={() => handleDelete(row.submission_id)}
-                                className="p-2 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all"
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: 'var(--text-faint)' }}
                                 title="Delete"
                               >
                                 <Trash2 size={16} />
@@ -805,11 +823,11 @@ export default function ResponsesPage() {
           /* ── Grid View ── */
           <div className="space-y-8">
             {paginatedData.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-dashed border-slate-300 py-20 text-center">
-                <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center mx-auto mb-4 text-slate-300">
+              <div className="rounded-3xl border border-dashed py-20 text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
                   <Search size={32} />
                 </div>
-                <p className="text-sm font-medium text-slate-500">
+                <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
                   {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
                 </p>
               </div>
@@ -822,15 +840,24 @@ export default function ResponsesPage() {
                     <div
                       key={row.submission_id}
                       className={`group relative p-6 rounded-[2rem] border transition-all duration-300 ${
-                        isSelected ? 'bg-blue-50/50 border-blue-200 shadow-md translate-y-[-4px]' : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-xl hover:translate-y-[-4px]'
+                        isSelected ? 'shadow-md translate-y-[-4px]' : 'hover:shadow-xl hover:translate-y-[-4px]'
                       }`}
+                      style={{ 
+                        background: isSelected ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                        borderColor: isSelected ? 'var(--accent)' : 'var(--border)'
+                      }}
                     >
                       {/* Checkbox Overlay */}
                       <button
                         onClick={() => toggleSelect(row.submission_id)}
-                        className={`absolute top-6 left-6 p-2 rounded-xl transition-all z-10 ${
-                          isSelected ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 opacity-0 group-hover:opacity-100 border border-slate-100'
+                        className={`absolute top-6 left-6 p-2 rounded-xl transition-all z-10 border ${
+                          isSelected ? 'bg-blue-600 text-white shadow-lg border-blue-600' : 'opacity-0 group-hover:opacity-100 shadow-sm'
                         }`}
+                        style={{ 
+                          background: isSelected ? '#2563eb' : 'var(--bg-muted)',
+                          borderColor: isSelected ? '#2563eb' : 'var(--border)',
+                          color: isSelected ? 'white' : 'var(--text-faint)'
+                        }}
                       >
                         {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
@@ -848,39 +875,42 @@ export default function ResponsesPage() {
                       <div className="space-y-5 mb-8">
                         {headers.filter(h => visibleColumns.has(h.key) && h.key !== 'submission_status').slice(0, 5).map(header => (
                           <div key={header.key} className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{header.label}</label>
-                            <p className="text-sm font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
+                            <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>{header.label}</label>
+                            <p className="text-sm font-bold truncate group-hover:text-blue-600 transition-colors" style={{ color: 'var(--text-primary)' }}>
                               {header.key === 'serial_no' ? globalIdx + 1 : header.key === 'submitted_at' ? new Date(row[header.key]).toLocaleDateString() : formatCellValue(row[header.key], header.type)}
                             </p>
                           </div>
                         ))}
                       </div>
 
-                      <div className="flex items-center justify-between pt-6 border-t border-slate-50">
+                      <div className="flex items-center justify-between pt-6 border-t" style={{ borderColor: 'var(--border)' }}>
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Status</span>
-                          <span className="text-xs text-slate-600 font-medium">
+                          <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-faint)' }}>Status</span>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                             {row.submission_status === 'DRAFT' ? 'In Progress' : 'Completed'}
                           </span>
                         </div>
                         <div className="flex gap-1.5">
                            <button 
                             onClick={() => { setSelectedSubmission(row); setIsDrawerOpen(true); }} 
-                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-90"
+                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
+                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
                             title="View Details"
                            >
                             <Eye size={18} />
                            </button>
                            <a 
                             href={`/f/${publicToken}?edit=${row.submission_id}`} 
-                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all active:scale-90"
+                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
+                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
                             title="Edit"
                            >
                             <Edit size={18} />
                            </a>
                            <button 
                             onClick={() => handleDelete(row.submission_id)} 
-                            className="p-2.5 rounded-2xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all active:scale-90"
+                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-red-500/10 hover:text-red-500"
+                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
                             title="Delete"
                            >
                             <Trash2 size={18} />
@@ -896,23 +926,24 @@ export default function ResponsesPage() {
         )}
       </div>
 
-        {/* ── SaaS Pagination ── */}
+        {/* Pagination */}
         {totalElements > 0 && (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-8 px-8 py-5 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="rounded-3xl border shadow-sm overflow-hidden mt-8 px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Per Page</span>
+                <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Per Page</span>
                 <select
                   value={pageSize}
                   onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                  className="bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                  className="bg-transparent border text-xs font-bold rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
                 >
                   {[10, 20, 50, 100].map(size => (
-                    <option key={size} value={size}>{size}</option>
+                    <option key={size} value={size} style={{ background: 'var(--bg-surface)' }}>{size}</option>
                   ))}
                 </select>
               </div>
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <div className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>
                 {totalElements} records
               </div>
             </div>
@@ -921,33 +952,37 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsLeft size={16} />
               </button>
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronLeft size={16} />
               </button>
               <div className="flex items-center gap-2 font-mono text-xs">
-                <span className="text-slate-900 font-bold">{currentPage}</span>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-500">{totalPages || 1}</span>
+                <span className="font-bold" style={{ color: 'var(--text-primary)' }}>{currentPage}</span>
+                <span style={{ color: 'var(--text-faint)' }}>/</span>
+                <span style={{ color: 'var(--text-muted)' }}>{totalPages || 1}</span>
               </div>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronRight size={16} />
               </button>
               <button
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border border-slate-200 bg-white text-slate-400 disabled:opacity-30 transition-all hover:bg-slate-50"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsRight size={16} />
               </button>

@@ -807,6 +807,7 @@ function renderInput(
             return (
                 <input
                     type="number"
+                    step="any"
                     placeholder="0"
                     min={field.validation?.min}
                     max={field.validation?.max}

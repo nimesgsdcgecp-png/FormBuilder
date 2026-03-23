@@ -34,6 +34,8 @@ import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
 
+
+
 interface Module {
   id: number;
   moduleName: string;
@@ -329,7 +331,7 @@ export default function ModuleManagementPage() {
                   ))}
 
                   {/* Modules directly under Parent (Level 2 but not sub-parents) */}
-                  {modules.filter(m => m.parentId === parent.id && !m.isSubParent).map(module => (
+                  {modules.filter(m => m.parentId === parent.id && !m.isSubParent && !m.subParentId).map(module => (
                      <div key={module.id} className="p-4 rounded-2xl border border-dashed flex items-center justify-between hover:bg-[var(--bg-subtle)] transition-all" style={{ borderColor: 'var(--border)' }}>
                         <div className="flex flex-col">
                           <span className="text-xs font-bold">{module.moduleName}</span>
@@ -408,36 +410,44 @@ export default function ModuleManagementPage() {
                           />
                        </div>
                     </div>
+                                       <div className="flex items-center gap-12 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                           <input 
+                             type="checkbox" 
+                             className="hidden" 
+                             checked={formData.isParent}
+                             onChange={(e) => setFormData({
+                               ...formData, 
+                               isParent: e.target.checked, 
+                               parentId: null, 
+                               subParentId: null, 
+                               isSubParent: e.target.checked ? false : formData.isSubParent
+                             })}
+                           />
+                           <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formData.isParent ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-300 bg-white'}`}>
+                              {formData.isParent && <Check className="text-white" size={16} strokeWidth={4} />}
+                           </div>
+                           <span className={`font-bold text-sm ${formData.isParent ? 'text-blue-600' : 'text-slate-600'}`}>Top Level Parent</span>
+                        </label>
 
-                    <div className="flex items-center gap-12 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                       <label className="flex items-center gap-3 cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            className="hidden" 
-                            checked={formData.isParent}
-                            onChange={(e) => setFormData({...formData, isParent: e.target.checked, parentId: null, subParentId: null, isSubParent: false})}
-                          />
-                          <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formData.isParent ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-300 bg-white'}`}>
-                             {formData.isParent && <Check className="text-white" size={16} strokeWidth={4} />}
-                          </div>
-                          <span className={`font-bold text-sm ${formData.isParent ? 'text-blue-600' : 'text-slate-600'}`}>Top Level Parent</span>
-                       </label>
-
-                       <label className="flex items-center gap-3 cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            className="hidden" 
-                            disabled={formData.isParent}
-                            checked={formData.isSubParent}
-                            onChange={(e) => setFormData({...formData, isSubParent: e.target.checked, subParentId: null})}
-                          />
-                          <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formData.isSubParent ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-300 bg-white'} ${formData.isParent ? 'opacity-50 grayscale' : ''}`}>
-                             {formData.isSubParent && <Check className="text-white" size={16} strokeWidth={4} />}
-                          </div>
-                          <span className={`font-bold text-sm ${formData.isSubParent ? 'text-blue-600' : 'text-slate-600'} ${formData.isParent ? 'text-slate-300' : ''}`}>Sub-Parent Folder</span>
-                       </label>
-                    </div>
-
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                           <input 
+                             type="checkbox" 
+                             className="hidden" 
+                             checked={formData.isSubParent}
+                             onChange={(e) => setFormData({
+                               ...formData, 
+                               isSubParent: e.target.checked, 
+                               isParent: e.target.checked ? false : formData.isParent,
+                               subParentId: null
+                             })}
+                           />
+                           <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formData.isSubParent ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-300 bg-white'}`}>
+                              {formData.isSubParent && <Check className="text-white" size={16} strokeWidth={4} />}
+                           </div>
+                           <span className={`font-bold text-sm ${formData.isSubParent ? 'text-blue-600' : 'text-slate-600'}`}>Sub-Parent Folder</span>
+                        </label>
+                     </div>
                     <div className="grid grid-cols-2 gap-8">
                        <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Parent Module</label>
