@@ -33,7 +33,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
       // 2. Fetch the allowed menu tree for the user
       try {
-        const res = await fetch('http://localhost:8080/api/menu', { credentials: 'include' });
+        const res = await fetch('http://localhost:8080/api/v1/menu', { credentials: 'include' });
         if (res.ok) {
           const menuTree: MenuNode[] = await res.json();
           

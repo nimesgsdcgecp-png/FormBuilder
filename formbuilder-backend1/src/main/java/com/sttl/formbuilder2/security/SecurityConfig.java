@@ -47,13 +47,14 @@ public class SecurityConfig {
                 // 3. Configure rules
                 .authorizeHttpRequests(auth -> auth
                         // 1. PUBLIC FORM ENDPOINTS (Must be at the top)
-                        .requestMatchers("/api/forms/public/**").permitAll()
-                        .requestMatchers("/api/forms/*/columns/*/values").permitAll()
-                        .requestMatchers("/api/upload").permitAll()
+                        .requestMatchers("/api/v1/forms/public/**").permitAll()
+                        .requestMatchers("/api/v1/forms/*/columns/*/values").permitAll()
+                        .requestMatchers("/api/v1/upload").permitAll()
+                        .requestMatchers("/api/v1/files/**").permitAll()
 
                         // Allow our specific auth endpoints
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
 
                         // Allow Swagger / OpenAPI completely
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

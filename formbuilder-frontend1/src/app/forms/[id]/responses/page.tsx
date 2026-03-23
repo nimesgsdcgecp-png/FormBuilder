@@ -84,7 +84,7 @@ export default function ResponsesPage() {
     setIsFetching(true);
     try {
       // 1. Fetch Form Meta (to get headers)
-      const formRes = await fetch(`http://localhost:8080/api/forms/${formId}`, { 
+      const formRes = await fetch(`http://localhost:8080/api/v1/forms/${formId}`, { 
         credentials: 'include',
         signal 
       });

@@ -79,7 +79,7 @@ export default function Sidebar() {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/menu', { credentials: 'include' });
+        const res = await fetch('http://localhost:8080/api/v1/menu', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setMenuTree(data);
@@ -126,7 +126,7 @@ export default function Sidebar() {
       if (document.visibilityState !== 'visible') return;
 
       try {
-        const res = await fetch('http://localhost:8080/api/workflows/my-pending', { credentials: 'include' });
+        const res = await fetch('http://localhost:8080/api/v1/workflows/my-pending', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setPendingApprovalsCount(data.length);

@@ -83,7 +83,7 @@ export default function FormRenderer({
             Promise.all(
                 lookups.map(f => {
                     const opts = f.options as { formId: string; columnName: string };
-                    return fetch(`http://localhost:8080/api/forms/${opts.formId}/columns/${opts.columnName}/values`)
+                    return fetch(`http://localhost:8080/api/v1/forms/${opts.formId}/columns/${opts.columnName}/values`)
                         .then(res => res.json())
                         .then(values => ({ col: f.columnName, values }))
                         .catch(() => ({ col: f.columnName, values: [] }));
@@ -615,7 +615,7 @@ export default function FormRenderer({
 const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('http://localhost:8080/api/upload', { method: 'POST', body: formData });
+    const res = await fetch('http://localhost:8080/api/v1/upload', { method: 'POST', body: formData });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
     return data.url;

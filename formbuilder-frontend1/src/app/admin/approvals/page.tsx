@@ -36,7 +36,7 @@ export default function ApprovalInbox() {
 
   const fetchPendingSteps = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/workflows/my-pending', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/workflows/my-pending', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setSteps(data);
@@ -48,7 +48,7 @@ export default function ApprovalInbox() {
     }
 
     try {
-      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
@@ -62,7 +62,7 @@ export default function ApprovalInbox() {
 
   const handleAction = async (stepId: number, action: 'approve' | 'reject', comments: string = "") => {
     try {
-      const res = await fetch(`http://localhost:8080/api/workflows/steps/${stepId}/${action}`, {
+      const res = await fetch(`http://localhost:8080/api/v1/workflows/steps/${stepId}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

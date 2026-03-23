@@ -70,7 +70,7 @@ export default function PropertiesPanel() {
   const [selectedFormSchema, setSelectedFormSchema] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/forms', { credentials: 'include' })
+    fetch('http://localhost:8080/api/v1/forms', { credentials: 'include' })
       .then(res => res.json())
       .then(data => setAvailableForms(data))
       .catch(console.error);
@@ -94,7 +94,7 @@ export default function PropertiesPanel() {
     if (selectedField?.type === 'LOOKUP') {
       const config = selectedField.options as any;
       if (config?.formId) {
-        fetch(`http://localhost:8080/api/forms/${config.formId}`, { credentials: 'include' })
+        fetch(`http://localhost:8080/api/v1/forms/${config.formId}`, { credentials: 'include' })
           .then(res => res.json())
           .then(data => setSelectedFormSchema(data))
           .catch(console.error);

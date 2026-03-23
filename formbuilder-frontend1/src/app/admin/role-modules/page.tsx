@@ -51,9 +51,9 @@ export default function RoleModuleMappingPage() {
     setIsLoading(true);
     try {
       const [rolesRes, modulesRes, userRes] = await Promise.all([
-        fetch('http://localhost:8080/api/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/modules', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/auth/me', { credentials: 'include' })
+        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/modules', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' })
       ]);
       const rolesData = await rolesRes.json();
       const modulesData = await modulesRes.json();
@@ -78,7 +78,7 @@ export default function RoleModuleMappingPage() {
 
   const fetchAssignments = async (roleId: number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/roles/${roleId}/modules`, { credentials: 'include' });
+      const res = await fetch(`http://localhost:8080/api/v1/roles/${roleId}/modules`, { credentials: 'include' });
       if (res.ok) {
         const data: Module[] = await res.json();
         setAssignedModuleIds(data.map(m => Number(m.id)));
@@ -141,7 +141,7 @@ export default function RoleModuleMappingPage() {
     if (!selectedRole) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:8080/api/roles/${selectedRole.id}/modules`, {
+      const res = await fetch(`http://localhost:8080/api/v1/roles/${selectedRole.id}/modules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

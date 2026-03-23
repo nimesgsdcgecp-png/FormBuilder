@@ -80,8 +80,8 @@ export default function Dashboard() {
     setIsLoading(true);
     try {
       const url = currentTab === 'ACTIVE' 
-        ? 'http://localhost:8080/api/forms' 
-        : 'http://localhost:8080/api/forms/archived';
+        ? 'http://localhost:8080/api/v1/forms' 
+        : 'http://localhost:8080/api/v1/forms/archived';
 
       const res = await fetch(url, {
         credentials: 'include' // Important for session cookie
@@ -96,7 +96,7 @@ export default function Dashboard() {
       // Also fetch user profile information
       if (!username) {
         try {
-          const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+          const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
           if (userRes.ok) {
             const userData = await userRes.json();
             setUsername(userData.username);
@@ -163,7 +163,7 @@ export default function Dashboard() {
         label: "Delete Now",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/forms/${id}/permanent`, {
+            const res = await fetch(`http://localhost:8080/api/v1/forms/${id}/permanent`, {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -187,7 +187,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
       clearCache();
       router.push('/login');
       toast.success('Logged out successfully');

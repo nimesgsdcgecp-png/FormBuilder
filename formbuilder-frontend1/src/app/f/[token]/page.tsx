@@ -26,14 +26,14 @@ function PublicFormContent() {
 
   useEffect(() => {
     // 0. Fetch Current User (if any)
-    fetch(`http://localhost:8080/api/auth/me`, { credentials: 'include' })
+    fetch(`http://localhost:8080/api/v1/auth/me`, { credentials: 'include' })
       .then(res => res.ok ? res.json() : null)
       .then(data => data && setCurrentUserId(data.id))
       .catch(() => { });
 
     if (!token) return;
 
-    fetch(`http://localhost:8080/api/forms/public/${token}`, { credentials: 'include' })
+    fetch(`http://localhost:8080/api/v1/forms/public/${token}`, { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Form not found or link is invalid');
         return res.json();
@@ -104,7 +104,7 @@ function PublicFormContent() {
         // Fetch existing submission if editing
         if (editSubmissionId) {
           try {
-            const subRes = await fetch(`http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`, { credentials: 'include' });
+            const subRes = await fetch(`http://localhost:8080/api/v1/forms/public/${token}/submissions/${editSubmissionId}`, { credentials: 'include' });
             if (subRes.ok) {
               const subData = await subRes.json();
               if (!subData) {
@@ -158,8 +158,8 @@ function PublicFormContent() {
   const handleSubmit = async (answers: Record<string, any>, status: 'DRAFT' | 'FINAL' = 'FINAL') => {
     try {
       const url = editSubmissionId
-        ? `http://localhost:8080/api/forms/public/${token}/submissions/${editSubmissionId}`
-        : `http://localhost:8080/api/forms/public/${token}/submissions`;
+        ? `http://localhost:8080/api/v1/forms/public/${token}/submissions/${editSubmissionId}`
+        : `http://localhost:8080/api/v1/forms/public/${token}/submissions`;
 
       const response = await fetch(url, {
         method: editSubmissionId ? 'PUT' : 'POST',

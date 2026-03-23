@@ -78,7 +78,7 @@ function BuilderContent() {
     // 1. Check Auth first. If we are just creating a new form, we still need to be logged in.
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/auth/me', {
+        const response = await fetch('http://localhost:8080/api/v1/auth/me', {
           credentials: 'include'
         });
         if (!response.ok) {
@@ -107,7 +107,7 @@ function BuilderContent() {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
 
-    fetch(`http://localhost:8080/api/forms/${editFormId}`, { credentials: 'include' })
+    fetch(`http://localhost:8080/api/v1/forms/${editFormId}`, { credentials: 'include' })
       .then(res => {
         if (res.status === 401) {
           router.push('/login');
@@ -191,8 +191,8 @@ function BuilderContent() {
     const fetchUsers = async () => {
       try {
         const url = editFormId 
-          ? `http://localhost:8080/api/workflows/available-authorities?formId=${editFormId}`
-          : 'http://localhost:8080/api/workflows/available-authorities';
+          ? `http://localhost:8080/api/v1/workflows/available-authorities?formId=${editFormId}`
+          : 'http://localhost:8080/api/v1/workflows/available-authorities';
           
         const res = await fetch(url, { credentials: 'include' });
         if (res.ok) {
@@ -276,7 +276,7 @@ function BuilderContent() {
       const formId = savedForm.id;
 
       // 2. Initiate Workflow
-      const res = await fetch('http://localhost:8080/api/workflows/initiate', {
+      const res = await fetch('http://localhost:8080/api/v1/workflows/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -332,7 +332,7 @@ function BuilderContent() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
       router.push('/login');
       toast.success('Logged out successfully');
     } catch (e) {

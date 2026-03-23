@@ -37,12 +37,12 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/admin/audit', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/admin/audit', { credentials: 'include' });
       if (res.ok) {
         setLogs(await res.json());
       }
       
-      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
@@ -57,7 +57,7 @@ export default function AuditLogsPage() {
   const handleClearLogs = async () => {
     setIsClearing(true);
     try {
-      const res = await fetch('http://localhost:8080/api/admin/audit/clear', { 
+      const res = await fetch('http://localhost:8080/api/v1/admin/audit/clear', { 
         method: 'DELETE',
         credentials: 'include' 
       });

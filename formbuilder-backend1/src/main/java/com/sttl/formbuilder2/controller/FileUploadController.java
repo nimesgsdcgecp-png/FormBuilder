@@ -24,7 +24,7 @@ import java.util.UUID;
  * and serving them for download.
  */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/v1")
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class FileUploadController {
 
@@ -70,7 +70,7 @@ public class FileUploadController {
 
             // Return a relative URL — the frontend prefixes it with the backend base URL
             Map<String, String> response = new HashMap<>();
-            response.put("url", "/api/files/" + fileName);
+            response.put("url", "/api/v1/files/" + fileName);
             response.put("fileName", originalFileName);
 
             return ResponseEntity.ok(response);

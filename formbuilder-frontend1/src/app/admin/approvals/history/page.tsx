@@ -48,7 +48,7 @@ export default function ApprovalHistoryPage() {
 
   const fetchHandledWorkflows = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/workflows/my-handled', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/workflows/my-handled', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setInstances(data);
@@ -61,7 +61,7 @@ export default function ApprovalHistoryPage() {
     }
 
     try {
-      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);

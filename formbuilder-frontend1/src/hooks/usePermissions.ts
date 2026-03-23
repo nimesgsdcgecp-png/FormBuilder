@@ -50,7 +50,7 @@ export function usePermissions() {
 
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/auth/permissions', {
+      const res = await fetch('http://localhost:8080/api/v1/auth/permissions', {
         credentials: 'include'
       });
       

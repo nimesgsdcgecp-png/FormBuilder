@@ -74,10 +74,10 @@ export default function RoleManagementPage() {
     setIsLoading(true);
     try {
       const [rolesRes, usersRes, permsRes, formsRes] = await Promise.all([
-        fetch('http://localhost:8080/api/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/admin/users/summary', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/admin/permissions', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/forms', { credentials: 'include' })
+        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/admin/users/summary', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/admin/permissions', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/forms', { credentials: 'include' })
       ]);
 
       const rolesData = await rolesRes.json();
@@ -90,7 +90,7 @@ export default function RoleManagementPage() {
       setPermissions(permsData);
       setForms(formsData);
 
-      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
@@ -112,8 +112,8 @@ export default function RoleManagementPage() {
 
     try {
       const url = editingRole 
-        ? `http://localhost:8080/api/admin/roles/${editingRole.id}`
-        : 'http://localhost:8080/api/admin/roles';
+        ? `http://localhost:8080/api/v1/admin/roles/${editingRole.id}`
+        : 'http://localhost:8080/api/v1/admin/roles';
       
       const method = editingRole ? 'PUT' : 'POST';
 
@@ -149,7 +149,7 @@ export default function RoleManagementPage() {
         label: "Delete",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/admin/roles/${id}`, {
+            const res = await fetch(`http://localhost:8080/api/v1/admin/roles/${id}`, {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -178,7 +178,7 @@ export default function RoleManagementPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:8080/api/admin/roles/assign', {
+      const res = await fetch('http://localhost:8080/api/v1/admin/roles/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

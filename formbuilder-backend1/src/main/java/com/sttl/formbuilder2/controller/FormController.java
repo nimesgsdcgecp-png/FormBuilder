@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  * Delegates business logic to FormService, SubmissionService, and DynamicTableService.
  */
 @RestController
-@RequestMapping("/api/forms")
+@RequestMapping("/api/v1/forms")
 @RequiredArgsConstructor
 public class FormController {
 

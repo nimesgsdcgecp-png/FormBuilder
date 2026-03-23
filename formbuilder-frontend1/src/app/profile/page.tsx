@@ -18,7 +18,7 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setUser(data);
@@ -39,7 +39,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const res = await fetch('http://localhost:8080/api/profile/update', {
+      const res = await fetch('http://localhost:8080/api/v1/profile/update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -51,7 +51,7 @@ export default function ProfilePage() {
         if (formData.username !== user.username) {
           toast.info("Username changed. Logging out...");
           setTimeout(() => {
-             fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' });
+             fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
              clearCache();
              router.push('/login');
           }, 2000);
@@ -72,7 +72,7 @@ export default function ProfilePage() {
   const handleLevelUpRequest = async () => {
     setIsRequesting(true);
     try {
-      const res = await fetch('http://localhost:8080/api/profile/level-up', {
+      const res = await fetch('http://localhost:8080/api/v1/profile/level-up', {
         method: 'POST',
         credentials: 'include'
       });

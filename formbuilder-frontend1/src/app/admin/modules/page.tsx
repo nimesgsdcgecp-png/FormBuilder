@@ -86,13 +86,13 @@ export default function ModuleManagementPage() {
   const fetchModules = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/modules', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/modules', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setModules(data);
       }
 
-      const userRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
@@ -144,7 +144,7 @@ export default function ModuleManagementPage() {
         label: "Delete Now",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/modules/${id}`, {
+            const res = await fetch(`http://localhost:8080/api/v1/modules/${id}`, {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -174,8 +174,8 @@ export default function ModuleManagementPage() {
 
     try {
       const url = editingModule 
-        ? `http://localhost:8080/api/modules/${editingModule.id}`
-        : 'http://localhost:8080/api/modules';
+        ? `http://localhost:8080/api/v1/modules/${editingModule.id}`
+        : 'http://localhost:8080/api/v1/modules';
       
       const method = editingModule ? 'PUT' : 'POST';
 

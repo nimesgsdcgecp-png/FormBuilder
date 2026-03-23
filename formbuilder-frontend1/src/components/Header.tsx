@@ -36,7 +36,7 @@ export default function Header({ username, breadcrumbs, title, badge }: HeaderPr
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
       clearCache();
       router.push('/login');
       toast.success('Logged out successfully');

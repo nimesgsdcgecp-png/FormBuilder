@@ -16,7 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/auth/me', {
+        const response = await fetch('http://localhost:8080/api/v1/auth/me', {
           credentials: 'include'
         });
         if (!response.ok) {

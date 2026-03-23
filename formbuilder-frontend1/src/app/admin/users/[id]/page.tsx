@@ -36,10 +36,10 @@ export default function EditUserPage() {
     const fetchData = async () => {
       try {
         const [userRes, rolesRes, assignRes, formsRes] = await Promise.all([
-          fetch(`http://localhost:8080/api/admin/users/summary`, { credentials: 'include' }),
-          fetch(`http://localhost:8080/api/admin/roles`, { credentials: 'include' }),
-          fetch(`http://localhost:8080/api/admin/roles/users/${userId}/assignments`, { credentials: 'include' }),
-          fetch(`http://localhost:8080/api/forms`, { credentials: 'include' })
+          fetch(`http://localhost:8080/api/v1/admin/users/summary`, { credentials: 'include' }),
+          fetch(`http://localhost:8080/api/v1/admin/roles`, { credentials: 'include' }),
+          fetch(`http://localhost:8080/api/v1/admin/roles/users/${userId}/assignments`, { credentials: 'include' }),
+          fetch(`http://localhost:8080/api/v1/forms`, { credentials: 'include' })
         ]);
 
         if (userRes.ok) {
@@ -76,7 +76,7 @@ export default function EditUserPage() {
         }
 
         // Fetch current user info for header independently
-        const meRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+        const meRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
         if (meRes.ok) {
           const meData = await meRes.json();
           setCurrentUser(meData.username);
@@ -94,7 +94,7 @@ export default function EditUserPage() {
 
   const handleRemoveAssignment = async (assignId: number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/roles/assignments/${assignId}`, {
+      const res = await fetch(`http://localhost:8080/api/v1/admin/roles/assignments/${assignId}`, {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -117,7 +117,7 @@ export default function EditUserPage() {
     try {
       const selectedRoleObj = roles.find(r => r.name === selectedRole);
       
-      const res = await fetch(`http://localhost:8080/api/admin/users/${userId}`, {
+      const res = await fetch(`http://localhost:8080/api/v1/admin/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

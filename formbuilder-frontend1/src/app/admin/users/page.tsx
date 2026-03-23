@@ -43,7 +43,7 @@ export default function UserManagementPage() {
 
   const fetchData = async () => {
     try {
-      const meRes = await fetch('http://localhost:8080/api/auth/me', { credentials: 'include' });
+      const meRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
       let me: any = null;
       if (meRes.ok) {
         me = await meRes.json();
@@ -55,13 +55,13 @@ export default function UserManagementPage() {
       );
 
       const fetchPromises: any[] = [
-        fetch('http://localhost:8080/api/admin/users/summary', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/admin/users/default-role', { credentials: 'include' })
+        fetch('http://localhost:8080/api/v1/admin/users/summary', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
+        fetch('http://localhost:8080/api/v1/admin/users/default-role', { credentials: 'include' })
       ];
 
       if (isAdmin) {
-        fetchPromises.push(fetch('http://localhost:8080/api/admin/level-up/pending', { credentials: 'include' }));
+        fetchPromises.push(fetch('http://localhost:8080/api/v1/admin/level-up/pending', { credentials: 'include' }));
       }
 
       const results = await Promise.all(fetchPromises);
@@ -99,7 +99,7 @@ export default function UserManagementPage() {
 
   const handleLevelUpAction = async (id: number, action: 'APPROVE' | 'REJECT') => {
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/level-up/${id}/action`, {
+      const res = await fetch(`http://localhost:8080/api/v1/admin/level-up/${id}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -128,7 +128,7 @@ export default function UserManagementPage() {
         label: "Delete",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/admin/users/${id}`, {
+            const res = await fetch(`http://localhost:8080/api/v1/admin/users/${id}`, {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -154,7 +154,7 @@ export default function UserManagementPage() {
 
   const handleUpdateDefaultRole = async (roleName: string) => {
     try {
-      const res = await fetch('http://localhost:8080/api/admin/users/default-role', {
+      const res = await fetch('http://localhost:8080/api/v1/admin/users/default-role', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -12,7 +12,7 @@ export class UnauthorizedError extends Error {
   }
 }
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 /**
  * Saves a form to the backend.
@@ -133,7 +133,7 @@ export const updateForm = async (id: number, schema: any) => {
       })(),
     };
   
-    const response = await fetch(`http://localhost:8080/api/forms/${id}`, {
+    const response = await fetch(`http://localhost:8080/api/v1/forms/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

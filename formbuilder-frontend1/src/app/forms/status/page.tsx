@@ -44,7 +44,7 @@ export default function MyFormStatus() {
 
   const fetchMySubmissions = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/workflows/my-submissions', { credentials: 'include' });
+      const res = await fetch('http://localhost:8080/api/v1/workflows/my-submissions', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setInstances(data);
