@@ -18,6 +18,9 @@ import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.service.UserService;
 import com.sttl.formbuilder2.service.AuditService;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionInformation;
+import java.util.List;
 
 import java.util.Collection;
 import java.util.Map;
@@ -34,17 +37,20 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final UserService userService;
     private final AuditService auditService;
+    private final SessionRegistry sessionRegistry;
 
     public AuthController(AuthenticationManager authenticationManager, 
                           UserRepository userRepository,
                           PasswordEncoder passwordEncoder,
                           UserService userService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          SessionRegistry sessionRegistry) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.userService = userService;
         this.auditService = auditService;
+        this.sessionRegistry = sessionRegistry;
     }
 
     @PostMapping("/login")
@@ -63,10 +69,19 @@ public class AuthController {
             securityContext.setAuthentication(authentication);
             SecurityContextHolder.setContext(securityContext);
 
-            // 3. Save Security Context to Http Session (crucial for JSESSIONID cookie
-            // generation)
+            // 3. Save Security Context to Http Session (crucial for JSESSIONID cookie generation)
             HttpSession session = request.getSession(true);
             session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+
+            // 4. Manually Handle Session Concurrency Registry
+            // This ensures that Spring Security knows about this manual login
+            // and can enforce the maximum sessions (1) limit.
+            Object principal = authentication.getPrincipal();
+            List<SessionInformation> sessions = sessionRegistry.getAllSessions(principal, false);
+            for (SessionInformation existingSession : sessions) {
+                existingSession.expireNow();
+            }
+            sessionRegistry.registerNewSession(session.getId(), principal);
 
             auditService.log("LOGIN", username, "USER", null, "User logged in successfully");
             return ResponseEntity.ok(Map.of("message", "Login successful", "username", username));

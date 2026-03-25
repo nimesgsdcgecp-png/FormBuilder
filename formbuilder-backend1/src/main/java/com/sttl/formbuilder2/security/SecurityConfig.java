@@ -64,7 +64,10 @@ public class SecurityConfig {
 
                 // 4. Use stateful sessions (this is what enables JSESSIONID cookies)
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .maximumSessions(1)
+                        .maxSessionsPreventsLogin(false)
+                        .sessionRegistry(sessionRegistry()))
 
                 // 5. Handle unauthorized access by returning 401 instead of a redirect to a
                 // Spring login page
@@ -101,5 +104,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    @Bean
+    public org.springframework.security.web.session.HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new org.springframework.security.web.session.HttpSessionEventPublisher();
+    }
+
+    @Bean
+    public org.springframework.security.core.session.SessionRegistry sessionRegistry() {
+        return new org.springframework.security.core.session.SessionRegistryImpl();
     }
 }
