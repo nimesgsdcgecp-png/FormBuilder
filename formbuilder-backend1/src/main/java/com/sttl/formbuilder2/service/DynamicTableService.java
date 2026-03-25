@@ -231,8 +231,17 @@ public class DynamicTableService {
 
         filters.forEach((col, val) -> {
             if (val != null && !val.isBlank() && !col.equals("q") && existingColumns.contains(col)) {
-                where.append(" AND \"").append(col).append("\" ILIKE ?");
-                params.add("%" + val + "%");
+                if (col.equals("form_version_id") || col.equals("id")) {
+                    where.append(" AND \"").append(col).append("\" = ?");
+                    try {
+                        params.add(Long.parseLong(val));
+                    } catch (NumberFormatException e) {
+                        params.add(-1L);
+                    }
+                } else {
+                    where.append(" AND \"").append(col).append("\" ILIKE ?");
+                    params.add("%" + val + "%");
+                }
             }
         });
 

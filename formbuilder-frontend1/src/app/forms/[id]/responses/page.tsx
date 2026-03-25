@@ -37,6 +37,7 @@ export default function ResponsesPage() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [formTitle, setFormTitle] = useState('');
+  const [formVersion, setFormVersion] = useState<number | null>(null);
   const [publicToken, setPublicToken] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -63,6 +64,11 @@ export default function ResponsesPage() {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [showColumnConfig, setShowColumnConfig] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // Version Filtering Extensions
+  const [allVersions, setAllVersions] = useState<any[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | 'all'>('all');
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -98,47 +104,68 @@ export default function ResponsesPage() {
       const formData = await formRes.json();
       setFormTitle(formData.title);
       setPublicToken(formData.publicShareToken);
+      
+      const versions = formData.versions || [];
+      setAllVersions(versions);
 
-      const activeVersion = formData.versions?.[0];
-      const currentFields = activeVersion?.fields || [];
+      // Determine which version to use for column headers
+      let targetVersion = null;
+      if (selectedVersionId === 'all') {
+        targetVersion = versions.find((v: any) => v.isActive) || versions[0];
+      } else {
+        targetVersion = versions.find((v: any) => v.id.toString() === selectedVersionId);
+      }
+
+      setFormVersion(targetVersion?.versionNumber || null);
+      
+      const currentFields = (targetVersion?.fields || [])
+        .filter((f: any) => f.fieldType !== 'SECTION_HEADER' && f.fieldType !== 'PAGE_BREAK')
+        .sort((a: any, b: any) => (a.ordinalPosition || 0) - (b.ordinalPosition || 0));
+        
       const currentFieldNames = new Set(currentFields.map((f: any) => f.columnName));
 
       // 2. Fetch Submissions with Pagination, Sorting, and Filtering
+      const apiFilters: any = { ...debouncedColumnFilters };
+      if (debouncedSearchTerm) apiFilters['q'] = debouncedSearchTerm;
+      if (selectedVersionId !== 'all') apiFilters['form_version_id'] = selectedVersionId;
+
       const response = await getSubmissions(
         formId,
-        currentPage - 1, // Backend is 0-indexed
+        currentPage - 1,
         pageSize,
         sortConfig.key || 'submitted_at',
         sortConfig.direction?.toUpperCase() || 'DESC',
-        { ...debouncedColumnFilters, ...(debouncedSearchTerm ? { 'q': debouncedSearchTerm } : {}) }
+        apiFilters
       );
 
       setData(response.content);
       setTotalElements(response.totalElements);
       setTotalPages(response.totalPages);
 
-      // 3. Build Headers (Only if empty or formId changes)
-      if (headers.length === 0) {
-        let ghostHeaders: FormHeader[] = [];
-        if (response.content.length > 0) {
-          const allDbKeys = Object.keys(response.content[0]);
-          const ghostKeys = allDbKeys.filter(key =>
-            key !== 'submission_id' && key !== 'submitted_at' && key !== 'submission_status' && !currentFieldNames.has(key)
-          );
-          ghostHeaders = ghostKeys.map(key => ({ key, label: `${formatLabel(key)} (Archived)` }));
-        }
-
-        const standardHeaders = [
-          { key: 'serial_no', label: 'ID' },
-          { key: 'submission_status', label: 'Status' },
-          { key: 'submitted_at', label: 'Date' }
-        ];
-        const formHeaders = currentFields.map((f: any) => ({
-          key: f.columnName, label: f.fieldLabel, type: f.fieldType
-        }));
-
-        setHeaders([...standardHeaders, ...formHeaders, ...ghostHeaders]);
+      // 3. Build Headers
+      let ghostHeaders: FormHeader[] = [];
+      if (showArchived && response.content.length > 0) {
+        const allDbKeys = Object.keys(response.content[0]);
+        const ghostKeys = allDbKeys.filter(key =>
+          key !== 'submission_id' && key !== 'submitted_at' && key !== 'submission_status' && 
+          key !== 'form_version_id' && key !== 'is_deleted' && key !== 'is_draft' && key !== 'submitted_by' &&
+          !currentFieldNames.has(key)
+        );
+        ghostHeaders = ghostKeys.map(key => ({ key, label: `${formatLabel(key)} (Archived)` }));
       }
+
+      const standardHeaders = [
+        { key: 'serial_no', label: 'ID' },
+        { key: 'submission_status', label: 'Status' },
+        { key: 'submitted_at', label: 'Date' }
+      ];
+      const formHeaders = currentFields.map((f: any) => ({
+        key: f.columnName, label: f.fieldLabel, type: f.fieldType
+      }));
+
+      // Only force reset visible columns if headers actually change structure
+      const newHeaders = [...standardHeaders, ...formHeaders, ...ghostHeaders];
+      setHeaders(newHeaders);
     } catch (error: any) {
       if (error.name === 'AbortError') return;
       console.error("Error loading responses:", error);
@@ -153,7 +180,7 @@ export default function ResponsesPage() {
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
-  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm]);
+  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm, selectedVersionId, showArchived]);
 
   // Reset headers when form changes
   useEffect(() => {
@@ -399,6 +426,11 @@ export default function ResponsesPage() {
                 <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-[var(--text-faint)] whitespace-nowrap">Responses Page</span>
                 <span className="hidden sm:inline text-[var(--border)] font-light">/</span>
                 <h1 className="text-base sm:text-xl font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>{formTitle}</h1>
+                {formVersion !== null && (
+                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent)] text-[10px] font-black uppercase tracking-widest border border-[var(--accent-muted)]">
+                    v{formVersion}.0
+                  </span>
+                )}
                 <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">Live</span>
               </div>
               <p className="text-[10px] sm:text-xs font-medium truncate" style={{ color: 'var(--text-muted)' }}>
@@ -444,7 +476,28 @@ export default function ResponsesPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {/* Version Filter */}
+            <div className="relative shrink-0">
+               <select
+                value={selectedVersionId}
+                onChange={(e) => {
+                  setSelectedVersionId(e.target.value);
+                  setCurrentPage(1);
+                  setHeaders([]); // Force full re-eval of columns
+                }}
+                className="pl-4 pr-10 py-2.5 rounded-xl text-xs font-bold border transition-all hover:border-blue-400 focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              >
+                <option value="all">All Versions</option>
+                {allVersions.map((v: any) => (
+                  <option key={v.id} value={v.id.toString()}>
+                    Version {v.versionNumber} {v.isActive ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
+            </div>
             {/* Advanced Filters */}
             <div className="relative">
               <button
@@ -556,6 +609,20 @@ export default function ResponsesPage() {
                       <button onClick={() => setVisibleColumns(new Set(headers.map(h => h.key)))} className="text-[10px] font-bold text-blue-600 hover:underline">Reset</button>
                     </div>
                     <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[var(--border)]">
+                      {/* Archive Toggle */}
+                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-[var(--border)] mb-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Archived Fields</span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Show old/removed field values</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
+                          checked={showArchived}
+                          onChange={(e) => setShowArchived(e.target.checked)}
+                        />
+                      </label>
+
                       {headers.map(header => (
                         <label key={header.key} className="flex items-center justify-between cursor-pointer group">
                           <span className="text-xs font-medium transition-colors" style={{ color: 'var(--text-muted)' }}>{header.label}</span>

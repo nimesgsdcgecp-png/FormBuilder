@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { extractApiError } from '@/utils/error-handler';
 import ThemeToggle from '@/components/ThemeToggle';
 import FormRenderer from '@/components/FormRenderer';
 import { FormSchema, FormField as SchemaField } from '@/types/schema';
@@ -34,7 +35,10 @@ function PublicFormContent() {
 
     if (!token) return;
 
-    fetch(`http://localhost:8080/api/v1/forms/public/${token}`, { credentials: 'include' })
+    fetch(`http://localhost:8080/api/v1/forms/public/${token}`, { 
+      credentials: 'include',
+      cache: 'no-store'
+    })
       .then((res) => {
         if (!res.ok) throw new Error('Form not found or link is invalid');
         return res.json();
@@ -43,7 +47,7 @@ function PublicFormContent() {
         const versions = data.versions || [];
         if (versions.length === 0) throw new Error('Form version data is missing');
 
-        const activeVersion = versions[0];
+        const activeVersion = versions.find((v: any) => v.isActive) || versions[0];
         setOwnerId(data.ownerId);
         setVersionId(activeVersion.id);
 
@@ -175,16 +179,7 @@ function PublicFormContent() {
       });
 
       if (!response.ok) {
-          const contentType = response.headers.get('content-type');
-          let errMsg = "Submission failed";
-          if (contentType && contentType.includes('application/json')) {
-              const errData = await response.json().catch(() => ({}));
-              if (errData.details && Array.isArray(errData.details)) {
-                  errMsg = errData.details.map((d: any) => d.message).join('\n');
-              } else if (errData.message) {
-                  errMsg = errData.message;
-              }
-          }
+          const errMsg = await extractApiError(response);
           throw new Error(errMsg);
       }
       const resData = await response.json();
@@ -209,7 +204,7 @@ function PublicFormContent() {
 
       if (status === 'FINAL') setIsSubmitted(true);
     } catch (err) {
-      toast.error("Submission failed. Please try again.");
+      // toast.error(msg); // Removed to prevent double notification (FormRenderer handles it)
       throw err;
     }
   };

@@ -62,6 +62,8 @@ function BuilderContent() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<'PALETTE' | 'CANVAS' | 'PROPERTIES'>('CANVAS');
+  const [initialState, setInitialState] = useState<string>('');
+  const isDirty = initialState !== JSON.stringify({ schema, formValidations });
   const profileRef = useRef<HTMLDivElement>(null);
   const { hasPermission, assignments } = usePermissions();
   const isAdminOrBuilder = assignments.some((a: any) => 
@@ -199,6 +201,14 @@ function BuilderContent() {
 
         const mappedFields = mapFieldsRecursive(activeVersion.fields);
         setFields(mappedFields);
+        
+        // Capture initial state for dirty check after all setters have run
+        setTimeout(() => {
+          setInitialState(JSON.stringify({ 
+            schema: { ...useFormStore.getState().schema, fields: mappedFields, rules: parsedRules }, 
+            formValidations: data.versions?.find((v: any) => v.isActive)?.formValidations || [] 
+          }));
+        }, 100);
       })
       .catch(err => {
         console.error("Failed to load form:", err);
@@ -300,6 +310,10 @@ function BuilderContent() {
       }
 
       toast.success(`Form ${status === 'PUBLISHED' ? 'published successfully!' : 'saved as draft!'}`);
+      
+      // Update initial state after successful save
+      setInitialState(JSON.stringify({ schema: payload, formValidations }));
+      
       // Don't push to '/' yet, allow user to keep editing or "Request Approval"
       // router.push('/'); 
     } catch (error) {
@@ -498,35 +512,47 @@ function BuilderContent() {
                 <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={20} />
               </button>
 
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={schema.title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 w-[200px] focus:outline-none"
-                    style={{ color: 'var(--text-primary)' }}
-                    placeholder="Untitled Form"
-                  />
-                  <input
-                    type="text"
-                    value={schema.code || ''}
-                    onChange={(e) => useFormStore.setState(s => ({ schema: { ...s.schema, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, '_') } }))}
-                    disabled={schema.codeLocked}
-                    className="bg-transparent border-none p-0 text-xs focus:ring-0 w-[120px] focus:outline-none"
-                    style={{ color: 'var(--text-secondary)' }}
-                    placeholder={schema.codeLocked ? 'Code locked' : 'Form identifier...'}
-                  />
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-widest pl-0.5">Form Title</span>
+                    <input
+                      type="text"
+                      value={schema.title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 w-[240px] focus:outline-none"
+                      style={{ color: 'var(--text-primary)' }}
+                      placeholder="Untitled Form"
+                    />
+                  </div>
+                  
+                  <div className="h-8 w-px bg-[var(--border)] mx-1" />
+
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-widest pl-0.5">Form Code identifier</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-[var(--accent)]">/</span>
+                      <input
+                        type="text"
+                        value={schema.code || ''}
+                        onChange={(e) => useFormStore.setState(s => ({ schema: { ...s.schema, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, '_') } }))}
+                        disabled={schema.codeLocked}
+                        className="bg-transparent border-none p-0 text-xs font-bold focus:ring-0 w-[140px] focus:outline-none"
+                        style={{ color: schema.codeLocked ? 'var(--text-faint)' : 'var(--text-secondary)' }}
+                        placeholder={schema.codeLocked ? 'locked' : 'unique_code...'}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="hidden xs:inline text-[10px] font-semibold opacity-50 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-                    {editFormId ? 'Editing Form' : 'New Draft'}
-                  </span>
-                  <span className="hidden xs:inline w-1 h-1 rounded-full bg-[var(--border)]" />
-                  <span className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">
+                
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[9px] font-bold text-[var(--accent)] uppercase tracking-[0.2em] bg-[var(--accent-subtle)] px-1.5 py-0.5 rounded">
                     {schema.status}
                   </span>
-                  {isSaving && <span className="text-[10px] font-medium animate-pulse text-blue-500">. Saving...</span>}
+                  <span className="text-[9px] font-semibold opacity-40 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+                    {editFormId ? 'Persistent V-ID' : 'Transient Draft'}
+                  </span>
+                  {isSaving && <span className="text-[9px] font-black animate-pulse text-blue-500 uppercase tracking-widest">. Saving</span>}
                 </div>
               </div>
             </div>
@@ -588,12 +614,13 @@ function BuilderContent() {
                 </button>
               )}
 
-              <button
+              {/* Workflow - Hidden for now as per user request */}
+              {/* <button
                 onClick={() => setIsWorkflowModalOpen(true)}
                 className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm hover:shadow-md shrink-0"
               >
                 <ShieldAlert size={14} className="sm:mr-1.5" /> <span className="hidden lg:inline">Request Approval</span>
-              </button>
+              </button> */}
 
               {isAdminOrBuilder && (
                 <>
@@ -608,10 +635,10 @@ function BuilderContent() {
 
                   <button
                     onClick={() => handleSave('PUBLISHED')}
-                    disabled={isSaving}
-                    className="px-3 sm:px-4 py-1.5 rounded-lg text-xs font-black text-white gradient-accent shadow-sm hover:shadow-md transition-all uppercase tracking-widest shrink-0"
+                    disabled={isSaving || !isDirty}
+                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-black shadow-sm transition-all uppercase tracking-widest shrink-0 ${isSaving || !isDirty ? 'bg-[var(--bg-muted)] text-[var(--text-muted)] border border-[var(--border)] cursor-not-allowed' : 'gradient-accent text-white hover:shadow-md'}`}
                   >
-                    {isSaving ? '...' : 'Publish'}
+                    {isSaving ? '...' : (status === 'PUBLISHED' && !isDirty ? 'Published' : 'Publish')}
                   </button>
                 </>
               )}

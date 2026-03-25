@@ -138,15 +138,21 @@ public class FormMapper {
                     .activatedAt(version.getActivatedAt() != null ? version.getActivatedAt().toString() : null)
                     .rules(parsedRules)
                     .formValidations(validationDTOs)
+                    .createdAt(version.getCreatedAt() != null ? version.getCreatedAt().toString() : null)
                     .fields(rootFields)
                     .build();
         }).collect(Collectors.toList());
 
-        // Extract theme metadata
+        // Extract theme metadata from the ACTIVE version
         String themeColor = null;
         String themeFont = null;
-        if (!versionDTOs.isEmpty()) {
-            Object rules = versionDTOs.get(0).getRules();
+        FormVersionResponseDTO activeVersionDTO = versionDTOs.stream()
+                .filter(FormVersionResponseDTO::getIsActive)
+                .findFirst()
+                .orElse(!versionDTOs.isEmpty() ? versionDTOs.get(0) : null);
+
+        if (activeVersionDTO != null) {
+            Object rules = activeVersionDTO.getRules();
             if (rules instanceof Map) {
                 Map<String, Object> rulesMap = (Map<String, Object>) rules;
                 if (rulesMap.containsKey("theme")) {

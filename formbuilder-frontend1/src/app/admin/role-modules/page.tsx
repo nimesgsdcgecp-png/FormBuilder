@@ -186,14 +186,14 @@ export default function RoleModuleMappingPage() {
       <div className="sticky top-16 z-20 py-3 px-4 sm:px-8 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
             <div className="flex bg-(--bg-base) p-1 rounded-xl border border-(--border) shrink-0">
-              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-black text-(--accent) bg-(--accent-subtle) rounded-lg whitespace-nowrap">
+              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-bold text-(--accent) bg-(--accent-subtle) rounded-lg whitespace-nowrap">
                 <ShieldCheck size={14} />
                 <span className="hidden xs:inline">{roles.length} Roles Identified</span>
                 <span className="xs:hidden">{roles.length}R</span>
               </div>
             </div>
             <div className="hidden sm:block h-6 w-px bg-(--border)" />
-            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-(--text-faint) truncate">
+            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-(--text-faint) truncate">
               <LayoutGrid size={12} className="shrink-0" />
               <span className="truncate">{modules.length} Available Modules</span>
             </div>
@@ -204,7 +204,7 @@ export default function RoleModuleMappingPage() {
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-black text-white gradient-accent shadow-sm hover:shadow-md transition-all active:scale-95 uppercase tracking-widest whitespace-nowrap disabled:opacity-50"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold text-white gradient-accent shadow-sm hover:shadow-md transition-all active:scale-95 uppercase tracking-widest whitespace-nowrap disabled:opacity-50"
               >
                 <Save size={14} />
                 {isSaving ? 'Saving...' : 'Save Mappings'}
@@ -225,7 +225,7 @@ export default function RoleModuleMappingPage() {
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Roles Selection */}
             <div className="space-y-4">
-               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-(--text-faint) ml-2">Select System Role</h2>
+               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-(--text-faint) ml-2">Select System Role</h2>
                <div className="space-y-2">
                   {roles.map(role => (
                     <button
@@ -239,7 +239,7 @@ export default function RoleModuleMappingPage() {
                     >
                       <div className="flex items-center gap-3">
                          <Shield size={18} className={selectedRole?.id === role.id ? 'text-(--accent)' : 'text-slate-400'} />
-                         <span className="font-bold text-sm tracking-tight">{role.name}</span>
+                         <span className="font-medium text-sm tracking-tight">{role.name}</span>
                       </div>
                       {selectedRole?.id === role.id && <Check size={16} />}
                     </button>
@@ -249,24 +249,24 @@ export default function RoleModuleMappingPage() {
 
             {/* Modules Mapping */}
             <div className="lg:col-span-2 space-y-6">
-               <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-black uppercase tracking-[0.2em] text-(--text-faint) ml-1">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-(--text-faint) ml-1">
                     {selectedRole ? `Modules for ${selectedRole.name}` : 'Select a role to map modules'}
                   </h2>
                   {selectedRole && (
                     <button 
                       onClick={handleSave}
                       disabled={isSaving}
-                      className="inline-flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black text-white gradient-accent shadow-lg shadow-blue-500/20 hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold text-white gradient-accent shadow-lg shadow-blue-500/20 hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-50"
                     >
                       <Save size={14} />
                       {isSaving ? 'Saving...' : 'Save Mappings'}
                     </button>
                   )}
-               </div>
+                </div>
 
-               {selectedRole ? (
-                 <div className="space-y-4">
+                {selectedRole ? (
+                  <div className="space-y-4">
                     {modules.filter(m => !m.parentId && !m.subParentId).map(parent => {
                       const isExpanded = expandedParents.includes(parent.id);
                       const isSelected = assignedModuleIds.includes(parent.id);
@@ -281,17 +281,17 @@ export default function RoleModuleMappingPage() {
                              <div className="flex items-center gap-4">
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); toggleModule(parent.id); }}
-                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-(--accent) border-(--accent)' : 'border-slate-300 bg-white'}`}
+                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all focus:outline-none ${isSelected ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-200 bg-white'}`}
                                 >
-                                   {isSelected && <Check className="text-white" size={14} />}
+                                   {isSelected && <Check className="text-white" size={16} strokeWidth={4} />}
                                 </button>
                                 <div className="flex items-center gap-3">
-                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-(--accent-subtle) text-(--accent)' : 'bg-slate-100 text-slate-400'}`}>
+                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-(--accent-subtle) text-(--accent)' : 'bg-slate-50 text-slate-400'}`}>
                                       {isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
                                    </div>
                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-(--text-primary)">{parent.moduleName}</span>
-                                      <span className="text-[10px] text-(--text-faint) font-bold uppercase tracking-wider">Parent Directory</span>
+                                      <span className="font-medium text-sm text-(--text-primary)">{parent.moduleName}</span>
+                                      <span className="text-[10px] text-(--text-faint) font-normal uppercase tracking-wider">Parent Directory</span>
                                    </div>
                                 </div>
                              </div>
@@ -321,12 +321,12 @@ export default function RoleModuleMappingPage() {
                                              <div className="flex items-center gap-3">
                                                 <button 
                                                   onClick={(e) => { e.stopPropagation(); toggleModule(subParent.id); }}
-                                                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSubSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 bg-white'}`}
+                                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all focus:outline-none ${isSubSelected ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-200 bg-white'}`}
                                                 >
-                                                   {isSubSelected && <Check className="text-white" size={12} />}
+                                                   {isSubSelected && <Check className="text-white" size={16} strokeWidth={4} />}
                                                 </button>
-                                                <span className="font-bold text-xs">{subParent.moduleName}</span>
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2 py-0.5 bg-slate-100 rounded">Sub Category</span>
+                                                <span className="font-medium text-xs">{subParent.moduleName}</span>
+                                                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 px-2 py-0.5 bg-slate-100 rounded">Sub Category</span>
                                              </div>
                                              <ChevronDown size={14} className={`text-(--text-faint) transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
                                           </div>
@@ -340,17 +340,17 @@ export default function RoleModuleMappingPage() {
                                                ) : (
                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                    {leafItems.map(leaf => (
-                                                      <label key={leaf.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer transition-all border border-transparent hover:border-slate-200">
+                                                      <label key={leaf.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer transition-all border border-transparent hover:border-slate-200 group">
                                                          <input 
                                                            type="checkbox" 
                                                            className="hidden" 
                                                            checked={assignedModuleIds.includes(leaf.id)}
                                                            onChange={() => toggleModule(leaf.id)}
                                                          />
-                                                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-400 border-blue-400' : 'border-slate-300'}`}>
-                                                            {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={10} />}
+                                                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all focus:outline-none ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-600 border-blue-600 shadow-sm' : 'border-slate-200 bg-white group-hover:border-blue-400'}`}>
+                                                            {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={14} strokeWidth={4} />}
                                                          </div>
-                                                         <span className="text-[11px] font-medium text-(--text-muted)">{leaf.moduleName}</span>
+                                                         <span className="text-[11px] font-normal text-(--text-muted)">{leaf.moduleName}</span>
                                                       </label>
                                                    ))}
                                                  </div>
@@ -364,17 +364,17 @@ export default function RoleModuleMappingPage() {
                                    {/* Level 2 Modules (non-subparents) */}
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                      {subItems.filter(m => !m.isSubParent).map(leaf => (
-                                       <label key={leaf.id} className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-slate-200 hover:bg-white cursor-pointer transition-all bg-white/30">
+                                       <label key={leaf.id} className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-slate-200 hover:bg-white cursor-pointer transition-all bg-white/30 group">
                                           <input 
                                             type="checkbox" 
                                             className="hidden" 
                                             checked={assignedModuleIds.includes(leaf.id)}
                                             onChange={() => toggleModule(leaf.id)}
                                           />
-                                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-500 border-blue-500' : 'border-slate-300'}`}>
-                                             {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={12} />}
+                                          <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all focus:outline-none ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-600 border-blue-600 shadow-lg shadow-blue-500/30' : 'border-slate-200 bg-white group-hover:border-blue-400'}`}>
+                                             {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={16} strokeWidth={4} />}
                                           </div>
-                                          <span className="font-bold text-xs">{leaf.moduleName}</span>
+                                          <span className="font-medium text-xs">{leaf.moduleName}</span>
                                        </label>
                                      ))}
                                    </div>
@@ -385,19 +385,19 @@ export default function RoleModuleMappingPage() {
                         </div>
                       );
                     })}
-                 </div>
-               ) : (
-                 <div className="h-100 flex flex-col items-center justify-center border-2 border-dashed rounded-[3rem] p-12 text-center" style={{ borderColor: 'var(--border)', background: 'var(--card-bg)' }}>
-                    <div className="w-20 h-20 rounded-full bg-(--bg-muted) flex items-center justify-center mb-6">
-                       <ShieldCheck className="text-(--text-faint)" size={40} />
-                    </div>
-                    <h3 className="text-lg font-black tracking-tight mb-2">Access Control Center</h3>
-                    <p className="max-w-xs text-xs font-medium text-(--text-muted) leading-relaxed">
-                       Select a user role from the left panel to begin mapping sidebar modules and managing system access.
-                    </p>
-                 </div>
-               )}
-            </div>
+                  </div>
+                ) : (
+                  <div className="h-100 flex flex-col items-center justify-center border-2 border-dashed rounded-[3rem] p-12 text-center" style={{ borderColor: 'var(--border)', background: 'var(--card-bg)' }}>
+                     <div className="w-20 h-20 rounded-full bg-(--bg-muted) flex items-center justify-center mb-6">
+                        <ShieldCheck className="text-(--text-faint)" size={40} />
+                     </div>
+                     <h3 className="text-lg font-bold tracking-tight mb-2">Access Control Center</h3>
+                     <p className="max-w-xs text-xs font-medium text-(--text-muted) leading-relaxed">
+                        Select a user role from the left panel to begin mapping sidebar modules and managing system access.
+                     </p>
+                  </div>
+                )}
+             </div>
          </div>
       </main>
     </div>

@@ -65,7 +65,7 @@ export default function RootLayout({
           {children}
         </AppShell>
         {/* Global toast container — position top-center with rich colour variants */}
-        <Toaster position="top-center" richColors />
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

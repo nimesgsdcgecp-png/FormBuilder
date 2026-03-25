@@ -387,7 +387,8 @@ export default function FormRenderer({
         try {
             if (onSubmit) await onSubmit(answers, status);
         } catch (err) {
-            toast.error(status === 'RESPONSE_DRAFT' ? "Failed to save draft" : (err instanceof Error && err.message !== "Submission failed" ? err.message : "Submission failed"));
+            const msg = err instanceof Error ? err.message : "Submission failed";
+            toast.error(status === 'RESPONSE_DRAFT' ? `Draft Error: ${msg}` : msg);
         } finally {
             setIsSubmitting(false);
         }

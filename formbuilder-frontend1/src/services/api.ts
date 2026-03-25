@@ -12,7 +12,10 @@ export class UnauthorizedError extends Error {
   }
 }
 
+import { extractApiError } from '@/utils/error-handler';
+
 const API_BASE_URL = 'http://localhost:8080/api/v1';
+
 
 /**
  * Saves a form to the backend.
@@ -88,8 +91,8 @@ export const saveForm = async (schema: FormSchema) => {
 
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || 'Failed to save form');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 
   return response.json();
@@ -150,10 +153,10 @@ export const updateForm = async (id: number, schema: any) => {
     });
   
     if (!response.ok) {
-      if (response.status === 401) throw new UnauthorizedError();
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to update form');
-    }
+    if (response.status === 401) throw new UnauthorizedError();
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
+  }
   
     return response.json();
   };
@@ -200,7 +203,8 @@ export const getSubmissions = async (
 
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to fetch submissions');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 
   return response.json();
@@ -220,7 +224,8 @@ export const deleteSubmission = async (formId: string, submissionId: string) => 
   });
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to delete submission');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 };
 
@@ -240,7 +245,8 @@ export const deleteSubmissionsBulk = async (formId: string, submissionIds: strin
   });
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to delete submissions');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 };
 
@@ -258,7 +264,8 @@ export const deleteForm = async (id: number) => {
   });
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to delete form');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 };
 
@@ -273,7 +280,8 @@ export const getArchivedForms = async () => {
   });
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to fetch archived forms');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
   return response.json();
 };
@@ -291,7 +299,8 @@ export const restoreForm = async (id: number) => {
   });
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    throw new Error('Failed to restore form');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 };
 
@@ -315,8 +324,8 @@ export const submitFormResponse = async (formId: string, data: Record<string, an
 
   if (!response.ok) {
     if (response.status === 401) throw new UnauthorizedError();
-    const error = await response.json();
-    throw new Error(error.message || 'Submission failed');
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
   }
 
   return response.json();

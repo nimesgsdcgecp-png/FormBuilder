@@ -30,6 +30,7 @@ public class FormVersionService {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final DraftService draftService;
+    private final DynamicTableService dynamicTableService;
 
     public FormVersionResponseDTO createVersion(Long formId) {
         Form form = formRepository.findById(formId)
@@ -81,6 +82,23 @@ public class FormVersionService {
         toActivate.setActivatedBy(actor);
         toActivate.setActivatedAt(Instant.now());
         formVersionRepository.save(toActivate);
+
+        // SYNC TABLE SCHEMA: Ensure the physical table matches the restored version
+        String tableName = toActivate.getForm().getTargetTableName();
+        if (tableName != null) {
+            List<com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO> fieldDtos = toActivate.getFields().stream()
+                .map(f -> {
+                    com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO dto = new com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO();
+                    dto.setLabel(f.getFieldLabel());
+                    dto.setColumnName(f.getColumnName());
+                    dto.setType(f.getFieldType());
+                    dto.setRequired(Boolean.TRUE.equals(f.getIsMandatory()));
+                    dto.setValidation(f.getValidationRules());
+                    return dto;
+                }).collect(Collectors.toList());
+            dynamicTableService.alterDynamicTable(tableName, fieldDtos);
+        }
+
         auditService.log("VERSION_ACTIVATE", actor, "FORM_VERSION", versionId.toString(), "Activated");
     }
 

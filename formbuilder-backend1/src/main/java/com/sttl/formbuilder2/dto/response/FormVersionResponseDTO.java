@@ -39,5 +39,6 @@ public class FormVersionResponseDTO {
     private String activatedAt;
     private Object rules;
     private List<FieldValidationResponseDTO> formValidations;
+    private String createdAt;
     private List<FormFieldResponseDTO> fields;
 }
