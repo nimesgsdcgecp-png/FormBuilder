@@ -34,6 +34,10 @@ public class FormVersionResponseDTO {
     private Long id;
     private Integer versionNumber;
     private String changeLog;
+    private Boolean isActive;
+    private String activatedBy;
+    private String activatedAt;
     private Object rules;
+    private List<FieldValidationResponseDTO> formValidations;
     private List<FormFieldResponseDTO> fields;
 }

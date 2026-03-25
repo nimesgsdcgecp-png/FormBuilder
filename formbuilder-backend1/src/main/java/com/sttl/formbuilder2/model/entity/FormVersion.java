@@ -92,4 +92,14 @@ public class FormVersion {
      */
     @Column(name = "rules", columnDefinition = "TEXT")
     private String rules;
+
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = false;
+
+    @Column(name = "activated_by")
+    private String activatedBy;
+
+    @Column(name = "activated_at")
+    private Instant activatedAt;
 }

@@ -16,7 +16,7 @@ export const FONT_MAP: Record<string, string> = {
 interface FormRendererProps {
     schema: FormSchema;
     initialAnswers?: Record<string, any>;
-    onSubmit?: (answers: Record<string, any>, status: 'DRAFT' | 'FINAL') => void;
+    onSubmit?: (answers: Record<string, any>, status: 'RESPONSE_DRAFT' | 'FINAL') => void;
     submitButtonText?: string;
     isPreview?: boolean;
 }
@@ -360,10 +360,10 @@ export default function FormRenderer({
     };
 
     const handleSaveDraft = async () => {
-        await performSubmit('DRAFT');
+        await performSubmit('RESPONSE_DRAFT');
     };
 
-    const performSubmit = async (status: 'DRAFT' | 'FINAL') => {
+    const performSubmit = async (status: 'RESPONSE_DRAFT' | 'FINAL') => {
         if (isPreview) {
             toast.info("This is a preview. Form submission is disabled.");
             console.log("Preview Data:", answers);
@@ -387,7 +387,7 @@ export default function FormRenderer({
         try {
             if (onSubmit) await onSubmit(answers, status);
         } catch (err) {
-            toast.error(status === 'DRAFT' ? "Failed to save draft" : "Submission failed");
+            toast.error(status === 'RESPONSE_DRAFT' ? "Failed to save draft" : (err instanceof Error && err.message !== "Submission failed" ? err.message : "Submission failed"));
         } finally {
             setIsSubmitting(false);
         }

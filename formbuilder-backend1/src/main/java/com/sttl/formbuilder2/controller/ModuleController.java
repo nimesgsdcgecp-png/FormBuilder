@@ -25,12 +25,12 @@ public class ModuleController {
     }
 
     @PutMapping("/{id}")
-    public Module updateModule(@PathVariable Long id, @RequestBody Module module) {
+    public Module updateModule(@PathVariable("id") Long id, @RequestBody Module module) {
         return moduleService.updateModule(id, module);
     }
 
     @DeleteMapping("/{id}")
-    public void deleteModule(@PathVariable Long id) {
+    public void deleteModule(@PathVariable("id") Long id) {
         moduleService.deleteModule(id);
     }
 }

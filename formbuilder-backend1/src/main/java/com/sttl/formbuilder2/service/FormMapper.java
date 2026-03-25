@@ -2,6 +2,7 @@ package com.sttl.formbuilder2.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO;
+import com.sttl.formbuilder2.dto.response.FieldValidationResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormFieldResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
@@ -9,6 +10,7 @@ import com.sttl.formbuilder2.dto.response.FormVersionResponseDTO;
 import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.model.entity.FormField;
 import com.sttl.formbuilder2.model.entity.FormVersion;
+import com.sttl.formbuilder2.repository.FieldValidationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 public class FormMapper {
 
     private final ObjectMapper objectMapper;
+    private final FieldValidationRepository fieldValidationRepository;
 
     public FormSummaryResponseDTO toSummaryDTO(Form form) {
         return FormSummaryResponseDTO.builder()
@@ -35,6 +38,7 @@ public class FormMapper {
                 .createdAt(form.getCreatedAt())
                 .updatedAt(form.getUpdatedAt())
                 .targetTableName(form.getTargetTableName())
+                .code(form.getCode())
                 .publicShareToken(form.getPublicShareToken())
                 .allowEditResponse(form.isAllowEditResponse())
                 .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)
@@ -111,11 +115,29 @@ public class FormMapper {
                 }
             }
 
+            // 4. Map existing AST validations
+            List<FieldValidationResponseDTO> validationDTOs = fieldValidationRepository
+                    .findByFormVersionIdOrderByExecutionOrder(version.getId())
+                    .stream().map(fv -> {
+                        FieldValidationResponseDTO dto = new FieldValidationResponseDTO();
+                        dto.setId(String.valueOf(fv.getId()));
+                        dto.setFieldKey(fv.getFieldKey());
+                        dto.setScope(fv.getScope());
+                        dto.setExpression(fv.getExpression());
+                        dto.setErrorMessage(fv.getErrorMessage());
+                        dto.setExecutionOrder(fv.getExecutionOrder());
+                        return dto;
+                    }).collect(Collectors.toList());
+
             return FormVersionResponseDTO.builder()
                     .id(version.getId())
                     .versionNumber(version.getVersionNumber())
                     .changeLog(version.getChangeLog())
+                    .isActive(version.getIsActive())
+                    .activatedBy(version.getActivatedBy())
+                    .activatedAt(version.getActivatedAt() != null ? version.getActivatedAt().toString() : null)
                     .rules(parsedRules)
+                    .formValidations(validationDTOs)
                     .fields(rootFields)
                     .build();
         }).collect(Collectors.toList());
@@ -142,6 +164,8 @@ public class FormMapper {
                 .status(form.getStatus())
                 .createdAt(form.getCreatedAt())
                 .updatedAt(form.getUpdatedAt())
+                .code(form.getCode())
+                .codeLocked(form.getCodeLocked())
                 .publicShareToken(form.getPublicShareToken())
                 .allowEditResponse(form.isAllowEditResponse())
                 .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)

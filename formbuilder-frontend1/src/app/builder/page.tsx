@@ -27,6 +27,7 @@ import { FieldType } from '@/types/schema';
 import { saveForm, updateForm, deleteForm } from '@/services/api';
 import { toast } from 'sonner';
 import LogicPanel from '@/components/builder/LogicPanel';
+import CustomValidationsPanel, { ValidationRule } from '@/components/builder/CustomValidationsPanel';
 import Header from '@/components/Header';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save, Palette, FileText, User, ChevronRight, Check, Search, ShieldAlert, Plus, Settings2 } from 'lucide-react';
@@ -39,7 +40,7 @@ import { SortableField } from '@/components/builder/SortableField';
 import ThemeToggle from '@/components/ThemeToggle';
 import Link from 'next/link';
 import { Eye, ExternalLink } from 'lucide-react';
-
+import VersionsPanel from '@/components/builder/VersionsPanel';
 
 function BuilderContent() {
   const router = useRouter();
@@ -55,7 +56,8 @@ function BuilderContent() {
   const [activeSidebarItem, setActiveSidebarItem] = useState<FieldType | null>(null);
   const [activeCanvasItemId, setActiveCanvasItemId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC'>('EDITOR');
+  const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC' | 'VALIDATIONS' | 'VERSIONS'>('EDITOR');
+  const [formValidations, setFormValidations] = useState<ValidationRule[]>([]);
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -118,6 +120,9 @@ function BuilderContent() {
       .then(data => {
         setFormId(data.id);
         setTitle(data.title);
+        useFormStore.setState((state) => ({
+          schema: { ...state.schema, code: data.code || '', codeLocked: data.codeLocked || false }
+        }));
         setDescription(data.description || '');
         setAllowEditResponse(data.allowEditResponse || false);
         setStatus(data.status);
@@ -129,9 +134,26 @@ function BuilderContent() {
         if (data.themeColor) setThemeColor(data.themeColor);
         if (data.themeFont) setThemeFont(data.themeFont);
 
+        // Always pick the latest version by versionNumber for editing, 
+        // preferring the active one if multiple exist (though usually only one is active).
+        const versions = [...data.versions].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
+        const activeVersion = versions.find((v: any) => v.isActive) || versions[0];
+
+        // Load AST custom validations from the active version
+        if (activeVersion.formValidations && Array.isArray(activeVersion.formValidations)) {
+          setFormValidations(activeVersion.formValidations.map((fv: any) => ({
+            id: fv.id || crypto.randomUUID(),
+            scope: fv.scope || 'FORM',
+            fieldKey: fv.fieldKey || '',
+            expression: fv.expression || '',
+            errorMessage: fv.errorMessage || '',
+            executionOrder: fv.executionOrder || 0,
+          })));
+        }
+
         let parsedRules = [];
-        if (data.versions[0].rules) {
-          let raw = data.versions[0].rules;
+        if (activeVersion.rules) {
+          let raw = activeVersion.rules;
           if (typeof raw === 'string') {
             try { raw = JSON.parse(raw); } catch (e) { }
           }
@@ -175,7 +197,7 @@ function BuilderContent() {
           });
         };
 
-        const mappedFields = mapFieldsRecursive(data.versions[0].fields);
+        const mappedFields = mapFieldsRecursive(activeVersion.fields);
         setFields(mappedFields);
       })
       .catch(err => {
@@ -235,7 +257,17 @@ function BuilderContent() {
     setIsSaving(true);
     try {
       // Cast status to any to bypass the union type restriction for the DTO
-      const payload: any = { ...schema, status: status };
+      const payload: any = { 
+        ...schema, 
+        status: status,
+        formValidations: formValidations.map(v => ({
+          fieldKey: v.fieldKey,
+          scope: v.scope,
+          expression: v.expression,
+          errorMessage: v.errorMessage,
+          executionOrder: v.executionOrder
+        }))
+      };
       
       let savedForm;
       if (editFormId) {
@@ -250,6 +282,21 @@ function BuilderContent() {
 
       if (savedForm && savedForm.status) {
         setStatus(savedForm.status);
+      }
+
+      // Sync custom validations from the response's active version
+      const returnedVersion = savedForm.versions?.find((v: any) => v.isActive) || 
+                             [...savedForm.versions || []].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))[0];
+      
+      if (returnedVersion && Array.isArray(returnedVersion.formValidations)) {
+        setFormValidations(returnedVersion.formValidations.map((fv: any) => ({
+          id: fv.id || crypto.randomUUID(),
+          scope: fv.scope || 'FORM',
+          fieldKey: fv.fieldKey || '',
+          expression: fv.expression || '',
+          errorMessage: fv.errorMessage || '',
+          executionOrder: fv.executionOrder || 0,
+        })));
       }
 
       toast.success(`Form ${status === 'PUBLISHED' ? 'published successfully!' : 'saved as draft!'}`);
@@ -452,14 +499,25 @@ function BuilderContent() {
               </button>
 
               <div className="flex flex-col">
-                <input
-                  type="text"
-                  value={schema.title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 w-[200px] focus:outline-none"
-                  style={{ color: 'var(--text-primary)' }}
-                  placeholder="Untitled Form"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={schema.title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 w-[200px] focus:outline-none"
+                    style={{ color: 'var(--text-primary)' }}
+                    placeholder="Untitled Form"
+                  />
+                  <input
+                    type="text"
+                    value={schema.code || ''}
+                    onChange={(e) => useFormStore.setState(s => ({ schema: { ...s.schema, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, '_') } }))}
+                    disabled={schema.codeLocked}
+                    className="bg-transparent border-none p-0 text-xs focus:ring-0 w-[120px] focus:outline-none"
+                    style={{ color: 'var(--text-secondary)' }}
+                    placeholder={schema.codeLocked ? 'Code locked' : 'Form identifier...'}
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="hidden xs:inline text-[10px] font-semibold opacity-50 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
                     {editFormId ? 'Editing Form' : 'New Draft'}
@@ -481,11 +539,23 @@ function BuilderContent() {
               >
                 <Layout size={13} /> Editor
               </button>
-              <button
+              {/* <button
                 onClick={() => setActiveTab('LOGIC')}
                 className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'LOGIC' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
               >
                 <Link2 size={13} /> Logic
+              </button> */}
+              <button
+                onClick={() => setActiveTab('VALIDATIONS')}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VALIDATIONS' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+              >
+                <Check size={13} /> Validations
+              </button>
+              <button
+                onClick={() => setActiveTab('VERSIONS')}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VERSIONS' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+              >
+                <Archive size={13} /> Versions
               </button>
             </div>
 
@@ -581,9 +651,21 @@ function BuilderContent() {
               </div>
             )}
 
-            {/* 2. Main content (Canvas) */}
+            {/* 2. Main content (Canvas / Panels) */}
             <main className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden ${activeTab === 'EDITOR' && activeMobileTab !== 'CANVAS' ? 'hidden lg:flex' : 'flex'}`}>
-              {activeTab === 'EDITOR' ? <Canvas /> : <LogicPanel />}
+              {activeTab === 'EDITOR' ? (
+                <Canvas />
+              ) : activeTab === 'LOGIC' ? (
+                <LogicPanel />
+              ) : activeTab === 'VALIDATIONS' ? (
+                <CustomValidationsPanel 
+                  fields={schema.fields.map(f => ({ columnName: f.columnName, label: f.label }))}
+                  rules={formValidations}
+                  onChange={setFormValidations}
+                />
+              ) : (
+                <VersionsPanel editFormId={editFormId} />
+              )}
             </main>
 
             {/* 3. Right panel (Properties) */}

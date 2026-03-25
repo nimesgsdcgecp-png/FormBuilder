@@ -42,6 +42,8 @@ public class FormDetailResponseDTO {
     private Instant createdAt;
     private Instant updatedAt;
     private String targetTableName;
+    private String code;
+    private Boolean codeLocked;
     private String publicShareToken;
     private boolean allowEditResponse;
     private Long ownerId;

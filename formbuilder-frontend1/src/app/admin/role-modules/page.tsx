@@ -163,7 +163,7 @@ export default function RoleModuleMappingPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-main)' }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-(--accent) border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Loading Mapping Tool...</p>
         </div>
       </div>
@@ -185,15 +185,15 @@ export default function RoleModuleMappingPage() {
       {/* ── Toolbar ── */}
       <div className="sticky top-16 z-20 py-3 px-4 sm:px-8 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-            <div className="flex bg-[var(--bg-base)] p-1 rounded-xl border border-[var(--border)] shrink-0">
-              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-black text-[var(--accent)] bg-[var(--accent-subtle)] rounded-lg whitespace-nowrap">
+            <div className="flex bg-(--bg-base) p-1 rounded-xl border border-(--border) shrink-0">
+              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-black text-(--accent) bg-(--accent-subtle) rounded-lg whitespace-nowrap">
                 <ShieldCheck size={14} />
                 <span className="hidden xs:inline">{roles.length} Roles Identified</span>
                 <span className="xs:hidden">{roles.length}R</span>
               </div>
             </div>
-            <div className="hidden sm:block h-6 w-px bg-[var(--border)]" />
-            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)] truncate">
+            <div className="hidden sm:block h-6 w-px bg-(--border)" />
+            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-(--text-faint) truncate">
               <LayoutGrid size={12} className="shrink-0" />
               <span className="truncate">{modules.length} Available Modules</span>
             </div>
@@ -210,10 +210,10 @@ export default function RoleModuleMappingPage() {
                 {isSaving ? 'Saving...' : 'Save Mappings'}
               </button>
             )}
-            <div className="hidden sm:block h-6 w-px bg-[var(--border)] mx-1" />
+            <div className="hidden sm:block h-6 w-px bg-(--border) mx-1" />
             <button 
               onClick={fetchData} 
-              className="p-2 rounded-xl bg-[var(--bg-base)] border border-[var(--border)] hover:bg-[var(--bg-muted)] text-[var(--text-muted)] transition-all shadow-sm"
+              className="p-2 rounded-xl bg-(--bg-base) border border-(--border) hover:bg-(--bg-muted) text-(--text-muted) transition-all shadow-sm"
               title="Refresh"
             >
               <RotateCcw size={16} />
@@ -225,7 +225,7 @@ export default function RoleModuleMappingPage() {
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Roles Selection */}
             <div className="space-y-4">
-               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--text-faint)] ml-2">Select System Role</h2>
+               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-(--text-faint) ml-2">Select System Role</h2>
                <div className="space-y-2">
                   {roles.map(role => (
                     <button
@@ -233,12 +233,12 @@ export default function RoleModuleMappingPage() {
                       onClick={() => handleSelectRole(role)}
                       className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group ${
                         selectedRole?.id === role.id 
-                          ? 'bg-[var(--accent-subtle)] border-[var(--accent)] text-[var(--accent)]' 
-                          : 'bg-[var(--card-bg)] border-[var(--card-border)] hover:border-[var(--text-faint)]'
+                          ? 'bg-(--accent-subtle) border-(--accent) text-(--accent)' 
+                          : 'bg-(--card-bg) border-(--card-border) hover:border-(--text-faint)'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                         <Shield size={18} className={selectedRole?.id === role.id ? 'text-[var(--accent)]' : 'text-slate-400'} />
+                         <Shield size={18} className={selectedRole?.id === role.id ? 'text-(--accent)' : 'text-slate-400'} />
                          <span className="font-bold text-sm tracking-tight">{role.name}</span>
                       </div>
                       {selectedRole?.id === role.id && <Check size={16} />}
@@ -250,7 +250,7 @@ export default function RoleModuleMappingPage() {
             {/* Modules Mapping */}
             <div className="lg:col-span-2 space-y-6">
                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--text-faint)] ml-1">
+                  <h2 className="text-sm font-black uppercase tracking-[0.2em] text-(--text-faint) ml-1">
                     {selectedRole ? `Modules for ${selectedRole.name}` : 'Select a role to map modules'}
                   </h2>
                   {selectedRole && (
@@ -273,33 +273,33 @@ export default function RoleModuleMappingPage() {
                       const subItems = modules.filter(m => m.parentId === parent.id);
 
                       return (
-                        <div key={parent.id} className="rounded-2xl border bg-[var(--card-bg)] overflow-hidden" style={{ borderColor: 'var(--card-border)' }}>
+                        <div key={parent.id} className="rounded-2xl border bg-(--card-bg) overflow-hidden" style={{ borderColor: 'var(--card-border)' }}>
                           <div 
-                            className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${isExpanded ? 'bg-[var(--bg-muted)]' : ''}`}
+                            className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${isExpanded ? 'bg-(--bg-muted)' : ''}`}
                             onClick={() => setExpandedParents(prev => isExpanded ? prev.filter(id => id !== parent.id) : [...prev, parent.id])}
                           >
                              <div className="flex items-center gap-4">
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); toggleModule(parent.id); }}
-                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[var(--accent)] border-[var(--accent)]' : 'border-slate-300 bg-white'}`}
+                                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-(--accent) border-(--accent)' : 'border-slate-300 bg-white'}`}
                                 >
                                    {isSelected && <Check className="text-white" size={14} />}
                                 </button>
                                 <div className="flex items-center gap-3">
-                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-[var(--accent-subtle)] text-[var(--accent)]' : 'bg-slate-100 text-slate-400'}`}>
+                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-(--accent-subtle) text-(--accent)' : 'bg-slate-100 text-slate-400'}`}>
                                       {isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
                                    </div>
                                    <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-[var(--text-primary)]">{parent.moduleName}</span>
-                                      <span className="text-[10px] text-[var(--text-faint)] font-bold uppercase tracking-wider">Parent Directory</span>
+                                      <span className="font-bold text-sm text-(--text-primary)">{parent.moduleName}</span>
+                                      <span className="text-[10px] text-(--text-faint) font-bold uppercase tracking-wider">Parent Directory</span>
                                    </div>
                                 </div>
                              </div>
-                             <ChevronDown size={18} className={`text-[var(--text-faint)] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                             <ChevronDown size={18} className={`text-(--text-faint) transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                           </div>
 
                           {isExpanded && (
-                            <div className="border-t border-[var(--border)] bg-[var(--bg-base)] p-4 space-y-3">
+                            <div className="border-t border-(--border) bg-(--bg-base) p-4 space-y-3">
                                {!isSelected ? (
                                  <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                     <ShieldCheck className="text-slate-300 mb-2" size={24} />
@@ -313,9 +313,9 @@ export default function RoleModuleMappingPage() {
                                      const leafItems = modules.filter(m => m.subParentId === subParent.id);
 
                                      return (
-                                       <div key={subParent.id} className="rounded-xl border border-[var(--border)] overflow-hidden bg-white/50">
+                                       <div key={subParent.id} className="rounded-xl border border-(--border) overflow-hidden bg-white/50">
                                           <div 
-                                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-[var(--bg-muted)] transition-colors"
+                                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-(--bg-muted) transition-colors"
                                             onClick={() => setExpandedSubParents(prev => isSubExpanded ? prev.filter(id => id !== subParent.id) : [...prev, subParent.id])}
                                           >
                                              <div className="flex items-center gap-3">
@@ -328,7 +328,7 @@ export default function RoleModuleMappingPage() {
                                                 <span className="font-bold text-xs">{subParent.moduleName}</span>
                                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2 py-0.5 bg-slate-100 rounded">Sub Category</span>
                                              </div>
-                                             <ChevronDown size={14} className={`text-[var(--text-faint)] transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
+                                             <ChevronDown size={14} className={`text-(--text-faint) transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
                                           </div>
 
                                           {isSubExpanded && (
@@ -350,7 +350,7 @@ export default function RoleModuleMappingPage() {
                                                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-400 border-blue-400' : 'border-slate-300'}`}>
                                                             {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={10} />}
                                                          </div>
-                                                         <span className="text-[11px] font-medium text-[var(--text-muted)]">{leaf.moduleName}</span>
+                                                         <span className="text-[11px] font-medium text-(--text-muted)">{leaf.moduleName}</span>
                                                       </label>
                                                    ))}
                                                  </div>
@@ -387,12 +387,12 @@ export default function RoleModuleMappingPage() {
                     })}
                  </div>
                ) : (
-                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-[3rem] p-12 text-center" style={{ borderColor: 'var(--border)', background: 'var(--card-bg)' }}>
-                    <div className="w-20 h-20 rounded-full bg-[var(--bg-muted)] flex items-center justify-center mb-6">
-                       <ShieldCheck className="text-[var(--text-faint)]" size={40} />
+                 <div className="h-100 flex flex-col items-center justify-center border-2 border-dashed rounded-[3rem] p-12 text-center" style={{ borderColor: 'var(--border)', background: 'var(--card-bg)' }}>
+                    <div className="w-20 h-20 rounded-full bg-(--bg-muted) flex items-center justify-center mb-6">
+                       <ShieldCheck className="text-(--text-faint)" size={40} />
                     </div>
                     <h3 className="text-lg font-black tracking-tight mb-2">Access Control Center</h3>
-                    <p className="max-w-xs text-xs font-medium text-[var(--text-muted)] leading-relaxed">
+                    <p className="max-w-xs text-xs font-medium text-(--text-muted) leading-relaxed">
                        Select a user role from the left panel to begin mapping sidebar modules and managing system access.
                     </p>
                  </div>

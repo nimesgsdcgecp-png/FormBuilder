@@ -50,6 +50,7 @@ interface FormState {
   resetForm: () => void;
   setFormId: (id: number) => void;
   setTitle: (title: string) => void;
+  setCode: (code: string) => void;
   setDescription: (description: string) => void;
   setThemeColor: (color: string) => void;
   setThemeFont: (font: string) => void;
@@ -151,6 +152,7 @@ export const useFormStore = create<FormState>((set) => ({
   schema: {
     id: undefined,
     title: 'Untitled Form',
+    code: '',
     description: '',
     targetTableName: '',
     fields: [],
@@ -199,7 +201,7 @@ export const useFormStore = create<FormState>((set) => ({
 
   /** Resets all state to the blank new-form defaults. Called at the start of /builder for a new form. */
   resetForm: () => set({
-    schema: { id: undefined, title: 'Untitled Form', description: '', targetTableName: '', fields: [], themeColor: '#6366f1', themeFont: 'Inter' },
+    schema: { id: undefined, title: 'Untitled Form', code: '', description: '', targetTableName: '', fields: [], themeColor: '#6366f1', themeFont: 'Inter' },
     selectedFieldId: null,
     isThemePanelOpen: false
   }),
@@ -218,6 +220,9 @@ export const useFormStore = create<FormState>((set) => ({
 
   setTitle: (title) =>
     set((state) => ({ schema: { ...state.schema, title } })),
+
+  setCode: (code) =>
+    set((state) => ({ schema: { ...state.schema, code } })),
 
   setDescription: (description) =>
     set((state) => ({ schema: { ...state.schema, description } })),

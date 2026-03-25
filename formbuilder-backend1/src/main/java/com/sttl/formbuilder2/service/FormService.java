@@ -1,15 +1,19 @@
 package com.sttl.formbuilder2.service;
 
 import com.sttl.formbuilder2.dto.request.CreateFormRequestDTO;
+import com.sttl.formbuilder2.dto.request.FieldValidationRequestDTO;
 import com.sttl.formbuilder2.dto.request.UpdateFormRequestDTO;
 import com.sttl.formbuilder2.dto.response.FormDetailResponseDTO;
 import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
 import com.sttl.formbuilder2.model.entity.AppUser;
+import com.sttl.formbuilder2.exception.FormBuilderException;
+import com.sttl.formbuilder2.model.entity.FieldValidation;
 import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.model.entity.UserFormRole;
 import com.sttl.formbuilder2.model.entity.WorkflowInstance;
 import com.sttl.formbuilder2.model.enums.FormStatus;
+import com.sttl.formbuilder2.repository.FieldValidationRepository;
 import com.sttl.formbuilder2.repository.FormRepository;
 import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.repository.UserFormRoleRepository;
@@ -36,7 +40,7 @@ public class FormService {
     private final UserRepository userRepository;
     private final UserFormRoleRepository userFormRoleRepository;
     private final WorkflowInstanceRepository workflowInstanceRepository;
-    
+    private final FieldValidationRepository fieldValidationRepository;
     private final FormMapper formMapper;
 
     // ─────────────────────────────────────────────
@@ -49,6 +53,31 @@ public class FormService {
     }
 
     // ─────────────────────────────────────────────
+    // HELPER: Validate Code
+    // ─────────────────────────────────────────────
+    private static final java.util.Set<String> RESERVED_SQL_KEYWORDS = java.util.Set.of(
+        "SELECT","INSERT","UPDATE","DELETE","FROM","WHERE","JOIN","INNER","LEFT","RIGHT",
+        "FULL","GROUP","ORDER","BY","HAVING","LIMIT","OFFSET","UNION","DISTINCT",
+        "TABLE","COLUMN","INDEX","PRIMARY","FOREIGN","KEY","CONSTRAINT","REFERENCES",
+        "VIEW","SEQUENCE","TRIGGER","USER","ROLE","GRANT","REVOKE"
+    );
+
+    private void validateFormCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code is required");
+        }
+        if (!code.matches("^[a-z][a-z0-9_]{0,99}$")) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code must start with a letter, use only lowercase alphanumeric characters and underscores, and be max 100 characters.");
+        }
+        if (RESERVED_SQL_KEYWORDS.contains(code.toUpperCase())) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code is a reserved keyword: " + code);
+        }
+        if (formRepository.existsByCode(code)) {
+            throw new FormBuilderException("DUPLICATE_FORM_CODE", "Form code already exists: " + code);
+        }
+    }
+
+    // ─────────────────────────────────────────────
     // CREATE (POST /api/forms)
     // ─────────────────────────────────────────────
     @Transactional
@@ -57,6 +86,10 @@ public class FormService {
         form.setTitle(request.getTitle());
         form.setDescription(request.getDescription());
         form.setAllowEditResponse(request.isAllowEditResponse());
+
+        validateFormCode(request.getCode());
+        form.setCode(request.getCode());
+        form.setCodeLocked(false);
 
         FormStatus incomingStatus = request.getStatus() != null ? request.getStatus() : FormStatus.DRAFT;
         form.setStatus(incomingStatus);
@@ -74,14 +107,34 @@ public class FormService {
         version.setFields(formMapper.mapFields(request.getFields(), version));
         version.setRules(formMapper.serializeRules(request.getRules()));
 
+        if (incomingStatus == FormStatus.PUBLISHED) {
+            version.setIsActive(true);
+            version.setActivatedAt(java.time.Instant.now());
+            version.setActivatedBy(currentUser.getUsername());
+        } else {
+            version.setIsActive(false);
+        }
+
         form.getVersions().add(version);
 
-        String dynamicTableName = "sub_" + form.getId() + "_u" + form.getOwner().getId() + "_v1";
+        String dynamicTableName = "form_data_" + form.getCode();
         form.setTargetTableName(dynamicTableName);
 
-        formRepository.save(form);
+        form = formRepository.saveAndFlush(form);
+        
+        // Find the persisted version in the returned managed form
+        FormVersion persistedVersion = form.getVersions().stream()
+                .filter(v -> v.getVersionNumber() == 1)
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Saved version not found"));
+
+        // Save custom AST validations
+        saveValidations(request.getFormValidations(), persistedVersion.getId());
 
         if (incomingStatus == FormStatus.PUBLISHED) {
+            form.setCodeLocked(true);
+            form.setApprovedBy(currentUser);
+            formRepository.save(form);
             dynamicTableService.createDynamicTable(dynamicTableName, request.getFields());
         }
 
@@ -143,8 +196,23 @@ public class FormService {
     @Transactional(readOnly = true)
     public FormDetailResponseDTO getFormByToken(String token) {
         Form form = formRepository.findByPublicShareToken(token)
-                .orElseThrow(() -> new RuntimeException("Form not found or link is invalid."));
+                .or(() -> formRepository.findByCode(token))
+                .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "Form not found or link is invalid."));
 
+        validateFormAccess(form);
+        return formMapper.toDetailDTO(form);
+    }
+
+    @Transactional(readOnly = true)
+    public FormDetailResponseDTO getFormByCode(String code) {
+        Form form = formRepository.findByCode(code)
+                .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "Form not found with code: " + code));
+
+        validateFormAccess(form);
+        return formMapper.toDetailDTO(form);
+    }
+
+    private void validateFormAccess(Form form) {
         if (form.getStatus() != FormStatus.PUBLISHED) {
             // Allow access if user is logged in as owner or administrator (for preview)
             try {
@@ -155,16 +223,14 @@ public class FormService {
                             .anyMatch(ufr -> ufr.getRole().getName().equals("ADMIN") || ufr.getRole().getName().equals("ROLE_ADMINISTRATOR"));
                     
                     if (form.getOwner().getId().equals(currentUser.getId()) || isAdmin) {
-                        return formMapper.toDetailDTO(form);
+                        return;
                     }
                 }
             } catch (Exception e) {
                 // Not logged in or error getting user -> falls through to restriction
             }
-            throw new RuntimeException("This form is not currently accepting submissions.");
+            throw new FormBuilderException("FORM_NOT_PUBLISHED", "This form is not currently accepting submissions.");
         }
-
-        return formMapper.toDetailDTO(form);
     }
 
     // ─────────────────────────────────────────────
@@ -183,6 +249,15 @@ public class FormService {
         form.setStatus(newStatus);
         form.setAllowEditResponse(request.isAllowEditResponse());
 
+        if (request.getCode() != null && !request.getCode().equals(form.getCode())) {
+            if (Boolean.TRUE.equals(form.getCodeLocked())) {
+                throw new FormBuilderException("FORBIDDEN", "Form code is locked and cannot be changed after publishing.");
+            }
+            validateFormCode(request.getCode());
+            form.setCode(request.getCode());
+            form.setTargetTableName("form_data_" + form.getCode());
+        }
+
         int nextVersionNum = form.getVersions().size() + 1;
         FormVersion newVersion = new FormVersion();
         newVersion.setForm(form);
@@ -191,10 +266,30 @@ public class FormService {
         newVersion.setFields(formMapper.mapFields(request.getFields(), newVersion));
         newVersion.setRules(formMapper.serializeRules(request.getRules()));
 
+        if (newStatus == FormStatus.PUBLISHED) {
+            form.getVersions().forEach(v -> v.setIsActive(false));
+            newVersion.setIsActive(true);
+            newVersion.setActivatedAt(java.time.Instant.now());
+            newVersion.setActivatedBy(getCurrentUser().getUsername());
+        } else {
+            newVersion.setIsActive(false);
+        }
+
         form.getVersions().add(newVersion);
-        form = formRepository.save(form);
+        form = formRepository.saveAndFlush(form);
+
+        // Find the persisted new version in the returned managed form
+        FormVersion persistedNewVersion = form.getVersions().stream()
+                .filter(v -> v.getVersionNumber().equals(nextVersionNum))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Saved version not found"));
+
+        // Replace custom AST validations for this version
+        fieldValidationRepository.deleteByFormVersionId(persistedNewVersion.getId());
+        saveValidations(request.getFormValidations(), persistedNewVersion.getId());
 
         if ((oldStatus == null || oldStatus == FormStatus.DRAFT) && newStatus == FormStatus.PUBLISHED) {
+            form.setCodeLocked(true);
             form.setApprovedBy(getCurrentUser());
             formRepository.save(form);
             dynamicTableService.createDynamicTable(form.getTargetTableName(), request.getFields());
@@ -203,6 +298,25 @@ public class FormService {
         }
 
         return formMapper.toDetailDTO(form);
+    }
+
+    // ─────────────────────────────────────────────
+    // HELPER: Save/replace validation rules
+    // ─────────────────────────────────────────────
+    private void saveValidations(java.util.List<FieldValidationRequestDTO> dtos, Long formVersionId) {
+        if (dtos == null || dtos.isEmpty()) return;
+        int order = 0;
+        for (FieldValidationRequestDTO dto : dtos) {
+            FieldValidation fv = new FieldValidation();
+            fv.setFormVersionId(formVersionId);
+            fv.setFieldKey(dto.getFieldKey() != null ? dto.getFieldKey() : "");
+            fv.setScope(dto.getScope());
+            fv.setExpression(dto.getExpression());
+            fv.setErrorMessage(dto.getErrorMessage());
+            fv.setExecutionOrder(dto.getExecutionOrder() != null ? dto.getExecutionOrder() : order);
+            fieldValidationRepository.save(fv);
+            order++;
+        }
     }
 
     // ─────────────────────────────────────────────

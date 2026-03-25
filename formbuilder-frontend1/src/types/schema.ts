@@ -113,6 +113,8 @@ export interface FormSchema {
   id?: number;                    // Null if this is an unsaved new form
   publicShareToken?: string;      // UUID used in the public /f/{token} URL
   title: string;
+  code?: string;
+  codeLocked?: boolean;
   description: string;
   targetTableName: string;
   status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | 'PENDING_DRAFT' | 'PENDING_PUBLISH' | 'REJECTED';

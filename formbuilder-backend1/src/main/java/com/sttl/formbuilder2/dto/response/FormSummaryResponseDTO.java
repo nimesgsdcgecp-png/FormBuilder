@@ -36,6 +36,7 @@ public class FormSummaryResponseDTO {
     private Instant createdAt;
     private Instant updatedAt;
     private String targetTableName;
+    private String code;
     private String publicShareToken;
     private boolean allowEditResponse;
     private Long ownerId;

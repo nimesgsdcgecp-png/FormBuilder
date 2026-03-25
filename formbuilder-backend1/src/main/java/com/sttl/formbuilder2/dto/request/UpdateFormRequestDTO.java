@@ -37,6 +37,10 @@ public class UpdateFormRequestDTO {
     @NotBlank(message = "Title is required")
     private String title;
 
+    @jakarta.validation.constraints.Pattern(regexp = "^[a-z][a-z0-9_]{0,99}$", message = "Code must be lowercase with underscores only")
+    @NotBlank(message = "Code is required")
+    private String code;
+
     private String description;
 
     private boolean allowEditResponse;
@@ -45,6 +49,9 @@ public class UpdateFormRequestDTO {
     private FormStatus status;
 
     private Object rules;
+
+    @Valid
+    private List<FieldValidationRequestDTO> formValidations;
 
     @NotEmpty(message = "At least one field is required")
     @Valid

@@ -147,6 +147,16 @@ public class FormController {
         return ResponseEntity.ok(submissionService.getSubmissions(id, page, size, sortBy, sortOrder, filters));
     }
 
+    @GetMapping("/{id}/submissions/export")
+    public ResponseEntity<byte[]> exportSubmissions(@PathVariable("id") Long id) {
+        String csvData = submissionService.exportSubmissionsToCsv(id);
+        byte[] output = csvData.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"submissions_" + id + ".csv\"")
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .body(output);
+    }
+
     /**
      * POST /api/forms/{id}/submissions
      * Accepts a JSON map of {columnName: value} pairs and inserts a new row into
@@ -159,7 +169,7 @@ public class FormController {
             @PathVariable("id") Long id,
             @Valid @RequestBody SubmissionRequestDTO request) {
 
-        UUID submissionId = submissionService.submitData(id, request.getData(), request.getStatus());
+        UUID submissionId = submissionService.submitData(id, request.getData(), request.getFormVersionId(), request.getStatus());
         return ResponseEntity.ok(Map.of(
                 "message", "Submission successful",
                 "submissionId", submissionId));
@@ -216,6 +226,26 @@ public class FormController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * POST /api/v1/forms/{formId}/submissions/bulk
+     * Generic bulk operation endpoint (Blueprint §3.2).
+     */
+    @PostMapping("/{formId}/submissions/bulk")
+    public ResponseEntity<Map<String, Object>> bulkOperation(
+            @PathVariable("formId") Long formId,
+            @RequestBody Map<String, Object> request) {
+        String operation = (String) request.get("operation");
+        List<String> idsStr = (List<String>) request.get("submissionIds");
+        List<UUID> submissionIds = idsStr.stream().map(UUID::fromString).collect(Collectors.toList());
+
+        if ("DELETE".equalsIgnoreCase(operation)) {
+            submissionService.deleteSubmissionsBulk(formId, submissionIds);
+            return ResponseEntity.ok(Map.of("processed", submissionIds.size(), "failed", 0));
+        }
+        
+        throw new com.sttl.formbuilder2.exception.FormBuilderException("BAD_REQUEST", "Unsupported bulk operation: " + operation);
+    }
+
     // ─────────────────────────────────────────────────────────
     // Lookup values (for LOOKUP field type)
     // ─────────────────────────────────────────────────────────
@@ -260,7 +290,7 @@ public class FormController {
     public ResponseEntity<?> submitPublicForm(
             @PathVariable("token") String token,
             @Valid @RequestBody SubmissionRequestDTO request) {
-        UUID submissionId = submissionService.submitDataByToken(token, request.getData(), request.getStatus());
+        UUID submissionId = submissionService.submitDataByToken(token, request.getData(), request.getFormVersionId(), request.getStatus());
         return ResponseEntity.ok(Map.of(
                 "message", "Submission successful",
                 "submissionId", submissionId));

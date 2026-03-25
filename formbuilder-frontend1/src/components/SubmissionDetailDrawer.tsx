@@ -111,7 +111,7 @@ const SubmissionDetailDrawer: React.FC<SubmissionDetailDrawerProps> = ({
               </div>
               <div>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                  submission.submission_status === 'DRAFT' 
+                  submission.submission_status === 'RESPONSE_DRAFT' 
                     ? 'bg-amber-50 text-amber-700 border-amber-100' 
                     : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                 }`}>

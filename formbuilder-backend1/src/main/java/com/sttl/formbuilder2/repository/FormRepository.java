@@ -72,4 +72,8 @@ public interface FormRepository extends JpaRepository<Form, Long> {
      * the service layer to throw a 404-equivalent error.
      */
     Optional<Form> findByPublicShareToken(String publicShareToken);
+
+    boolean existsByCode(String code);
+
+    Optional<Form> findByCode(String code);
 }

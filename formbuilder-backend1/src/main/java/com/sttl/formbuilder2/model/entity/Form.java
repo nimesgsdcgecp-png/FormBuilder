@@ -38,6 +38,13 @@ public class Form {
     @Builder.Default
     private FormStatus status = FormStatus.DRAFT;
 
+    @Column(nullable = true, unique = true, length = 100)
+    private String code;
+
+    @Column(name = "code_locked", nullable = false)
+    @Builder.Default
+    private Boolean codeLocked = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

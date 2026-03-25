@@ -30,6 +30,9 @@ public class DynamicTableService {
         sql.append("CREATE TABLE IF NOT EXISTS \"").append(tableName).append("\" (");
 
         sql.append("submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
+        sql.append("form_version_id BIGINT, ");
+        sql.append("submitted_by VARCHAR(100), ");
+        sql.append("is_draft BOOLEAN DEFAULT FALSE, ");
         sql.append("submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
         sql.append("updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
         sql.append("submission_status VARCHAR(20) DEFAULT 'FINAL', ");
@@ -97,6 +100,53 @@ public class DynamicTableService {
         if (!existingColumns.contains("is_deleted")) {
             String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE";
             jdbcTemplate.execute(sql);
+        }
+
+        if (!existingColumns.contains("form_version_id")) {
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN form_version_id BIGINT";
+            jdbcTemplate.execute(sql);
+        }
+
+        if (!existingColumns.contains("submitted_by")) {
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN submitted_by VARCHAR(100)";
+            jdbcTemplate.execute(sql);
+        }
+
+        if (!existingColumns.contains("is_draft")) {
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_draft BOOLEAN DEFAULT FALSE";
+            jdbcTemplate.execute(sql);
+        }
+    }
+
+    public List<String> detectSchemaDrift(String tableName, List<com.sttl.formbuilder2.model.entity.FormField> fields) {
+        List<String> dbColumns = getTableColumns(tableName);
+        List<String> missing = new java.util.ArrayList<>();
+        for (com.sttl.formbuilder2.model.entity.FormField field : fields) {
+            String cname = field.getColumnName();
+            if (cname != null && !cname.trim().isEmpty() && !dbColumns.contains(cname)) {
+                missing.add(cname);
+            }
+        }
+        return missing;
+    }
+
+    public void validateNoSchemaDrift(Form form) {
+        String tableName = form.getTargetTableName();
+        if (tableName == null) return;
+        List<com.sttl.formbuilder2.model.entity.FormVersion> versions = form.getVersions();
+        if (versions == null || versions.isEmpty()) return;
+        
+        com.sttl.formbuilder2.model.entity.FormVersion activeVersion = versions.stream()
+            .filter(v -> Boolean.TRUE.equals(v.getIsActive()))
+            .findFirst()
+            .orElse(null);
+            
+        if (activeVersion == null) return; // No active version yet, no schema to enforce
+            
+        List<String> missingCols = detectSchemaDrift(tableName, activeVersion.getFields());
+        if (!missingCols.isEmpty()) {
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("SCHEMA_DRIFT_DETECTED",
+                "Table " + tableName + " is missing columns: " + missingCols);
         }
     }
 
@@ -262,9 +312,14 @@ public class DynamicTableService {
         jdbcTemplate.execute(sql);
     }
 
-    private List<String> getTableColumns(String tableName) {
+    public List<String> getTableColumns(String tableName) {
         String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ?";
         return jdbcTemplate.queryForList(checkSql, String.class, tableName);
+    }
+
+    public List<Map<String, Object>> fetchAllData(String tableName) {
+        String sql = "SELECT * FROM \"" + tableName + "\" WHERE is_deleted = false";
+        return jdbcTemplate.queryForList(sql);
     }
 
     private String generateColumnName(String label) {

@@ -22,8 +22,14 @@ const API_BASE_URL = 'http://localhost:8080/api/v1';
  * @returns The saved Form entity returned by the backend.
  */
 export const saveForm = async (schema: FormSchema) => {
+  let defaultCode = schema.title.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').substring(0, 90);
+  if (!defaultCode || !/^[a-z]/.test(defaultCode)) {
+      defaultCode = 'form_' + Date.now();
+  }
+
   const payload = {
     title: schema.title,
+    code: schema.code || defaultCode,
     description: schema.description,
     allowEditResponse: schema.allowEditResponse,
     status: schema.status || 'DRAFT',
@@ -61,6 +67,7 @@ export const saveForm = async (schema: FormSchema) => {
       };
       return mapFields(schema.fields);
     })(),
+    formValidations: (schema as any).formValidations || [],
   };
 
   // DEV: logs the rules being sent to the backend for debugging
@@ -94,6 +101,7 @@ export const saveForm = async (schema: FormSchema) => {
 export const updateForm = async (id: number, schema: any) => {
     const payload = {
       title: schema.title,
+      code: schema.code,
       description: schema.description,
       allowEditResponse: schema.allowEditResponse,
       status: schema.status || 'DRAFT',
@@ -131,6 +139,7 @@ export const updateForm = async (id: number, schema: any) => {
         };
         return mapFields(schema.fields);
       })(),
+      formValidations: schema.formValidations || [],
     };
   
     const response = await fetch(`http://localhost:8080/api/v1/forms/${id}`, {
@@ -224,9 +233,9 @@ export const deleteSubmission = async (formId: string, submissionId: string) => 
  */
 export const deleteSubmissionsBulk = async (formId: string, submissionIds: string[]) => {
   const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/bulk`, {
-    method: 'DELETE',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(submissionIds),
+    body: JSON.stringify({ operation: 'DELETE', submissionIds }),
     credentials: 'include',
   });
   if (!response.ok) {
@@ -294,13 +303,13 @@ export const restoreForm = async (id: number) => {
  * @param data   Map of {columnName: value} pairs from the respondent.
  * @returns The backend response containing {submissionId, message}.
  */
-export const submitFormResponse = async (formId: string, data: Record<string, any>, status: 'DRAFT' | 'FINAL' = 'FINAL') => {
+export const submitFormResponse = async (formId: string, data: Record<string, any>, status: 'RESPONSE_DRAFT' | 'FINAL' = 'FINAL', formVersionId?: number) => {
   const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ data, status }),
+    body: JSON.stringify({ data, status, formVersionId }),
     credentials: 'include',
   });
 

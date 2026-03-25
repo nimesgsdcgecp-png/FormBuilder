@@ -41,6 +41,7 @@ public class FormFieldResponseDTO {
     private Long id;
     private String fieldLabel;
     private String columnName;
+    private String parentColumnName;
     private FieldType fieldType;
     private Boolean isMandatory;
     private String defaultValue;

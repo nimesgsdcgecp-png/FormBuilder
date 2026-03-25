@@ -247,27 +247,21 @@ export default function ResponsesPage() {
     });
   };
 
-  const downloadCSV = () => {
-    const exportRows = prepareExportData();
-    if (exportRows.length === 0) {
-      toast.info("No data available to export");
-      return;
+  const downloadCSV = async () => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/forms/${formId}/submissions/export`, { credentials: 'include' });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${formTitle.replace(/\s+/g, '_')}_responses.csv`;
+      a.click();
+      setShowExportMenu(false);
+      toast.success("CSV Downloaded Successfully");
+    } catch (err) {
+      toast.error("Failed to generate CSV export");
     }
-    const csvHeaders = headers.map(h => h.label).join(',');
-    const csvContent = exportRows.map(row =>
-      headers.map(h => {
-        const val = row[h.label];
-        return `"${String(val).replace(/"/g, '""')}"`;
-      }).join(',')
-    ).join('\n');
-
-    const blob = new Blob([csvHeaders + '\n' + csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${formTitle.replace(/\s+/g, '_')}_responses.csv`;
-    a.click();
-    setShowExportMenu(false);
   };
 
   const downloadXLSX = () => {
@@ -766,7 +760,7 @@ export default function ResponsesPage() {
                               ) : header.key === 'submission_status' ? (
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                    row[header.key] === 'DRAFT' 
+                                    row[header.key] === 'RESPONSE_DRAFT' 
                                       ? 'bg-slate-100 text-slate-600 border-slate-200' 
                                       : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                   }`}
@@ -864,7 +858,7 @@ export default function ResponsesPage() {
 
                       <div className="flex justify-end mb-6">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                          row.submission_status === 'DRAFT' 
+                          row.submission_status === 'RESPONSE_DRAFT' 
                             ? 'bg-amber-50 text-amber-600 border-amber-100' 
                             : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                         }`}>
@@ -887,7 +881,7 @@ export default function ResponsesPage() {
                         <div className="flex flex-col">
                           <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-faint)' }}>Status</span>
                           <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                            {row.submission_status === 'DRAFT' ? 'In Progress' : 'Completed'}
+                            {row.submission_status === 'RESPONSE_DRAFT' ? 'In Progress' : 'Completed'}
                           </span>
                         </div>
                         <div className="flex gap-1.5">

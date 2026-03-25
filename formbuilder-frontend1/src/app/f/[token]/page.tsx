@@ -22,6 +22,7 @@ function PublicFormContent() {
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [ownerId, setOwnerId] = useState<number | null>(null);
+  const [versionId, setVersionId] = useState<number | null>(null);
   const [initialAnswers, setInitialAnswers] = useState<Record<string, any>>({});
 
   useEffect(() => {
@@ -44,6 +45,7 @@ function PublicFormContent() {
 
         const activeVersion = versions[0];
         setOwnerId(data.ownerId);
+        setVersionId(activeVersion.id);
 
         const mapFieldsRecursive = (fields: any[]): SchemaField[] => {
           return fields.map((f: any) => {
@@ -155,7 +157,7 @@ function PublicFormContent() {
       });
   }, [token, editSubmissionId]);
 
-  const handleSubmit = async (answers: Record<string, any>, status: 'DRAFT' | 'FINAL' = 'FINAL') => {
+  const handleSubmit = async (answers: Record<string, any>, status: 'RESPONSE_DRAFT' | 'FINAL' = 'FINAL') => {
     try {
       const url = editSubmissionId
         ? `http://localhost:8080/api/v1/forms/public/${token}/submissions/${editSubmissionId}`
@@ -164,11 +166,27 @@ function PublicFormContent() {
       const response = await fetch(url, {
         method: editSubmissionId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: answers, status }),
+        body: JSON.stringify({ 
+          data: answers, 
+          status,
+          formVersionId: versionId 
+        }),
         credentials: 'include',
       });
 
-      if (!response.ok) throw new Error("Submission failed");
+      if (!response.ok) {
+          const contentType = response.headers.get('content-type');
+          let errMsg = "Submission failed";
+          if (contentType && contentType.includes('application/json')) {
+              const errData = await response.json().catch(() => ({}));
+              if (errData.details && Array.isArray(errData.details)) {
+                  errMsg = errData.details.map((d: any) => d.message).join('\n');
+              } else if (errData.message) {
+                  errMsg = errData.message;
+              }
+          }
+          throw new Error(errMsg);
+      }
       const resData = await response.json();
 
       // Redirect if form creator
@@ -178,11 +196,11 @@ function PublicFormContent() {
         return;
       }
 
-      toast.success(status === 'DRAFT' ? "Draft saved successfully!" : "Response submitted successfully!");
+      toast.success(status === 'RESPONSE_DRAFT' ? "Draft saved successfully!" : "Response submitted successfully!");
       setSubmittedId(resData.submissionId);
 
       // If it's a draft, update the URL so a refresh doesn't lose the ID
-      if (status === 'DRAFT' && !editSubmissionId) {
+      if (status === 'RESPONSE_DRAFT' && !editSubmissionId) {
         const newUrl = `${window.location.pathname}?edit=${resData.submissionId}`;
         window.history.replaceState({ path: newUrl }, '', newUrl);
         // Also update local state so subsequent saves use PUT
