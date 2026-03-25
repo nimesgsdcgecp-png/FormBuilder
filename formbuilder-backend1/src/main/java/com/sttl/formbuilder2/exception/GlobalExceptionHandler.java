@@ -103,6 +103,7 @@ public class GlobalExceptionHandler {
             case "FORBIDDEN", "FORM_NOT_PUBLISHED" -> HttpStatus.FORBIDDEN;
             case "DUPLICATE_FORM_CODE", "VERSION_MISMATCH", "ALREADY_ACTIVE" -> HttpStatus.CONFLICT;
             case "SCHEMA_DRIFT_DETECTED" -> HttpStatus.INTERNAL_SERVER_ERROR;
+            case "SQL_RESERVED_KEYWORD", "TYPE_MISMATCH", "INVALID_FIELD_KEY" -> HttpStatus.BAD_REQUEST;
             default -> HttpStatus.BAD_REQUEST;
         };
     }

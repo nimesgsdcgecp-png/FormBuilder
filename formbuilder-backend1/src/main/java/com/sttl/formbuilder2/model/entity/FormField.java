@@ -70,7 +70,7 @@ public class FormField {
      * table and in logic-rule conditions (e.g. "your_email_address").
      * Unique within a version to prevent duplicate columns.
      */
-    @Column(nullable = false, length = 64)
+    @Column(nullable = false, length = 100)
     private String columnName;
 
     /** Determines the HTML input type and the PostgreSQL column type. */

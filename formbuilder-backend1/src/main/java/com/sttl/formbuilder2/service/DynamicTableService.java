@@ -142,6 +142,8 @@ public class DynamicTableService {
             .orElse(null);
             
         if (activeVersion == null) return; // No active version yet, no schema to enforce
+        
+        if (!tableExists(tableName)) return; // Table doesn't exist yet, no drift possible
             
         List<String> missingCols = detectSchemaDrift(tableName, activeVersion.getFields());
         if (!missingCols.isEmpty()) {
@@ -321,6 +323,12 @@ public class DynamicTableService {
         jdbcTemplate.execute(sql);
     }
 
+    public boolean tableExists(String tableName) {
+        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
+        return count != null && count > 0;
+    }
+
     public List<String> getTableColumns(String tableName) {
         String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ?";
         return jdbcTemplate.queryForList(checkSql, String.class, tableName);
@@ -332,7 +340,9 @@ public class DynamicTableService {
     }
 
     private String generateColumnName(String label) {
-        return label.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+        String name = label.trim().toLowerCase().replaceAll("[^a-z0-9]+", "");
+        com.sttl.formbuilder2.util.SqlKeywordValidator.validate(name);
+        return name;
     }
 
     private String mapToSqlType(FieldType type) {

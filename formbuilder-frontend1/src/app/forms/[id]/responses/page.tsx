@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List } from 'lucide-react';
 import { deleteSubmission, deleteSubmissionsBulk, getSubmissions } from '@/services/api';
+import { extractApiError } from '@/utils/error-handler';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -169,7 +170,7 @@ export default function ResponsesPage() {
     } catch (error: any) {
       if (error.name === 'AbortError') return;
       console.error("Error loading responses:", error);
-      toast.error("Failed to load response data");
+      toast.error(error.message || "Failed to load response data");
     } finally {
       setIsFetching(false);
       setIsInitialLoading(false);
@@ -277,7 +278,10 @@ export default function ResponsesPage() {
   const downloadCSV = async () => {
     try {
       const res = await fetch(`http://localhost:8080/api/v1/forms/${formId}/submissions/export`, { credentials: 'include' });
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) {
+        const msg = await extractApiError(res);
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -286,8 +290,8 @@ export default function ResponsesPage() {
       a.click();
       setShowExportMenu(false);
       toast.success("CSV Downloaded Successfully");
-    } catch (err) {
-      toast.error("Failed to generate CSV export");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate CSV export");
     }
   };
 
@@ -349,8 +353,8 @@ export default function ResponsesPage() {
               setSelectedIds(newSelected);
             }
             toast.success(`${count} response${count > 1 ? 's' : ''} deleted`);
-          } catch (err) {
-            toast.error("Failed to delete response");
+          } catch (err: any) {
+            toast.error(err.message || "Failed to delete response");
           }
         }
       },

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Archive, CheckCircle, Clock, Copy, RotateCcw } from 'lucide-react';
+import { extractApiError } from '@/utils/error-handler';
 
 interface FormVersion {
   id: number;
@@ -29,8 +30,8 @@ export default function VersionsPanel({ editFormId }: { editFormId: string | nul
       // Sort by version number descending
       const sorted = (data.versions || []).sort((a: any, b: any) => b.versionNumber - a.versionNumber);
       setVersions(sorted);
-    } catch (err) {
-      toast.error('Failed to load version history');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load version history');
     } finally {
       setLoading(false);
     }
@@ -46,11 +47,14 @@ export default function VersionsPanel({ editFormId }: { editFormId: string | nul
         method: 'POST',
         credentials: 'include'
       });
-      if (!res.ok) throw new Error('Activation failed');
+      if (!res.ok) {
+        const msg = await extractApiError(res);
+        throw new Error(msg);
+      }
       toast.success('Version restored and activated! Reloading...');
       setTimeout(() => window.location.reload(), 1500);
-    } catch (err) {
-      toast.error('Failed to activate version');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to activate version');
     }
   };
 

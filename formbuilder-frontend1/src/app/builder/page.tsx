@@ -316,9 +316,9 @@ function BuilderContent() {
       
       // Don't push to '/' yet, allow user to keep editing or "Request Approval"
       // router.push('/'); 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Failed to save form");
+      toast.error(error.message || "Failed to save form");
     } finally {
       setIsSaving(false);
     }

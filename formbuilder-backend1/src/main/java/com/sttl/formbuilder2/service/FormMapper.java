@@ -218,15 +218,24 @@ public class FormMapper {
             }
 
             String colName = dto.getColumnName();
-            if (colName == null || colName.trim().isEmpty()) {
-                colName = dto.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "_");
+            if (colName != null && !colName.trim().isEmpty()) {
+                // User provided a custom key — validate it strictly
+                if (!colName.matches("^[a-z][a-z0-9_]{0,99}$")) {
+                    throw new com.sttl.formbuilder2.exception.FormBuilderException("INVALID_FIELD_KEY", 
+                        "Field key '" + colName + "' must start with a letter and contain only lowercase letters, numbers, or underscores (max 100 chars).");
+                }
+            } else {
+                // Generate from label if missing
+                colName = dto.getLabel().trim().toLowerCase().replaceAll("[^a-z0-9]+", "");
+                if (colName.length() > 100) {
+                    colName = colName.substring(0, 96) + "_" + Integer.toHexString(colName.hashCode()).substring(0, 3);
+                }
             }
-            if (colName.length() > 63) {
-                colName = colName.substring(0, 59) + "_" + Integer.toHexString(colName.hashCode()).substring(0, 3);
-            }
-            if (colName.isEmpty() || colName.equals("_")) {
+
+            if (colName.isEmpty()) {
                 colName = dto.getType().name().toLowerCase() + "_" + System.nanoTime() % 10000;
             }
+            com.sttl.formbuilder2.util.SqlKeywordValidator.validate(colName);
             entity.setColumnName(colName);
             allEntities.add(entity);
 

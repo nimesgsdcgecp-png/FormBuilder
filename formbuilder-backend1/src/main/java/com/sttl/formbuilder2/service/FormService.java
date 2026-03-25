@@ -258,15 +258,20 @@ public class FormService {
             form.setTargetTableName("form_data_" + form.getCode());
         }
 
+        if (newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
+            // SRS Requirement: Block publish if current table has drifted from active schema
+            dynamicTableService.validateNoSchemaDrift(form);
+        }
+
         int nextVersionNum = form.getVersions().size() + 1;
-        FormVersion newVersion = new FormVersion();
+        com.sttl.formbuilder2.model.entity.FormVersion newVersion = new com.sttl.formbuilder2.model.entity.FormVersion();
         newVersion.setForm(form);
         newVersion.setVersionNumber(nextVersionNum);
         newVersion.setChangeLog("Updated via Builder");
         newVersion.setFields(formMapper.mapFields(request.getFields(), newVersion));
         newVersion.setRules(formMapper.serializeRules(request.getRules()));
 
-        if (newStatus == FormStatus.PUBLISHED) {
+        if (newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
             form.getVersions().forEach(v -> v.setIsActive(false));
             newVersion.setIsActive(true);
             newVersion.setActivatedAt(java.time.Instant.now());
@@ -278,9 +283,10 @@ public class FormService {
         form.getVersions().add(newVersion);
         form = formRepository.saveAndFlush(form);
 
-        // Find the persisted new version in the returned managed form
-        FormVersion persistedNewVersion = form.getVersions().stream()
-                .filter(v -> v.getVersionNumber().equals(nextVersionNum))
+        // Find the persisted version
+        final int vNum = nextVersionNum;
+        com.sttl.formbuilder2.model.entity.FormVersion persistedNewVersion = form.getVersions().stream()
+                .filter(v -> v.getVersionNumber().equals(vNum))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Saved version not found"));
 
@@ -288,12 +294,16 @@ public class FormService {
         fieldValidationRepository.deleteByFormVersionId(persistedNewVersion.getId());
         saveValidations(request.getFormValidations(), persistedNewVersion.getId());
 
-        if ((oldStatus == null || oldStatus == FormStatus.DRAFT) && newStatus == FormStatus.PUBLISHED) {
+        // Replace custom AST validations for this version
+        fieldValidationRepository.deleteByFormVersionId(persistedNewVersion.getId());
+        saveValidations(request.getFormValidations(), persistedNewVersion.getId());
+
+        if ((oldStatus == null || oldStatus == com.sttl.formbuilder2.model.enums.FormStatus.DRAFT) && newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
             form.setCodeLocked(true);
             form.setApprovedBy(getCurrentUser());
             formRepository.save(form);
             dynamicTableService.createDynamicTable(form.getTargetTableName(), request.getFields());
-        } else if (oldStatus == FormStatus.PUBLISHED && newStatus == FormStatus.PUBLISHED) {
+        } else if (oldStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED && newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
             dynamicTableService.alterDynamicTable(form.getTargetTableName(), request.getFields());
         }
 

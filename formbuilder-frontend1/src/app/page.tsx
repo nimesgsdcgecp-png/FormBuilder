@@ -108,9 +108,9 @@ export default function Dashboard() {
 
       const data = await res.json();
       setForms(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Failed to load dashboard.');
+      toast.error(error.message || 'Failed to load dashboard.');
     } finally {
       setIsLoading(false);
     }
@@ -129,8 +129,8 @@ export default function Dashboard() {
             await deleteForm(id);
             toast.success("Form archived");
             setForms((prevForms) => prevForms.filter(f => f.id !== id));
-          } catch (error) {
-            toast.error("Failed to archive form");
+          } catch (error: any) {
+            toast.error(error.message || "Failed to archive form");
           }
         }
       },
@@ -151,8 +151,8 @@ export default function Dashboard() {
       await restoreForm(id);
       toast.success("Form restored to drafts");
       setForms((prevForms) => prevForms.filter(f => f.id !== id));
-    } catch (error) {
-      toast.error("Failed to restore form");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to restore form");
     }
   };
 
