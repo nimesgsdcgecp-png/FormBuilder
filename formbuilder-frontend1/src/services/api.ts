@@ -251,6 +251,28 @@ export const deleteSubmissionsBulk = async (formId: string, submissionIds: strin
 };
 
 /**
+ * Updates status of multiple submissions in one call.
+ * Calls POST /api/forms/{formId}/submissions/bulk with STATUS_UPDATE operation.
+ *
+ * @param formId        The internal form ID.
+ * @param submissionIds Array of submission UUIDs.
+ * @param status        New status to set (SUBMITTED, RESPONSE_DRAFT).
+ */
+export const updateSubmissionStatusBulk = async (formId: string, submissionIds: string[], status: string) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'STATUS_UPDATE', submissionIds, status }),
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
+  }
+};
+
+/**
  * Archives (soft-deletes) a form via DELETE /api/forms/{id}.
  * Currently not used directly from a component — archiving is done inline
  * in the dashboard page — but exported here for future reuse.

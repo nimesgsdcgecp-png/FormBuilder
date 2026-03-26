@@ -18,6 +18,7 @@ import com.sttl.formbuilder2.repository.FormRepository;
 import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.repository.UserFormRoleRepository;
 import com.sttl.formbuilder2.repository.WorkflowInstanceRepository;
+import com.sttl.formbuilder2.config.FormBuilderLimitsConfig;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,6 +43,7 @@ public class FormService {
     private final WorkflowInstanceRepository workflowInstanceRepository;
     private final FieldValidationRepository fieldValidationRepository;
     private final FormMapper formMapper;
+    private final FormBuilderLimitsConfig limitsConfig;
 
     // ─────────────────────────────────────────────
     // HELPER: Get Current User
@@ -78,10 +80,43 @@ public class FormService {
     }
 
     // ─────────────────────────────────────────────
+    // HELPER: Validate SRS Limits (Section 10)
+    // ─────────────────────────────────────────────
+    private void validateFormLimits(List<com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO> fields,
+                                    List<FieldValidationRequestDTO> validations) {
+        // Max 50 fields per form
+        if (fields != null && fields.size() > limitsConfig.getMaxFieldsPerForm()) {
+            throw new FormBuilderException("LIMIT_EXCEEDED",
+                "Maximum " + limitsConfig.getMaxFieldsPerForm() + " fields allowed per form. Current: " + fields.size());
+        }
+
+        // Max 100 validations per form
+        if (validations != null && validations.size() > limitsConfig.getMaxValidationsPerForm()) {
+            throw new FormBuilderException("LIMIT_EXCEEDED",
+                "Maximum " + limitsConfig.getMaxValidationsPerForm() + " validations allowed per form. Current: " + validations.size());
+        }
+
+        // Max 10 pages/sections per form
+        if (fields != null) {
+            long pageCount = fields.stream()
+                .filter(f -> f.getType() == com.sttl.formbuilder2.model.enums.FieldType.PAGE_BREAK ||
+                            f.getType() == com.sttl.formbuilder2.model.enums.FieldType.SECTION_HEADER)
+                .count();
+            if (pageCount > limitsConfig.getMaxPagesPerForm()) {
+                throw new FormBuilderException("LIMIT_EXCEEDED",
+                    "Maximum " + limitsConfig.getMaxPagesPerForm() + " pages/sections allowed per form. Current: " + pageCount);
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────
     // CREATE (POST /api/forms)
     // ─────────────────────────────────────────────
     @Transactional
     public FormDetailResponseDTO createForm(CreateFormRequestDTO request) {
+        // SRS Section 10: Validate limits before proceeding
+        validateFormLimits(request.getFields(), request.getFormValidations());
+
         Form form = new Form();
         form.setTitle(request.getTitle());
         form.setDescription(request.getDescription());
@@ -238,6 +273,9 @@ public class FormService {
     // ─────────────────────────────────────────────
     @Transactional
     public FormDetailResponseDTO updateForm(Long formId, UpdateFormRequestDTO request) {
+        // SRS Section 10: Validate limits before proceeding
+        validateFormLimits(request.getFields(), request.getFormValidations());
+
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 

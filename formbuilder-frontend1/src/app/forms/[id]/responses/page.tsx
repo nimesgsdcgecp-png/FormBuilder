@@ -10,8 +10,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List } from 'lucide-react';
-import { deleteSubmission, deleteSubmissionsBulk, getSubmissions } from '@/services/api';
+import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List, CheckCircle, Clock } from 'lucide-react';
+import { deleteSubmission, deleteSubmissionsBulk, getSubmissions, updateSubmissionStatusBulk } from '@/services/api';
 import { extractApiError } from '@/utils/error-handler';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -360,6 +360,27 @@ export default function ResponsesPage() {
       },
       cancel: { label: 'Cancel', onClick: () => { } }
     });
+  };
+
+  // SRS: Bulk status update handler
+  const handleBulkStatusUpdate = async (newStatus: 'SUBMITTED' | 'RESPONSE_DRAFT') => {
+    const ids = Array.from(selectedIds);
+    const count = ids.length;
+    const statusLabel = newStatus === 'SUBMITTED' ? 'Submitted' : 'Draft';
+
+    try {
+      await updateSubmissionStatusBulk(formId, ids, newStatus);
+      // Update local data to reflect new status
+      setData((prevData) => prevData.map(row =>
+        ids.includes(row.submission_id)
+          ? { ...row, submission_status: newStatus }
+          : row
+      ));
+      setSelectedIds(new Set());
+      toast.success(`${count} response${count > 1 ? 's' : ''} marked as ${statusLabel}`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+    }
   };
 
   // --- Data Processing Logic ---
@@ -1073,6 +1094,22 @@ export default function ResponsesPage() {
               <span className="text-blue-400">{selectedIds.size}</span> Selected
             </div>
             <div className="flex items-center gap-2">
+              {/* Status Update Buttons */}
+              <button
+                onClick={() => handleBulkStatusUpdate('SUBMITTED')}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 transition-colors text-xs font-bold"
+                title="Mark as Submitted"
+              >
+                <CheckCircle size={14} /> Submitted
+              </button>
+              <button
+                onClick={() => handleBulkStatusUpdate('RESPONSE_DRAFT')}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 transition-colors text-xs font-bold"
+                title="Mark as Draft"
+              >
+                <Clock size={14} /> Draft
+              </button>
+              <div className="w-px h-6 bg-slate-700 mx-1" />
               <button
                 onClick={() => handleDelete(Array.from(selectedIds))}
                 className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-xs font-bold"

@@ -229,6 +229,7 @@ public class FormController {
     /**
      * POST /api/v1/forms/{formId}/submissions/bulk
      * Generic bulk operation endpoint (Blueprint §3.2).
+     * Supports: DELETE, STATUS_UPDATE
      */
     @PostMapping("/{formId}/submissions/bulk")
     public ResponseEntity<Map<String, Object>> bulkOperation(
@@ -242,7 +243,16 @@ public class FormController {
             submissionService.deleteSubmissionsBulk(formId, submissionIds);
             return ResponseEntity.ok(Map.of("processed", submissionIds.size(), "failed", 0));
         }
-        
+
+        if ("STATUS_UPDATE".equalsIgnoreCase(operation)) {
+            String newStatus = (String) request.get("status");
+            if (newStatus == null || newStatus.isBlank()) {
+                throw new com.sttl.formbuilder2.exception.FormBuilderException("BAD_REQUEST", "status is required for STATUS_UPDATE operation");
+            }
+            submissionService.updateSubmissionStatusBulk(formId, submissionIds, newStatus);
+            return ResponseEntity.ok(Map.of("processed", submissionIds.size(), "failed", 0));
+        }
+
         throw new com.sttl.formbuilder2.exception.FormBuilderException("BAD_REQUEST", "Unsupported bulk operation: " + operation);
     }
 

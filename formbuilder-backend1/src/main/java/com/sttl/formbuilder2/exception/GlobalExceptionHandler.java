@@ -84,7 +84,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponseDTO> handleRuntimeExceptions(RuntimeException ex, HttpServletRequest request) {
-        ex.printStackTrace();
+        // SRS 2.5: Never expose stack traces - log internally only
+        org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class).error("Unhandled exception: {}", ex.getMessage(), ex);
         ErrorResponseDTO errorResponse = new ErrorResponseDTO(
             "INTERNAL_SERVER_ERROR",
             ex.getMessage(),

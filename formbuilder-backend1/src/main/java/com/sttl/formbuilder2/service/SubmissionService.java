@@ -308,6 +308,24 @@ public class SubmissionService {
         dynamicTableService.deleteRowsBulk(form.getTargetTableName(), submissionIds);
     }
 
+    /**
+     * SRS Bulk Operation: Update status for multiple submissions
+     */
+    @Transactional
+    public void updateSubmissionStatusBulk(Long formId, List<UUID> submissionIds, String newStatus) {
+        Form form = formRepository.findById(formId)
+                .orElseThrow(() -> new RuntimeException("Form not found"));
+        dynamicTableService.updateStatusBulk(form.getTargetTableName(), submissionIds, newStatus);
+
+        // Also update metadata table
+        for (UUID id : submissionIds) {
+            formSubmissionMetaRepository.findBySubmissionRowId(id).ifPresent(meta -> {
+                meta.setStatus(newStatus);
+                formSubmissionMetaRepository.save(meta);
+            });
+        }
+    }
+
     public String exportSubmissionsToCsv(Long formId) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND",

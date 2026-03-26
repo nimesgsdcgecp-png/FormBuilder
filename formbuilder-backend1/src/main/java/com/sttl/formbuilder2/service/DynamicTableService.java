@@ -298,6 +298,22 @@ public class DynamicTableService {
         jdbcTemplate.update(sql, ids.toArray());
     }
 
+    /**
+     * SRS Bulk Operation: Update submission_status for multiple rows
+     */
+    @Transactional
+    public void updateStatusBulk(String tableName, List<UUID> ids, String newStatus) {
+        if (ids == null || ids.isEmpty()) return;
+        String placeholders = ids.stream().map(i -> "?").collect(java.util.stream.Collectors.joining(","));
+        String sql = "UPDATE \"" + tableName + "\" SET submission_status = ?, updated_at = NOW() WHERE submission_id IN (" + placeholders + ")";
+        Object[] params = new Object[ids.size() + 1];
+        params[0] = newStatus;
+        for (int i = 0; i < ids.size(); i++) {
+            params[i + 1] = ids.get(i);
+        }
+        jdbcTemplate.update(sql, params);
+    }
+
     public List<String> getColumnValues(Long formId, String columnName) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));

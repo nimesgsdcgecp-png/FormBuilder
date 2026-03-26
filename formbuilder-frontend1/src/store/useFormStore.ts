@@ -291,23 +291,27 @@ export const useFormStore = create<FormState>((set) => ({
 
   /**
    * Updates a field with partial changes. Handles recursive search and rules cascade.
+   * SRS: Field type is immutable after creation - type changes are ignored.
    */
   updateField: (id, updates) => set((state) => {
+    // SRS: Field type cannot be changed after creation - remove type from updates
+    const { type: _ignoredType, ...safeUpdates } = updates as any;
+
     const fieldToUpdate = findFieldInTree(state.schema.fields, id);
     if (!fieldToUpdate) return state;
 
     const oldColumnName = fieldToUpdate.columnName;
     let newColumnName = oldColumnName;
 
-    if (updates.label !== undefined) {
-      newColumnName = updates.label
+    if (safeUpdates.label !== undefined) {
+      newColumnName = safeUpdates.label
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/(^_|_$)/g, '');
     }
 
     let updatedFields = updateFieldInTree(state.schema.fields, id, {
-      ...updates,
+      ...safeUpdates,
       columnName: newColumnName || fieldToUpdate.columnName
     });
 
