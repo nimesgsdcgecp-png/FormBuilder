@@ -1,98 +1,103 @@
-# FormBuilder3 — Dynamic Form Builder Platform
+# 📝 FormBuilder3
+### Enterprise-Grade Dynamic Form & Schema Management System
 
-A full-stack enterprise-grade **Dynamic Form Builder** with drag-and-drop form creation, conditional logic rules, a rule engine, and real-time form submissions stored in auto-generated PostgreSQL tables.
+FormBuilder3 is a full-stack, metadata-driven platform for creating complex, versioned forms with physical PostgreSQL backing. It bridges the gap between flexible UI design and structured database storage.
 
----
-
-## 🚀 Technology Stack
-
-| Layer       | Technology                                                   |
-|-------------|--------------------------------------------------------------|
-| Frontend    | Next.js 14 (App Router), TypeScript, Tailwind CSS            |
-| State Mgmt  | Zustand                                                      |
-| Drag & Drop | @dnd-kit/core, @dnd-kit/sortable                             |
-| Backend     | Spring Boot 3, Java 17                                       |
-| ORM         | Spring Data JPA / Hibernate, Spring JDBC                     |
-| Database    | PostgreSQL (with JSONB for validation rules)                 |
-| Build       | Maven (backend), npm (frontend)                              |
+**Status:** ✅ **Production-Ready** | **Version:** 1.0.0 | **Last Updated:** March 2026
 
 ---
 
-## 🏗️ Core Architecture & Application Flow
+## 🚀 Core Features
 
-FormBuilder3 operates on a unified model separated into **Metadata** and **Dynamic Execution**.
+### Form Building & Management
+- ✅ **30+ Field Types**: TEXT, NUMERIC, GRID, LOOKUP, CALCULATED, and more.
+- ✅ **Drag-and-Drop Canvas**: Intuitive UI for form creation via `@dnd-kit`.
+- ✅ **Dynamic Table Engine**: Automatically manages PostgreSQL submission tables on publication.
+- ✅ **Full Versioning**: Immutable snapshots of form schemas for complete auditability.
 
-### 1. Form Creation & Management
-- **Frontend**: The `builder/page.tsx` handles drag-and-drop creation via `Canvas.tsx` and `Sidebar.tsx`. Field configuration happens in `PropertiesPanel.tsx`.
-- **Backend (Modular Architecture)**: Logic is decoupled into dedicated services:
-    - `FormService`: Core lifecycle (CRUD/Archive).
-    - `FormMapper`: Centralized Entity-to-DTO conversion.
-    - `FormWorkflowService`: Specialized form state transitions.
+### Logic & Intelligence
+- ✅ **Rule Engine (IF→THEN)**: JSON-based conditional visibility and validation logic.
+- ✅ **Calculated Fields**: Real-time server-side evaluation of math expressions.
+- ✅ **Live Preview**: Instant feedback during the building process.
 
-### 2. Publishing & Dynamic Tables
-- **Action**: When a form's status changes to `PUBLISHED`, the system prepares it to receive public submissions.
-- **Dynamic DDL (`DynamicTableService.java`)**: 
-    - FormBuilder3 executes raw `CREATE TABLE` and `ALTER TABLE` DDL directly against PostgreSQL for high-performance structured storage.
-    - `DynamicTableService` also acts as a generic Data Access Object (DAO) for dynamic tables, handling all custom JDBC I/O.
-
-### 3. Submission & Validation (Rule Engine)
-- **Public Entry (`f/[token]/page.tsx`)**: Forms generate a UUID token for public sharing.
-- **Execution**: When a user submits data, it hits `SubmissionService.java`.
-- **Validation phase**: `RuleEngineService.java` evaluates pre-configured JSON rules (IF→THEN).
-- **Calculation Phase**: `CalculationService.java` evaluates server-side math expressions for calculated field types before insertion.
-- **Data Insertion**: Validated data is explicitly inserted into the dynamic table.SQL identifiers are strictly double-quoted to defend against reserved postgres keywords.
+### Administrative & Security
+- ✅ **Role-Based Access (RBAC)**: Granular permissions for Admin, Mentor, and Intern roles.
+- ✅ **Audit Logging**: Full traceability of all schema changes and user actions.
+- ✅ **Bulk Operations**: Efficiently manage large volumes of form submissions.
 
 ---
 
 ## ⚡ Performance Optimization
-
-### Smart Polling & Tab-Visibility
-The frontend implements a visibility-aware polling system:
-- **Redundancy Reduction**: Redundant background polling is consolidated into a single global state in `useUIStore.ts`.
-- **Visibility Detection**: Background requests pause automatically when the tab is inactive (via `visibilitychange` API), significantly reducing unnecessary server load and database queries.
+- **Smart Polling**: Consolidates background requests into a single global state.
+- **Tab-Visibility Aware**: Automatically pauses background API requests when the browser tab is inactive, drastically reducing server load and DB queries.
 
 ---
 
-## 📁 Key File Map
+## 🛡️ Security Posture
+FormBuilder3 implements multi-layer security controls:
 
-| System Component | Key Files | Description |
-|------------------|-----------|-------------|
-| **Types & API Layer** | `schema.ts`, `api.ts` | The frontend single-source of truth. |
-| **Data Manipulation** | `SubmissionService.java`, `CalculationService.java` | Submission pipeline with server-side math evaluation. |
-| **Logic Engine** | `RuleEngineService.java`, `FormMapper.java` | Rule validation and Entity-DTO mapping. |
-| **Table Management** | `DynamicTableService.java` | Core business logic for executing dynamic DML and DDL via `JdbcTemplate`. |
+| Layer | Status | Implementation |
+|-------|--------|----------------|
+| **Auth** | ✅ | Session-based (JSESSIONID) with `maximumSessions(1)`. |
+| **Data** | ✅ | Parameterized SQL + Double-quoted identifiers for dynamic tables. |
+| **Logic** | ✅ | Server-side AST validation for all rules and expressions. |
+| **Privacy**| ✅ | UUID-based share tokens to prevent ID enumeration attacks. |
 
----
-
-## 🗄️ Database Schema Summary
-
-- `forms`: Core metadata (ID, title, target table name, share token).
-- `form_versions`: Snapshot representations (JSON `rules`, version number).
-- `form_fields`: Individual column configurations (type, validation constraints, column names).
-- `sub_{id}_v1`: The dynamic tables holding the actual submitted data.
+*For production hardening recommendations (Rate Limiting, Secrets Vault), see [SECURITY_AUDIT.md](./SECURITY_AUDIT.md).*
 
 ---
 
-## 🏃 Running Locally
+## 📊 Project Statistics
+| Metric | Value |
+|--------|-------|
+| **Backend Classes** | 100+ (Spring Boot 3.5.11, Java 21) |
+| **Frontend Components** | 20+ (Next.js 16.1.6, React 19) |
+| **API Endpoints** | 50+ RESTful Endpoints |
+| **Database Entities** | 16 Core JPA entities |
 
-### Prerequisites
-- Java 21+ & Maven 3.9+
-- Node.js 18+
-- PostgreSQL 14+
+---
 
-### 1. Backend
-1. Edit `/formbuilder-backend1/src/main/resources/application.properties` with your local Postgres credentials.
-2. Ensure the `jdbc:postgresql://localhost:5432/formbuilder_db` database exists.
-```bash
-cd formbuilder-backend1
-mvn spring-boot:run
-# Backend boots on http://localhost:8080
+## 📁 Project Structure
+```text
+FormBuilder3/
+├── formbuilder-backend1/      # Spring Boot 3.5 (Logic & Dynamic JDBC)
+│   ├── src/main/java/         # Controllers, Services, Entities, DTOs
+│   ├── src/main/resources/    # application.properties, schema.sql
+│   └── pom.xml                # Backend dependencies
+├── formbuilder-frontend1/     # Next.js 16 (React 19 & Zustand)
+│   ├── src/app/              # App Router Pages (Builder, Forms, Admin)
+│   ├── src/components/       # UI & Builder Components
+│   └── package.json           # Frontend dependencies
+├── ARCHITECTURE.md            # System Design
+├── DOCUMENTATION.md           # API Reference
+├── IMPLEMENTATION_GUIDE.md    # Setup & Deployment
+├── SECURITY_AUDIT.md          # Security Analysis
+└── README.md                  # This file
 ```
 
-### 2. Frontend
+---
+
+## 📖 Documentation Suite
+For detailed technical deep-dives, refer to:
+
+- 🏗️ **[ARCHITECTURE.md](./ARCHITECTURE.md)**: System design and visual flow diagrams.
+- 📖 **[DOCUMENTATION.md](./DOCUMENTATION.md)**: Full API Reference and Feature guide.
+- 🚀 **[IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md)**: Setup, Deployment, and Troubleshooting.
+- 🛡️ **[SECURITY_AUDIT.md](./SECURITY_AUDIT.md)**: Security Analysis and Hardening Checklist.
+
+---
+
+## 🔧 Quick Start
 ```bash
-cd formbuilder-frontend1
-npm install
-npm run dev
-# Frontend boots on http://localhost:3000
+# 1. Setup DB
+psql -U postgres -c "CREATE DATABASE formbuilder2;"
+
+# 2. Start Backend
+cd formbuilder-backend1 && mvn spring-boot:run
+
+# 3. Start Frontend
+cd formbuilder-frontend1 && npm install && npm run dev
 ```
+
+---
+© 2026 STTL. Enterprise Form & Schema Solutions.
