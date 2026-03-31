@@ -57,6 +57,15 @@ public class FormController {
     }
 
     /**
+     * GET /api/forms/stats
+     * Returns statistics for the dashboard.
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<com.sttl.formbuilder2.dto.response.DashboardStatsResponseDTO> getDashboardStats() {
+        return ResponseEntity.ok(formService.getDashboardStats());
+    }
+
+    /**
      * POST /api/forms
      * Creates a brand-new form (DRAFT status). Does NOT create a submission table
      * yet — that only happens on Publish (PUT with status=PUBLISHED).
@@ -148,8 +157,19 @@ public class FormController {
     }
 
     @GetMapping("/{id}/submissions/export")
-    public ResponseEntity<byte[]> exportSubmissions(@PathVariable("id") Long id) {
-        String csvData = submissionService.exportSubmissionsToCsv(id);
+    public ResponseEntity<byte[]> exportSubmissions(
+            @PathVariable("id") Long id,
+            @RequestParam(name = "columns", required = false) List<String> columns,
+            @RequestParam(name = "sortBy", defaultValue = "submitted_at") String sortBy,
+            @RequestParam(name = "sortOrder", defaultValue = "DESC") String sortOrder,
+            @RequestParam Map<String, String> allParams) {
+        
+        // Filter out known pagination params to leave only custom column filters
+        Map<String, String> filters = allParams.entrySet().stream()
+                .filter(e -> !List.of("columns", "sortBy", "sortOrder").contains(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        String csvData = submissionService.exportSubmissionsToCsv(id, columns, sortBy, sortOrder, filters);
         byte[] output = csvData.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=\"submissions_" + id + ".csv\"")
@@ -227,9 +247,21 @@ public class FormController {
     }
 
     /**
+     * POST /api/forms/{id}/submissions/{submissionId}/restore
+     * Restores a soft-deleted submission.
+     */
+    @PostMapping("/{id}/submissions/{submissionId}/restore")
+    public ResponseEntity<Void> restoreSubmission(
+            @PathVariable("id") Long id,
+            @PathVariable("submissionId") UUID submissionId) {
+        submissionService.restoreSubmission(id, submissionId);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * POST /api/v1/forms/{formId}/submissions/bulk
      * Generic bulk operation endpoint (Blueprint §3.2).
-     * Supports: DELETE, STATUS_UPDATE
+     * Supports: DELETE, STATUS_UPDATE, RESTORE
      */
     @PostMapping("/{formId}/submissions/bulk")
     public ResponseEntity<Map<String, Object>> bulkOperation(
@@ -241,6 +273,11 @@ public class FormController {
 
         if ("DELETE".equalsIgnoreCase(operation)) {
             submissionService.deleteSubmissionsBulk(formId, submissionIds);
+            return ResponseEntity.ok(Map.of("processed", submissionIds.size(), "failed", 0));
+        }
+
+        if ("RESTORE".equalsIgnoreCase(operation)) {
+            submissionService.restoreSubmissionsBulk(formId, submissionIds);
             return ResponseEntity.ok(Map.of("processed", submissionIds.size(), "failed", 0));
         }
 

@@ -125,7 +125,7 @@ public class FormField {
      * section).
      * If null, the field is at the top level.
      */
-    @Column(name = "parent_column_name", length = 64)
+    @Column(name = "parent_column_name", length = 100)
     private String parentColumnName;
 
     /**

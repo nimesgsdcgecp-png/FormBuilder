@@ -253,16 +253,44 @@ export const deleteSubmissionsBulk = async (formId: string, submissionIds: strin
 /**
  * Updates status of multiple submissions in one call.
  * Calls POST /api/forms/{formId}/submissions/bulk with STATUS_UPDATE operation.
- *
- * @param formId        The internal form ID.
- * @param submissionIds Array of submission UUIDs.
- * @param status        New status to set (SUBMITTED, RESPONSE_DRAFT).
  */
 export const updateSubmissionStatusBulk = async (formId: string, submissionIds: string[], status: string) => {
   const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ operation: 'STATUS_UPDATE', submissionIds, status }),
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
+  }
+};
+
+/**
+ * Restores a single soft-deleted submission.
+ */
+export const restoreSubmission = async (formId: string, submissionId: string) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/${submissionId}/restore`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
+  }
+};
+
+/**
+ * Restores multiple soft-deleted submissions in bulk.
+ */
+export const restoreSubmissionsBulk = async (formId: string, submissionIds: string[]) => {
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/submissions/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'RESTORE', submissionIds }),
     credentials: 'include',
   });
   if (!response.ok) {
@@ -341,6 +369,36 @@ export const submitFormResponse = async (formId: string, data: Record<string, an
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ data, status, formVersionId }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) throw new UnauthorizedError();
+    const errMsg = await extractApiError(response);
+    throw new Error(errMsg);
+  }
+
+  return response.json();
+};
+
+/**
+ * Interface for dashboard statistics.
+ */
+export interface DashboardStats {
+  totalForms: number;
+  publishedForms: number;
+  draftForms: number;
+  totalSubmissions: number;
+  recentForms: any[]; // FormSummaryResponseDTO
+}
+
+/**
+ * Fetches dashboard statistics from the backend.
+ * Calls GET /api/v1/forms/stats.
+ */
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  const response = await fetch(`${API_BASE_URL}/forms/stats`, {
+    method: 'GET',
     credentials: 'include',
   });
 

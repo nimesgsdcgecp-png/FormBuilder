@@ -86,4 +86,8 @@ public class Form {
 
     @Column(name = "approval_chain", columnDefinition = "TEXT")
     private String approvalChain;
+
+    @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 }

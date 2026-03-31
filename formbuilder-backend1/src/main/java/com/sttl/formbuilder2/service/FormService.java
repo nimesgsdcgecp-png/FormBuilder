@@ -13,11 +13,8 @@ import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.model.entity.UserFormRole;
 import com.sttl.formbuilder2.model.entity.WorkflowInstance;
 import com.sttl.formbuilder2.model.enums.FormStatus;
-import com.sttl.formbuilder2.repository.FieldValidationRepository;
-import com.sttl.formbuilder2.repository.FormRepository;
-import com.sttl.formbuilder2.repository.UserRepository;
-import com.sttl.formbuilder2.repository.UserFormRoleRepository;
-import com.sttl.formbuilder2.repository.WorkflowInstanceRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sttl.formbuilder2.repository.*;
 import com.sttl.formbuilder2.config.FormBuilderLimitsConfig;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +41,8 @@ public class FormService {
     private final FieldValidationRepository fieldValidationRepository;
     private final FormMapper formMapper;
     private final FormBuilderLimitsConfig limitsConfig;
+    private final FormSubmissionMetaRepository formSubmissionMetaRepository;
+    private final ObjectMapper objectMapper;
 
     // ─────────────────────────────────────────────
     // HELPER: Get Current User
@@ -82,8 +81,19 @@ public class FormService {
     // ─────────────────────────────────────────────
     // HELPER: Validate SRS Limits (Section 10)
     // ─────────────────────────────────────────────
-    private void validateFormLimits(List<com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO> fields,
+    private void validateFormLimits(Object request, List<com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO> fields,
                                     List<FieldValidationRequestDTO> validations) {
+        // Max Payload Size (100 KB)
+        try {
+            byte[] bytes = objectMapper.writeValueAsBytes(request);
+            if (bytes.length > limitsConfig.getMaxPayloadSizeKb() * 1024) {
+                throw new FormBuilderException("LIMIT_EXCEEDED",
+                    "Payload size exceeds limit of " + limitsConfig.getMaxPayloadSizeKb() + " KB. Current: " + (bytes.length / 1024) + " KB");
+            }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            // Ignore - if it can't be serialized here, it's problematic anyway
+        }
+
         // Max 50 fields per form
         if (fields != null && fields.size() > limitsConfig.getMaxFieldsPerForm()) {
             throw new FormBuilderException("LIMIT_EXCEEDED",
@@ -115,7 +125,7 @@ public class FormService {
     @Transactional
     public FormDetailResponseDTO createForm(CreateFormRequestDTO request) {
         // SRS Section 10: Validate limits before proceeding
-        validateFormLimits(request.getFields(), request.getFormValidations());
+        validateFormLimits(request, request.getFields(), request.getFormValidations());
 
         Form form = new Form();
         form.setTitle(request.getTitle());
@@ -274,13 +284,23 @@ public class FormService {
     @Transactional
     public FormDetailResponseDTO updateForm(Long formId, UpdateFormRequestDTO request) {
         // SRS Section 10: Validate limits before proceeding
-        validateFormLimits(request.getFields(), request.getFormValidations());
+        validateFormLimits(request, request.getFields(), request.getFormValidations());
 
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         FormStatus oldStatus = form.getStatus();
         FormStatus newStatus = request.getStatus() != null ? request.getStatus() : oldStatus;
+
+        // SRS Section 11.1: Forms with live submissions cannot be modified
+        if (oldStatus == FormStatus.PUBLISHED && newStatus == FormStatus.PUBLISHED) {
+            long liveSubmissions = formSubmissionMetaRepository.countByFormIdInAndIsDeletedFalseAndStatusIn(
+                java.util.List.of(formId), java.util.List.of("SUBMITTED", "FINAL"));
+            if (liveSubmissions > 0) {
+                throw new FormBuilderException("FORBIDDEN", 
+                    "Form cannot be modified because it has " + liveSubmissions + " live submission(s). To make changes, save your form as a DRAFT.");
+            }
+        }
 
         form.setTitle(request.getTitle());
         form.setDescription(request.getDescription());
@@ -309,13 +329,14 @@ public class FormService {
         newVersion.setFields(formMapper.mapFields(request.getFields(), newVersion));
         newVersion.setRules(formMapper.serializeRules(request.getRules()));
 
+        // REFINEMENT: Even if DRAFT, make it the "active" version for the builder to load latest changes
+        // This ensures the FormMapper picks the latest version even if it's not yet PUBLISHED.
+        form.getVersions().forEach(v -> v.setIsActive(false));
+        newVersion.setIsActive(true);
         if (newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
-            form.getVersions().forEach(v -> v.setIsActive(false));
-            newVersion.setIsActive(true);
             newVersion.setActivatedAt(java.time.Instant.now());
             newVersion.setActivatedBy(getCurrentUser().getUsername());
-        } else {
-            newVersion.setIsActive(false);
+            softDeleteDraftsForForm(formId);
         }
 
         form.getVersions().add(newVersion);
@@ -332,10 +353,6 @@ public class FormService {
         fieldValidationRepository.deleteByFormVersionId(persistedNewVersion.getId());
         saveValidations(request.getFormValidations(), persistedNewVersion.getId());
 
-        // Replace custom AST validations for this version
-        fieldValidationRepository.deleteByFormVersionId(persistedNewVersion.getId());
-        saveValidations(request.getFormValidations(), persistedNewVersion.getId());
-
         if ((oldStatus == null || oldStatus == com.sttl.formbuilder2.model.enums.FormStatus.DRAFT) && newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
             form.setCodeLocked(true);
             form.setApprovedBy(getCurrentUser());
@@ -346,6 +363,19 @@ public class FormService {
         }
 
         return formMapper.toDetailDTO(form);
+    }
+
+    private void softDeleteDraftsForForm(Long formId) {
+        Form form = formRepository.findById(formId).orElse(null);
+        if (form == null) return;
+        
+        // 1. Soft delete in metadata table
+        formSubmissionMetaRepository.softDeleteByFormIdAndStatus(formId, "RESPONSE_DRAFT");
+        
+        // 2. Soft delete in dynamic table
+        dynamicTableService.softDeleteRowsByForm(form.getTargetTableName(), formId);
+        
+        auditService.log("DRAFTS_DISCARDED", "SYSTEM", "FORM", formId.toString(), "Drafts soft-deleted due to version update");
     }
 
     // ─────────────────────────────────────────────
@@ -413,5 +443,49 @@ public class FormService {
         }
         form.setStatus(FormStatus.DRAFT);
         formRepository.save(form);
+    }
+
+    // ─────────────────────────────────────────────
+    // DASHBOARD STATS (GET /api/v1/forms/stats)
+    // ─────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public com.sttl.formbuilder2.dto.response.DashboardStatsResponseDTO getDashboardStats() {
+        AppUser currentUser = getCurrentUser();
+        String username = currentUser.getUsername();
+        boolean isAdmin = currentUser.getUserFormRoles().stream()
+                .anyMatch(ufr -> ufr.getRole().getName().equals("ADMIN") || ufr.getRole().getName().equals("ROLE_ADMINISTRATOR"));
+
+        long totalForms;
+        long publishedForms;
+        long draftForms;
+        List<Form> activeForms;
+
+        if (isAdmin) {
+            totalForms = formRepository.countByStatusNot(FormStatus.ARCHIVED);
+            publishedForms = formRepository.countByStatus(FormStatus.PUBLISHED);
+            draftForms = formRepository.countByStatus(FormStatus.DRAFT);
+            activeForms = formRepository.findAllByStatusNotOrderByUpdatedAtDesc(FormStatus.ARCHIVED);
+        } else {
+            totalForms = formRepository.countByAccessAndStatusNot(currentUser, username, FormStatus.ARCHIVED);
+            publishedForms = formRepository.countByAccessAndStatus(currentUser, username, FormStatus.PUBLISHED);
+            draftForms = formRepository.countByAccessAndStatus(currentUser, username, FormStatus.DRAFT);
+            activeForms = formRepository.findByAccessAndStatusNot(currentUser, username, FormStatus.ARCHIVED);
+        }
+
+        List<Long> formIds = activeForms.stream().map(Form::getId).collect(java.util.stream.Collectors.toList());
+        long totalSubmissions = formIds.isEmpty() ? 0 : formSubmissionMetaRepository.countByFormIdInAndIsDeletedFalseAndStatusIn(formIds, List.of("SUBMITTED", "FINAL"));
+
+        List<com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO> recentForms = activeForms.stream()
+                .limit(5)
+                .map(formMapper::toSummaryDTO)
+                .collect(java.util.stream.Collectors.toList());
+
+        return com.sttl.formbuilder2.dto.response.DashboardStatsResponseDTO.builder()
+                .totalForms(totalForms)
+                .publishedForms(publishedForms)
+                .draftForms(draftForms)
+                .totalSubmissions(totalSubmissions)
+                .recentForms(recentForms)
+                .build();
     }
 }

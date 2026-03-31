@@ -3,11 +3,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, FileText, Edit, Eye, Trash2, User, Link2, LayoutGrid, List as ListIcon, MoreVertical, ExternalLink, Copy, Check, RotateCcw, Archive, Shield, LogOut, Settings, Users, ShieldAlert, Clock, Ban } from 'lucide-react';
+import { Plus, FileText, Edit, Eye, Trash2, User, Link2, LayoutGrid, List as ListIcon, MoreVertical, ExternalLink, Copy, Check, RotateCcw, Archive, Shield, LogOut, Settings, Users, ShieldAlert, Clock, Ban, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
-import { deleteForm, getArchivedForms, restoreForm } from '@/services/api';
+import { deleteForm, getArchivedForms, restoreForm, getDashboardStats, DashboardStats } from '@/services/api';
 import { usePermissions } from '@/hooks/usePermissions';
 
 /** Shape of each form card item from GET /api/forms */
@@ -49,9 +49,54 @@ function SkeletonCard() {
   );
 }
 
+/** Statistics card component */
+function StatsCard({ title, value, icon: Icon, colorClass, loading }: {
+  title: string,
+  value: number | string,
+  icon: any,
+  colorClass: string,
+  loading?: boolean
+}) {
+  // Extract color for the glow effect
+  const iconColor = colorClass.split(' ').find(c => c.startsWith('text-'))?.replace('text-', '') || 'blue-500';
+
+  return (
+    <div className="flex-1 min-w-[220px] rounded-3xl border p-6 flex flex-col gap-3 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group active:scale-[0.98] overflow-hidden relative"
+      style={{
+        background: 'rgba(var(--bg-surface-rgb), 0.7)',
+        borderColor: 'var(--card-border)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)'
+      }}>
+
+      {/* Dynamic Background Glow */}
+      <div className={`absolute -right-6 -bottom-6 w-32 h-32 opacity-[0.08] rounded-full blur-3xl transition-opacity duration-500 group-hover:opacity-[0.15]`}
+        style={{ backgroundColor: `var(--${iconColor.split('-')[0]})`, background: colorClass.includes('emerald') ? '#10b981' : colorClass.includes('blue') ? '#3b82f6' : colorClass.includes('amber') ? '#f59e0b' : '#a855f7' }} />
+
+      <div className="flex items-center gap-4 relative z-10 w-full mb-1">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${colorClass} bg-opacity-10 backdrop-blur-md border border-current border-opacity-10 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 shadow-sm`}>
+          <Icon size={22} strokeWidth={2} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] opacity-50 truncate" style={{ color: 'var(--text-muted)' }}>{title}</p>
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <div className="shimmer h-8 w-16 rounded-lg mt-1" />
+            ) : (
+              <h2 className="text-3xl font-bold tracking-tight mt-0.5" style={{ color: 'var(--text-primary)' }}>{value}</h2>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [forms, setForms] = useState<FormSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
@@ -62,6 +107,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchForms();
+    fetchStats();
   }, [currentTab]);
 
   useEffect(() => {
@@ -79,8 +125,8 @@ export default function Dashboard() {
   const fetchForms = async () => {
     setIsLoading(true);
     try {
-      const url = currentTab === 'ACTIVE' 
-        ? 'http://localhost:8080/api/v1/forms' 
+      const url = currentTab === 'ACTIVE'
+        ? 'http://localhost:8080/api/v1/forms'
         : 'http://localhost:8080/api/v1/forms/archived';
 
       const res = await fetch(url, {
@@ -113,6 +159,20 @@ export default function Dashboard() {
       toast.error(error.message || 'Failed to load dashboard.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  /** Fetches dashboard statistics. */
+  const fetchStats = async () => {
+    setIsStatsLoading(true);
+    try {
+      const data = await getDashboardStats();
+      setStats(data);
+    } catch (error: any) {
+      console.error("Failed to fetch stats", error);
+      // We don't toast error here to avoid blocking the page
+    } finally {
+      setIsStatsLoading(false);
     }
   };
 
@@ -217,14 +277,14 @@ export default function Dashboard() {
             <div className="flex bg-[var(--bg-muted)] p-1 rounded-xl border border-[var(--border)] mr-2">
               <button
                 onClick={() => setViewMode('GRID')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-[var(--card-bg)] shadow-sm text-(--accent)' : 'text-(--text-faint)'}`}
                 title="Grid View"
               >
                 <LayoutGrid size={18} />
               </button>
               <button
                 onClick={() => setViewMode('LIST')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'LIST' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'LIST' ? 'bg-[var(--card-bg)] shadow-sm text-(--accent)' : 'text-(--text-faint)'}`}
                 title="List View"
               >
                 <ListIcon size={18} />
@@ -243,9 +303,42 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Statistics Widgets */}
+        <div className="flex flex-row gap-4 mb-16">
+          <StatsCard
+            title="Total Forms"
+            value={stats?.totalForms ?? 0}
+            icon={FileText}
+            colorClass="bg-blue-500/10 text-blue-500"
+            loading={isStatsLoading}
+          />
+          <StatsCard
+            title="Published"
+            value={stats?.publishedForms ?? 0}
+            icon={Check}
+            colorClass="bg-emerald-500/10 text-emerald-500"
+            loading={isStatsLoading}
+          />
+          <StatsCard
+            title="Drafts"
+            value={stats?.draftForms ?? 0}
+            icon={Edit}
+            colorClass="bg-amber-500/10 text-amber-500"
+            loading={isStatsLoading}
+          />
+          <StatsCard
+            title="Submissions"
+            value={stats?.totalSubmissions ?? 0}
+            icon={Users}
+            colorClass="bg-purple-500/10 text-purple-500"
+            loading={isStatsLoading}
+          />
+        </div>
+
+
         {/* Sub-header with Tabs */}
-        <div className="mb-8 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex gap-8">
+        <div className="mb-8 border-b mt-8" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex gap-12 px-6">
             <button
               onClick={() => setCurrentTab('ACTIVE')}
               className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ACTIVE' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
@@ -255,8 +348,6 @@ export default function Dashboard() {
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 gradient-accent rounded-full" />
               )}
             </button>
-            {/* Archive section hidden as requested */}
-            {/* 
             <button
               onClick={() => setCurrentTab('ARCHIVED')}
               className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ARCHIVED' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
@@ -265,8 +356,7 @@ export default function Dashboard() {
               {currentTab === 'ARCHIVED' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 gradient-accent rounded-full" />
               )}
-            </button> 
-            */}
+            </button>
           </div>
         </div>
 
@@ -288,8 +378,8 @@ export default function Dashboard() {
               {currentTab === 'ACTIVE' ? 'No forms yet' : 'Archive is empty'}
             </h3>
             <p className="text-sm mb-6 max-w-sm mx-auto" style={{ color: 'var(--text-muted)' }}>
-              {currentTab === 'ACTIVE' 
-                ? 'Get started by creating your first dynamic form. It only takes a few seconds.' 
+              {currentTab === 'ACTIVE'
+                ? 'Get started by creating your first dynamic form. It only takes a few seconds.'
                 : 'Any forms you archive will appear here for 30 days before being permanently deleted.'}
             </p>
             {currentTab === 'ACTIVE' && (
@@ -317,28 +407,28 @@ export default function Dashboard() {
                     }}
                   >
                     {/* Top colour accent bar by status */}
-                      <div
-                        className={`h-1 w-full ${isPublished ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : form.status === 'REJECTED' ? 'bg-red-500' : form.status.startsWith('PENDING') ? 'bg-amber-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}
-                      />
+                    <div
+                      className={`h-1 w-full ${isPublished ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : form.status === 'REJECTED' ? 'bg-red-500' : form.status.startsWith('PENDING') ? 'bg-amber-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}
+                    />
 
                     {/* Card body */}
                     <div className="p-6 flex-1">
                       <div className="flex justify-between items-start mb-3">
                         {/* Status badge */}
-                      <span
-                        className="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
-                        style={{
-                          background: currentTab === 'ARCHIVED' ? 'var(--bg-muted)' : (isPublished ? 'var(--status-pub-bg)' : form.status === 'REJECTED' ? '#fee2e2' : form.status.startsWith('PENDING') ? '#fff7ed' : 'var(--status-draft-bg)'),
-                          color: currentTab === 'ARCHIVED' ? 'var(--text-muted)' : (isPublished ? 'var(--status-pub-text)' : form.status === 'REJECTED' ? '#ef4444' : form.status.startsWith('PENDING') ? '#f59e0b' : 'var(--text-primary)'),
-                          borderColor: currentTab === 'ARCHIVED' ? 'var(--border)' : (isPublished ? 'var(--status-pub-ring)' : form.status === 'REJECTED' ? '#fecaca' : form.status.startsWith('PENDING') ? '#ffedd5' : 'var(--border)'),
-                        }}
-                      >
-                        {currentTab === 'ARCHIVED' ? 'ARCHIVED' : (
-                          form.status === 'PUBLISHED' ? '● Published' : 
-                          form.status === 'DRAFT' ? '◌ Draft' : 
-                          form.status === 'REJECTED' ? '✕ Rejected' : '◒ Pending'
-                        )}
-                      </span>
+                        <span
+                          className="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+                          style={{
+                            background: currentTab === 'ARCHIVED' ? 'var(--bg-muted)' : (isPublished ? 'var(--status-pub-bg)' : form.status === 'REJECTED' ? '#fee2e2' : form.status.startsWith('PENDING') ? '#fff7ed' : 'var(--status-draft-bg)'),
+                            color: currentTab === 'ARCHIVED' ? 'var(--text-muted)' : (isPublished ? 'var(--status-pub-text)' : form.status === 'REJECTED' ? '#ef4444' : form.status.startsWith('PENDING') ? '#f59e0b' : 'var(--text-primary)'),
+                            borderColor: currentTab === 'ARCHIVED' ? 'var(--border)' : (isPublished ? 'var(--status-pub-ring)' : form.status === 'REJECTED' ? '#fecaca' : form.status.startsWith('PENDING') ? '#ffedd5' : 'var(--border)'),
+                          }}
+                        >
+                          {currentTab === 'ARCHIVED' ? 'ARCHIVED' : (
+                            form.status === 'PUBLISHED' ? '● Published' :
+                              form.status === 'DRAFT' ? '◌ Draft' :
+                                form.status === 'REJECTED' ? '✕ Rejected' : '◒ Pending'
+                          )}
+                        </span>
                         <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>#{form.id}</span>
                       </div>
 
@@ -535,7 +625,7 @@ export default function Dashboard() {
                                   >
                                     <Edit size={16} />
                                   </Link>
- 
+
                                   {isPublished && (
                                     <>
                                       <Link
@@ -589,8 +679,8 @@ export default function Dashboard() {
                 {forms.map((form) => {
                   const isPublished = form.status === 'PUBLISHED';
                   return (
-                    <div 
-                      key={form.id} 
+                    <div
+                      key={form.id}
                       className="p-5 rounded-2xl border shadow-sm space-y-4"
                       style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
                     >
@@ -609,7 +699,7 @@ export default function Dashboard() {
                           </span>
                         </div>
                         <div className="flex gap-1">
-                           {currentTab === 'ACTIVE' ? (
+                          {currentTab === 'ACTIVE' ? (
                             <>
                               {hasPermission('EDIT', form.id) && (
                                 <Link
@@ -620,14 +710,14 @@ export default function Dashboard() {
                                 </Link>
                               )}
                             </>
-                           ) : (
-                             <button
-                                onClick={() => handleRestore(form.id)}
-                                className="p-2 rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]"
-                              >
-                                <RotateCcw size={16} />
-                              </button>
-                           )}
+                          ) : (
+                            <button
+                              onClick={() => handleRestore(form.id)}
+                              className="p-2 rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]"
+                            >
+                              <RotateCcw size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -644,22 +734,22 @@ export default function Dashboard() {
                           <p className="text-[10px] font-bold text-[var(--text-secondary)] truncate">{form.ownerName || 'Unknown System User'}</p>
                         </div>
                         <div className="flex gap-2">
-                           {isPublished && currentTab === 'ACTIVE' && (
-                             <Link
+                          {isPublished && currentTab === 'ACTIVE' && (
+                            <Link
                               href={`/forms/${form.id}/responses`}
                               className="px-3 py-1.5 rounded-lg bg-[var(--bg-muted)] text-[var(--text-primary)] text-[10px] font-black uppercase tracking-widest border border-[var(--border)]"
                             >
                               Stats
                             </Link>
-                           )}
-                           {currentTab === 'ACTIVE' && hasPermission('DELETE', form.id) && (
-                              <button
-                                onClick={() => handleDelete(form.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                           )}
+                          )}
+                          {currentTab === 'ACTIVE' && hasPermission('DELETE', form.id) && (
+                            <button
+                              onClick={() => handleDelete(form.id)}
+                              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

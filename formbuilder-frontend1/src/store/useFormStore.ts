@@ -66,6 +66,7 @@ interface FormState {
   reorderFields: (newOrder: FormField[], parentId?: string | null) => void;
   setThemePanelOpen: (isOpen: boolean) => void;
   setStatus: (status: string) => void;
+  setFormValidations: (validations: any[]) => void;
 }
 
 /** Recursive helper to update a field within a tree of fields */
@@ -160,6 +161,7 @@ export const useFormStore = create<FormState>((set) => ({
     themeColor: '#6366f1',  // Default: indigo
     themeFont: 'Inter',     // Default: Inter
     status: 'DRAFT',
+    formValidations: [],
   },
   selectedFieldId: null,
   isThemePanelOpen: false,
@@ -167,6 +169,10 @@ export const useFormStore = create<FormState>((set) => ({
   /** Replace the entire rules array — used when loading an existing form. */
   setRules: (rules) => set((state) => ({
     schema: { ...state.schema, rules }
+  })),
+
+  setFormValidations: (formValidations) => set((state) => ({
+    schema: { ...state.schema, formValidations }
   })),
 
   /** Toggle whether respondents can edit their submission after submitting. */

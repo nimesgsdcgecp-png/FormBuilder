@@ -75,14 +75,17 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (isAuthorized === false) {
+      import('sonner').then(({ toast }) => {
+        toast.error("You are not authorized to access this page.");
+      });
       router.push('/'); // Redirect to dashboard if unauthorized
     }
   }, [isAuthorized, router]);
 
   if (isAuthorized === null || permsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)]">
-        <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center bg-(--bg-main)">
+        <div className="w-8 h-8 border-2 border-(--accent) border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }

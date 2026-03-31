@@ -76,4 +76,24 @@ public interface FormRepository extends JpaRepository<Form, Long> {
     boolean existsByCode(String code);
 
     Optional<Form> findByCode(String code);
+
+    long countByOwnerAndStatusNot(AppUser owner, FormStatus status);
+    
+    long countByOwnerAndStatus(AppUser owner, FormStatus status);
+
+    long countByStatusNot(FormStatus status);
+    
+    long countByStatus(FormStatus status);
+
+    @Query("SELECT COUNT(f) FROM Form f " +
+           "LEFT JOIN UserFormRole ufr ON f.id = ufr.formId " +
+           "WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) " +
+           "AND f.status <> :status")
+    long countByAccessAndStatusNot(@Param("user") AppUser user, @Param("username") String username, @Param("status") FormStatus status);
+
+    @Query("SELECT COUNT(f) FROM Form f " +
+           "LEFT JOIN UserFormRole ufr ON f.id = ufr.formId " +
+           "WHERE (f.owner = :user OR f.issuedByUsername = :username OR ufr.user = :user) " +
+           "AND f.status = :status")
+    long countByAccessAndStatus(@Param("user") AppUser user, @Param("username") String username, @Param("status") FormStatus status);
 }

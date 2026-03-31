@@ -50,20 +50,19 @@ function BuilderContent() {
   const {
     schema, addField, insertField, reorderFields, setFormId, setTitle, setDescription,
     setFields, setRules, resetForm, setAllowEditResponse, isThemePanelOpen, setThemePanelOpen,
-    setThemeColor, setThemeFont, setStatus
+    setThemeColor, setThemeFont, setStatus, setFormValidations
   } = useFormStore();
 
   const [activeSidebarItem, setActiveSidebarItem] = useState<FieldType | null>(null);
   const [activeCanvasItemId, setActiveCanvasItemId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC' | 'VALIDATIONS' | 'VERSIONS'>('EDITOR');
-  const [formValidations, setFormValidations] = useState<ValidationRule[]>([]);
   const [username, setUsername] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<'PALETTE' | 'CANVAS' | 'PROPERTIES'>('CANVAS');
   const [initialState, setInitialState] = useState<string>('');
-  const isDirty = initialState !== JSON.stringify({ schema, formValidations });
+  const isDirty = initialState !== JSON.stringify({ schema });
   const profileRef = useRef<HTMLDivElement>(null);
   const { hasPermission, assignments } = usePermissions();
   const isAdminOrBuilder = assignments.some((a: any) => 
@@ -151,6 +150,8 @@ function BuilderContent() {
             errorMessage: fv.errorMessage || '',
             executionOrder: fv.executionOrder || 0,
           })));
+        } else {
+          setFormValidations([]);
         }
 
         let parsedRules = [];
@@ -205,8 +206,7 @@ function BuilderContent() {
         // Capture initial state for dirty check after all setters have run
         setTimeout(() => {
           setInitialState(JSON.stringify({ 
-            schema: { ...useFormStore.getState().schema, fields: mappedFields, rules: parsedRules }, 
-            formValidations: data.versions?.find((v: any) => v.isActive)?.formValidations || [] 
+            schema: { ...useFormStore.getState().schema, fields: mappedFields, rules: parsedRules }
           }));
         }, 100);
       })
@@ -283,13 +283,6 @@ function BuilderContent() {
       const payload: any = { 
         ...schema, 
         status: status,
-        formValidations: formValidations.map(v => ({
-          fieldKey: v.fieldKey,
-          scope: v.scope,
-          expression: v.expression,
-          errorMessage: v.errorMessage,
-          executionOrder: v.executionOrder
-        }))
       };
       
       let savedForm;
@@ -325,7 +318,7 @@ function BuilderContent() {
       toast.success(`Form ${status === 'PUBLISHED' ? 'published successfully!' : 'saved as draft!'}`);
       
       // Update initial state after successful save
-      setInitialState(JSON.stringify({ schema: payload, formValidations }));
+      setInitialState(JSON.stringify({ schema: payload }));
       
       // Don't push to '/' yet, allow user to keep editing or "Request Approval"
       // router.push('/'); 
@@ -700,7 +693,7 @@ function BuilderContent() {
               ) : activeTab === 'VALIDATIONS' ? (
                 <CustomValidationsPanel 
                   fields={schema.fields.map(f => ({ columnName: f.columnName, label: f.label }))}
-                  rules={formValidations}
+                  rules={schema.formValidations || []}
                   onChange={setFormValidations}
                 />
               ) : (

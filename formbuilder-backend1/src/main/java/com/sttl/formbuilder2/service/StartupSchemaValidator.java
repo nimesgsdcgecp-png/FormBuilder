@@ -31,6 +31,8 @@ public class StartupSchemaValidator {
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         System.out.println(">>> [STARTUP] Running Schema Drift Check...");
+        dynamicTableService.repairLongFieldKeys(); // Auto-fix long identifiers to match physical DB limits
+        dynamicTableService.normalizeAllTableStatuses(); // SRS 6.3: Normalize all FINAL statuses to SUBMITTED
         List<Form> allForms = formRepository.findAll();
         int checkedCount = 0;
         

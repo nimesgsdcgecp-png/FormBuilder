@@ -7,6 +7,7 @@ import com.sttl.formbuilder2.model.entity.Form;
 import com.sttl.formbuilder2.model.entity.FormField;
 import com.sttl.formbuilder2.model.entity.FormVersion;
 import com.sttl.formbuilder2.repository.FormRepository;
+import com.sttl.formbuilder2.config.FormBuilderLimitsConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class SubmissionService {
     private final com.sttl.formbuilder2.repository.FieldValidationRepository fieldValidationRepository;
     private final ExpressionEvaluatorService expressionEvaluatorService;
     private final com.sttl.formbuilder2.repository.FormSubmissionMetaRepository formSubmissionMetaRepository;
+    private final FormBuilderLimitsConfig limitsConfig;
 
     private String getCurrentUsername() {
         try {
@@ -53,6 +55,17 @@ public class SubmissionService {
         if (form.getStatus() != com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.FORBIDDEN, "Submission failed: Form is not published.");
+        }
+
+        // Section 10: Payload Size Check (100 KB)
+        try {
+            byte[] bytes = objectMapper.writeValueAsBytes(data);
+            if (bytes.length > limitsConfig.getMaxPayloadSizeKb() * 1024) {
+                 throw new com.sttl.formbuilder2.exception.FormBuilderException("LIMIT_EXCEEDED",
+                    "Submission payload size exceeds limit of " + limitsConfig.getMaxPayloadSizeKb() + " KB. Current: " + (bytes.length / 1024) + " KB");
+            }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            // Ignore - fallback to standard flow
         }
 
         FormVersion activeVersion = formVersionRepository.findByFormIdAndIsActiveTrue(formId)
@@ -134,10 +147,11 @@ public class SubmissionService {
             for (com.sttl.formbuilder2.model.entity.FieldValidation fv : fieldValidations) {
                 boolean passed;
                 try {
-                    passed = expressionEvaluatorService.evaluate(fv.getExpression(), data);
+                    passed = expressionEvaluatorService.evaluate(fv.getExpression(), data, 
+                        fv.getId() != null ? fv.getId().toString() : "NEW", fv.getScope());
                 } catch (com.sttl.formbuilder2.exception.ExpressionEvaluationException e) {
-                    throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_PARSE_ERROR",
-                        "Invalid expression for field: " + fv.getFieldKey(), e);
+                    throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_EVAL_FAILED",
+                        String.format("Evaluation failed: %s [ID: %s, Context: %s]", e.getMessage(), e.getExpressionId(), e.getContext()), e);
                 }
                 if (!passed) {
                     errors.add(Map.of("fieldKey", fv.getFieldKey(), "message", fv.getErrorMessage()));
@@ -146,7 +160,14 @@ public class SubmissionService {
     
             if (errors.isEmpty()) {
                 for (com.sttl.formbuilder2.model.entity.FieldValidation fv : formValidations) {
-                    boolean passed = expressionEvaluatorService.evaluate(fv.getExpression(), data);
+                    boolean passed;
+                    try {
+                        passed = expressionEvaluatorService.evaluate(fv.getExpression(), data,
+                            fv.getId() != null ? fv.getId().toString() : "NEW", fv.getScope());
+                    } catch (com.sttl.formbuilder2.exception.ExpressionEvaluationException e) {
+                        throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_EVAL_FAILED",
+                            String.format("Evaluation failed: %s [ID: %s, Context: %s]", e.getMessage(), e.getExpressionId(), e.getContext()), e);
+                    }
                     if (!passed) {
                         errors.add(Map.of("fieldKey", "", "message", fv.getErrorMessage()));
                     }
@@ -182,34 +203,92 @@ public class SubmissionService {
         // 2. Perform Calculations
         calculationService.recalculateCalculatedFields(data, activeFields);
 
-        // 3. Prepare Metadata
-        UUID submissionId = UUID.randomUUID();
-        data.put("submission_id", submissionId);
-        data.put("submitted_at", LocalDateTime.now());
-        data.put("updated_at", LocalDateTime.now());
-        data.put("submission_status", status != null ? status : "SUBMITTED");
-        
-        // Required Dynamic DB System Columns added for Phase 5 compliance
-        data.put("form_version_id", latestVersion.getId());
-        data.put("is_draft", "RESPONSE_DRAFT".equals(status));
-        data.put("submitted_by", getCurrentUsername());
-        // 4. Save to DB
-        dynamicTableService.validateNoSchemaDrift(form);
-        dynamicTableService.insertData(form.getTargetTableName(), data);
+        // 3. Prepare Metadata & Enforce Ownership/Unique Draft Rule (Section 5.1)
+        String currentUsername = getCurrentUsername();
+        UUID submissionId;
+        com.sttl.formbuilder2.model.entity.FormSubmissionMeta existingMeta = null;
 
-        // 5. Save metadata
-        com.sttl.formbuilder2.model.entity.FormSubmissionMeta meta = com.sttl.formbuilder2.model.entity.FormSubmissionMeta.builder()
-            .formId(form.getId())
-            .formVersionId(latestVersion.getId())
-            .submissionTable(form.getTargetTableName())
-            .submissionRowId(submissionId)
-            .status(status != null ? status : "SUBMITTED")
-            .submittedBy(getCurrentUsername())
-            .submittedAt(java.time.Instant.now())
-            .build();
-        formSubmissionMetaRepository.save(meta);
+        if ("RESPONSE_DRAFT".equalsIgnoreCase(status)) {
+            existingMeta = formSubmissionMetaRepository.findByFormIdAndSubmittedByAndStatus(formId, currentUsername, "RESPONSE_DRAFT")
+                .filter(m -> !Boolean.TRUE.equals(m.getIsDeleted()))
+                .orElse(null);
+        }
+
+        if (existingMeta != null) {
+            // UPSERT: Update existing draft
+            submissionId = existingMeta.getSubmissionRowId();
+            data.put("updated_at", LocalDateTime.now());
+            data.put("submission_status", "RESPONSE_DRAFT");
+            dynamicTableService.updateData(form.getTargetTableName(), submissionId, data);
+            
+            existingMeta.setSubmittedAt(java.time.Instant.now());
+            formSubmissionMetaRepository.save(existingMeta);
+        } else {
+            // INSERT: New entry or new versioned submission
+            submissionId = UUID.randomUUID();
+            data.put("submission_id", submissionId);
+            data.put("submitted_at", LocalDateTime.now());
+            data.put("updated_at", LocalDateTime.now());
+            data.put("submission_status", status != null ? status : "SUBMITTED");
+            data.put("form_version_id", latestVersion.getId());
+            data.put("is_draft", "RESPONSE_DRAFT".equalsIgnoreCase(status));
+            data.put("submitted_by", currentUsername);
+
+            dynamicTableService.insertData(form.getTargetTableName(), data);
+
+            com.sttl.formbuilder2.model.entity.FormSubmissionMeta meta = com.sttl.formbuilder2.model.entity.FormSubmissionMeta.builder()
+                .formId(form.getId())
+                .formVersionId(latestVersion.getId())
+                .submissionTable(form.getTargetTableName())
+                .submissionRowId(submissionId)
+                .status(status != null ? status : "SUBMITTED")
+                .submittedBy(currentUsername)
+                .submittedAt(java.time.Instant.now())
+                .build();
+            
+            try {
+                formSubmissionMetaRepository.save(meta);
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // Section 5.2: Handle concurrent draft creation failure
+                if (e.getMessage() != null && e.getMessage().contains("idx_one_draft_per_user")) {
+                    throw new com.sttl.formbuilder2.exception.FormBuilderException("CONCURRENT_SUBMISSION_REJECTED", 
+                        "A draft is already being saved for this form. Please refresh.");
+                }
+                throw e;
+            }
+        }
         
         return submissionId;
+    }
+
+    /**
+     * SRS 6.2: Restore a soft-deleted submission
+     */
+    @Transactional
+    public void restoreSubmission(Long formId, UUID submissionId) {
+        Form form = formRepository.findById(formId)
+                .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
+        
+        com.sttl.formbuilder2.model.entity.FormSubmissionMeta meta = formSubmissionMetaRepository.findBySubmissionRowId(submissionId)
+                .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("SUBMISSION_NOT_FOUND", "Submission metadata not found"));
+
+        if (!meta.getFormId().equals(formId)) {
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("INVALID_OPERATION", "Submission does not belong to the specified form.");
+        }
+
+        // Section 6.2: Restore Semantics (Treated as fully active, timestamps reflect restore time)
+        meta.setIsDeleted(false);
+        meta.setSubmittedAt(java.time.Instant.now()); 
+        formSubmissionMetaRepository.save(meta);
+
+        dynamicTableService.restoreRow(form.getTargetTableName(), submissionId);
+    }
+
+    @Transactional
+    public void restoreSubmissionsBulk(Long formId, List<UUID> submissionIds) {
+        for (UUID id : submissionIds) {
+            restoreSubmission(formId, id);
+        }
     }
 
     @Transactional
@@ -237,8 +316,29 @@ public class SubmissionService {
 
     public Map<String, Object> getSubmissionById(Long formId, UUID submissionId) {
         Form form = formRepository.findById(formId)
-                .orElseThrow(() -> new RuntimeException("Form not found"));
-        return dynamicTableService.fetchRowById(form.getTargetTableName(), submissionId);
+                .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
+        
+        try {
+            Map<String, Object> submission = dynamicTableService.fetchRowById(form.getTargetTableName(), submissionId);
+            
+            // Section 5.1: Ownership check for Drafts
+            String status = submission.get("submission_status") != null ? submission.get("submission_status").toString() : "";
+            String owner = submission.get("submitted_by") != null ? submission.get("submitted_by").toString() : "";
+            
+            if ("RESPONSE_DRAFT".equalsIgnoreCase(status) && !owner.equalsIgnoreCase(getCurrentUsername())) {
+                throw new com.sttl.formbuilder2.exception.FormBuilderException("FORBIDDEN", "You do not have permission to access this draft.");
+            }
+            
+            return submission;
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            // Check if it was a discarded draft (Requirement 3.2)
+            Optional<com.sttl.formbuilder2.model.entity.FormSubmissionMeta> meta = formSubmissionMetaRepository.findBySubmissionRowId(submissionId);
+            if (meta.isPresent() && Boolean.TRUE.equals(meta.get().getIsDeleted()) && "RESPONSE_DRAFT".equals(meta.get().getStatus())) {
+                throw new com.sttl.formbuilder2.exception.FormBuilderException("DRAFT_DISCARDED", 
+                    "Your draft was discarded because the form was updated to a new version.");
+            }
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("SUBMISSION_NOT_FOUND", "Submission not found or already deleted");
+        }
     }
 
     public Map<String, Object> getSubmissionByToken(String token, UUID submissionId) {
@@ -250,15 +350,43 @@ public class SubmissionService {
     @Transactional
     public UUID updateSubmission(Long formId, UUID submissionId, Map<String, Object> data, String status) {
         Form form = formRepository.findById(formId)
-                .orElseThrow(() -> new RuntimeException("Form not found"));
+                .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
 
-        FormVersion latestVersion = form.getVersions().stream()
+        // Requirement 3.2 warning check
+        com.sttl.formbuilder2.model.entity.FormSubmissionMeta metaCheck = formSubmissionMetaRepository.findBySubmissionRowId(submissionId)
+            .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("SUBMISSION_NOT_FOUND", "Submission not found"));
+            
+        // Section 5.1: Ownership check for Drafts
+        if ("RESPONSE_DRAFT".equalsIgnoreCase(metaCheck.getStatus()) && !metaCheck.getSubmittedBy().equalsIgnoreCase(getCurrentUsername())) {
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("FORBIDDEN", "You do not have permission to modify this draft.");
+        }
+
+        if (Boolean.TRUE.equals(metaCheck.getIsDeleted()) && "RESPONSE_DRAFT".equalsIgnoreCase(metaCheck.getStatus())) {
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("DRAFT_DISCARDED", 
+                "Your draft was discarded because the form was updated to a new version.");
+        }
+        // Requirement 5.1: Status Transition Validation
+        String currentStatus = metaCheck.getStatus();
+        if (( "SUBMITTED".equalsIgnoreCase(currentStatus) ) 
+            && "RESPONSE_DRAFT".equalsIgnoreCase(status)) {
+            throw new com.sttl.formbuilder2.exception.FormBuilderException("INVALID_STATUS_TRANSITION", 
+                "A submitted form cannot be reverted to a draft.");
+        }
+
+        // Requirement 5.2: Metadata Immutability (Lock version and user for SUBMITTED forms)
+        FormVersion effectiveVersion;
+        if ("SUBMITTED".equalsIgnoreCase(currentStatus)) {
+            effectiveVersion = formVersionRepository.findById(metaCheck.getFormVersionId())
+                .orElseThrow(() -> new RuntimeException("Original form version not found"));
+        } else {
+            effectiveVersion = form.getVersions().stream()
                 .max(Comparator.comparingInt(FormVersion::getVersionNumber))
                 .orElseThrow(() -> new RuntimeException("No versions found"));
+        }
 
-        validateSubmissionData(latestVersion, data, status);
+        validateSubmissionData(effectiveVersion, data, status);
 
-        calculationService.recalculateCalculatedFields(data, latestVersion.getFields());
+        calculationService.recalculateCalculatedFields(data, effectiveVersion.getFields());
 
         data.put("updated_at", LocalDateTime.now());
         data.put("is_draft", "RESPONSE_DRAFT".equals(status));
@@ -273,7 +401,7 @@ public class SubmissionService {
                 .orElseGet(() -> {
                     com.sttl.formbuilder2.model.entity.FormSubmissionMeta m = new com.sttl.formbuilder2.model.entity.FormSubmissionMeta();
                     m.setFormId(form.getId());
-                    m.setFormVersionId(latestVersion.getId());
+                    m.setFormVersionId(effectiveVersion.getId());
                     m.setSubmissionTable(form.getTargetTableName());
                     m.setSubmissionRowId(submissionId);
                     m.setSubmittedBy(getCurrentUsername());
@@ -299,6 +427,11 @@ public class SubmissionService {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         dynamicTableService.deleteRow(form.getTargetTableName(), submissionId);
+        // Sync metadata
+        formSubmissionMetaRepository.findBySubmissionRowId(submissionId).ifPresent(meta -> {
+            meta.setIsDeleted(true);
+            formSubmissionMetaRepository.save(meta);
+        });
     }
 
     @Transactional
@@ -306,6 +439,13 @@ public class SubmissionService {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         dynamicTableService.deleteRowsBulk(form.getTargetTableName(), submissionIds);
+        // Sync metadata
+        for (UUID id : submissionIds) {
+            formSubmissionMetaRepository.findBySubmissionRowId(id).ifPresent(meta -> {
+                meta.setIsDeleted(true);
+                formSubmissionMetaRepository.save(meta);
+            });
+        }
     }
 
     /**
@@ -315,6 +455,19 @@ public class SubmissionService {
     public void updateSubmissionStatusBulk(Long formId, List<UUID> submissionIds, String newStatus) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
+        
+        // Requirement 5.1: Status Transition Validation for Bulk
+        if ("RESPONSE_DRAFT".equalsIgnoreCase(newStatus)) {
+            for (UUID id : submissionIds) {
+                formSubmissionMetaRepository.findBySubmissionRowId(id).ifPresent(meta -> {
+                    if ("SUBMITTED".equalsIgnoreCase(meta.getStatus())) {
+                        throw new com.sttl.formbuilder2.exception.FormBuilderException("INVALID_STATUS_TRANSITION", 
+                            "Bulk operation failed: One or more submitted forms cannot be reverted to draft.");
+                    }
+                });
+            }
+        }
+
         dynamicTableService.updateStatusBulk(form.getTargetTableName(), submissionIds, newStatus);
 
         // Also update metadata table
@@ -326,21 +479,36 @@ public class SubmissionService {
         }
     }
 
-    public String exportSubmissionsToCsv(Long formId) {
+    public String exportSubmissionsToCsv(Long formId, List<String> requestedColumns, String sortBy, String sortOrder, Map<String, String> filters) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND",
                         "Form not found"));
 
-        List<String> columns = dynamicTableService.getTableColumns(form.getTargetTableName());
-        List<Map<String, Object>> data = dynamicTableService.fetchAllData(form.getTargetTableName());
+        List<String> allColumns = dynamicTableService.getTableColumns(form.getTargetTableName());
+        
+        // 7.1: Order strictly follows form definition or requested list
+        List<String> exportColumns;
+        if (requestedColumns != null && !requestedColumns.isEmpty()) {
+            exportColumns = requestedColumns.stream()
+                .filter(allColumns::contains)
+                .collect(Collectors.toList());
+        } else {
+            exportColumns = allColumns;
+        }
+
+        List<Map<String, Object>> data = dynamicTableService.fetchAllDataFiltered(form.getTargetTableName(), sortBy, sortOrder, filters);
 
         StringBuilder csv = new StringBuilder();
-        csv.append(String.join(",", columns)).append("\n");
+        // Header Row
+        csv.append(String.join(",", exportColumns)).append("\n");
+
         for (Map<String, Object> row : data) {
             List<String> rowValues = new ArrayList<>();
-            for (String col : columns) {
+            for (String col : exportColumns) {
                 Object val = row.get(col);
                 String strVal = val == null ? "" : val.toString().replace("\"", "\"\"");
+                
+                // 7.2: CSV Injection Protection
                 if (strVal.startsWith("=") || strVal.startsWith("+") || strVal.startsWith("-") || strVal.startsWith("@")) {
                     strVal = "'" + strVal;
                 }
@@ -415,10 +583,11 @@ public class SubmissionService {
         for (com.sttl.formbuilder2.model.entity.FieldValidation fv : fieldValidations) {
             boolean passed;
             try {
-                passed = expressionEvaluatorService.evaluate(fv.getExpression(), data);
+                passed = expressionEvaluatorService.evaluate(fv.getExpression(), data,
+                    fv.getId() != null ? fv.getId().toString() : "NEW", fv.getScope());
             } catch (com.sttl.formbuilder2.exception.ExpressionEvaluationException e) {
-                throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_PARSE_ERROR",
-                        "Invalid expression for field: " + fv.getFieldKey(), e);
+                throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_EVAL_FAILED",
+                    String.format("Evaluation failed: %s [ID: %s, Context: %s]", e.getMessage(), e.getExpressionId(), e.getContext()), e);
             }
             if (!passed) {
                 errors.add(Map.of("fieldKey", fv.getFieldKey(), "message", fv.getErrorMessage()));
@@ -427,7 +596,14 @@ public class SubmissionService {
 
         if (errors.isEmpty()) {
             for (com.sttl.formbuilder2.model.entity.FieldValidation fv : formValidations) {
-                boolean passed = expressionEvaluatorService.evaluate(fv.getExpression(), data);
+                boolean passed;
+                try {
+                    passed = expressionEvaluatorService.evaluate(fv.getExpression(), data,
+                        fv.getId() != null ? fv.getId().toString() : "NEW", fv.getScope());
+                } catch (com.sttl.formbuilder2.exception.ExpressionEvaluationException e) {
+                    throw new com.sttl.formbuilder2.exception.FormBuilderException("EXPRESSION_EVAL_FAILED",
+                        String.format("Evaluation failed: %s [ID: %s, Context: %s]", e.getMessage(), e.getExpressionId(), e.getContext()), e);
+                }
                 if (!passed) {
                     errors.add(Map.of("fieldKey", "", "message", fv.getErrorMessage()));
                 }

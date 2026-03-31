@@ -105,8 +105,14 @@ public class FormMapper {
             if (version.getRules() != null && !version.getRules().isBlank() && !version.getRules().equals("[]")) {
                 try {
                     com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(version.getRules());
-                    if (rootNode.isObject() && rootNode.has("rules") && rootNode.get("rules").isArray()) {
-                        parsedRules = objectMapper.convertValue(rootNode.get("rules"), Object.class);
+                    if (rootNode.isObject()) {
+                        if (rootNode.has("logic") && rootNode.get("logic").isArray()) {
+                            parsedRules = objectMapper.convertValue(rootNode.get("logic"), Object.class);
+                        } else if (rootNode.has("rules") && rootNode.get("rules").isArray()) {
+                            parsedRules = objectMapper.convertValue(rootNode.get("rules"), Object.class);
+                        } else {
+                            parsedRules = objectMapper.convertValue(rootNode, Object.class);
+                        }
                     } else {
                         parsedRules = objectMapper.convertValue(rootNode, Object.class);
                     }

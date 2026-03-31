@@ -82,6 +82,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatusCode()).body(errorResponse);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponseDTO> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        String message = "Database constraint violation";
+        Throwable root = ex.getRootCause();
+        String rootMsg = root != null ? root.getMessage() : ex.getMessage();
+        
+        if (rootMsg != null && (rootMsg.contains("value too long") || rootMsg.contains("varying"))) {
+            message = "One or more fields exceed the allowed length limit. Please ensure labels and keys are within limits.";
+        }
+        
+        ErrorResponseDTO errorResponse = new ErrorResponseDTO(
+            "DATABASE_CONSTRAINT_VIOLATED",
+            message,
+            List.of(Map.of("details", rootMsg != null ? rootMsg : "")),
+            Instant.now().toString(),
+            request.getRequestURI()
+        );
+        return ResponseEntity.badRequest().body(errorResponse);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponseDTO> handleRuntimeExceptions(RuntimeException ex, HttpServletRequest request) {
         // SRS 2.5: Never expose stack traces - log internally only
@@ -99,12 +119,12 @@ public class GlobalExceptionHandler {
     private HttpStatus resolveStatus(String code) {
         return switch (code) {
             case "FORM_NOT_FOUND", "DRAFT_NOT_FOUND" -> HttpStatus.NOT_FOUND;
-            case "FORM_ARCHIVED" -> HttpStatus.GONE;
+            case "FORM_ARCHIVED", "DRAFT_DISCARDED" -> HttpStatus.GONE;
             case "UNAUTHORIZED" -> HttpStatus.UNAUTHORIZED;
             case "FORBIDDEN", "FORM_NOT_PUBLISHED" -> HttpStatus.FORBIDDEN;
-            case "DUPLICATE_FORM_CODE", "VERSION_MISMATCH", "ALREADY_ACTIVE" -> HttpStatus.CONFLICT;
+            case "DUPLICATE_FORM_CODE", "VERSION_MISMATCH", "ALREADY_ACTIVE", "CONCURRENT_SUBMISSION_REJECTED" -> HttpStatus.CONFLICT;
             case "SCHEMA_DRIFT_DETECTED" -> HttpStatus.INTERNAL_SERVER_ERROR;
-            case "SQL_RESERVED_KEYWORD", "TYPE_MISMATCH", "INVALID_FIELD_KEY" -> HttpStatus.BAD_REQUEST;
+            case "SQL_RESERVED_KEYWORD", "TYPE_MISMATCH", "INVALID_FIELD_KEY", "TYPE_STABILITY_VIOLATED" -> HttpStatus.BAD_REQUEST;
             default -> HttpStatus.BAD_REQUEST;
         };
     }

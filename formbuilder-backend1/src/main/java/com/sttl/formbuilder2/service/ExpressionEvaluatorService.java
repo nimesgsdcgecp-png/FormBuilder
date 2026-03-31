@@ -17,18 +17,22 @@ import java.util.Map;
 public class ExpressionEvaluatorService {
 
     public boolean evaluate(String expression, Map<String, Object> fieldValues) {
+        return evaluate(expression, fieldValues, "UNKNOWN", "UNKNOWN");
+    }
+
+    public boolean evaluate(String expression, Map<String, Object> fieldValues, String expressionId, String context) {
         if (expression == null || expression.isBlank()) return true;
-        Tokenizer tokenizer = new Tokenizer(expression);
+        Tokenizer tokenizer = new Tokenizer(expression, expressionId, context);
         List<Token> tokens = tokenizer.tokenize();
         if (tokens.isEmpty()) return true;
         
-        Parser parser = new Parser(tokens, fieldValues);
+        Parser parser = new Parser(tokens, fieldValues, expressionId, context);
         Object result = parser.parseExpression();
         
         if (result instanceof Boolean) {
             return (Boolean) result;
         }
-        throw new ExpressionEvaluationException("Expression did not return a boolean result", "EVAL_ERR", "PARSER");
+        throw new ExpressionEvaluationException("Expression did not return a boolean result", expressionId, context);
     }
 
     // ─── Tokenizer ─────────────────────────────────────────
@@ -50,10 +54,14 @@ public class ExpressionEvaluatorService {
 
     private static class Tokenizer {
         private final String input;
+        private final String expressionId;
+        private final String context;
         private int pos = 0;
 
-        Tokenizer(String input) {
+        Tokenizer(String input, String expressionId, String context) {
             this.input = input;
+            this.expressionId = expressionId;
+            this.context = context;
         }
 
         List<Token> tokenize() {
@@ -72,7 +80,7 @@ public class ExpressionEvaluatorService {
                     if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
                         tokens.add(new Token(TokenType.EQ_EQ, "=="));
                         pos += 2;
-                    } else throw new ExpressionEvaluationException("Invalid char '='", "TOKENIZER", "PARSER");
+                    } else throw new ExpressionEvaluationException("Invalid char '='", expressionId, context);
                 } else if (ch == '!') {
                     if (pos + 1 < input.length() && input.charAt(pos + 1) == '=') {
                         tokens.add(new Token(TokenType.NOT_EQ, "!="));
@@ -110,7 +118,7 @@ public class ExpressionEvaluatorService {
                     tokens.add(new Token(TokenType.RPAREN, ")"));
                     pos++;
                 } else {
-                    throw new ExpressionEvaluationException("Unrecognized character: " + ch, "TOKENIZER", "PARSER");
+                    throw new ExpressionEvaluationException("Unrecognized character: " + ch, expressionId, context);
                 }
             }
             tokens.add(new Token(TokenType.EOF, "EOF"));
@@ -140,7 +148,7 @@ public class ExpressionEvaluatorService {
             while (pos < input.length() && input.charAt(pos) != quote) {
                 pos++;
             }
-            if (pos >= input.length()) throw new ExpressionEvaluationException("Unterminated string", "TOKENIZER", "PARSER");
+            if (pos >= input.length()) throw new ExpressionEvaluationException("Unterminated string", expressionId, context);
             String result = input.substring(start, pos);
             pos++; // skip closing quote
             return result;
@@ -151,11 +159,15 @@ public class ExpressionEvaluatorService {
     private static class Parser {
         private final List<Token> tokens;
         private final Map<String, Object> fieldValues;
+        private final String expressionId;
+        private final String context;
         private int pos = 0;
 
-        Parser(List<Token> tokens, Map<String, Object> fieldValues) {
+        Parser(List<Token> tokens, Map<String, Object> fieldValues, String expressionId, String context) {
             this.tokens = tokens;
             this.fieldValues = fieldValues;
+            this.expressionId = expressionId;
+            this.context = context;
         }
 
         private Token current() {
@@ -164,13 +176,13 @@ public class ExpressionEvaluatorService {
 
         private void consume(TokenType expected) {
             if (current().type == expected) pos++;
-            else throw new ExpressionEvaluationException("Expected " + expected + " got " + current().type, "PARSER", "PARSER");
+            else throw new ExpressionEvaluationException("Expected " + expected + " got " + current().type, expressionId, context);
         }
 
         public Object parseExpression() {
             Object result = parseOr();
             if (current().type != TokenType.EOF) {
-                throw new ExpressionEvaluationException("Unexpected token at end: " + current().value, "PARSER", "PARSER");
+                throw new ExpressionEvaluationException("Unexpected token at end: " + current().value, expressionId, context);
             }
             return result;
         }
@@ -235,19 +247,13 @@ public class ExpressionEvaluatorService {
                 consume(TokenType.NUMBER);
                 return Double.parseDouble(t.value);
             }
-            throw new ExpressionEvaluationException("Unexpected operand: " + t.value, "PARSER", "PARSER");
+            throw new ExpressionEvaluationException("Unexpected operand: " + t.value, expressionId, context);
         }
 
         private boolean evaluateComparison(Object left, Object right, TokenType op) {
-            if (op == TokenType.EQ_EQ) {
-                if (left == null && right == null) return true;
-                if (left == null || right == null) return false;
-                return left.toString().equals(right.toString());
-            }
-            if (op == TokenType.NOT_EQ) {
-                if (left == null && right == null) return false;
-                if (left == null || right == null) return true;
-                return !left.toString().equals(right.toString());
+            if (op == TokenType.EQ_EQ || op == TokenType.NOT_EQ) {
+                boolean eq = areEqual(left, right);
+                return (op == TokenType.EQ_EQ) ? eq : !eq;
             }
             
             double lNum = asDouble(left);
@@ -260,6 +266,30 @@ public class ExpressionEvaluatorService {
                 case GTE -> lNum >= rNum;
                 default -> false;
             };
+        }
+
+        private boolean areEqual(Object left, Object right) {
+            if (left == null && right == null) return true;
+            if (left == null || right == null) return false;
+            
+            String s1 = left.toString();
+            String s2 = right.toString();
+            
+            // Auto-coerce to numbers if both sides look numeric
+            if (isNumeric(s1) && isNumeric(s2)) {
+                return asDouble(left) == asDouble(right);
+            }
+            return s1.equals(s2);
+        }
+
+        private boolean isNumeric(String str) {
+            if (str == null || str.isBlank()) return false;
+            try {
+                Double.parseDouble(str);
+                return true;
+            } catch (NumberFormatException e) {
+                return false;
+            }
         }
 
         private boolean isTruthy(Object val) {

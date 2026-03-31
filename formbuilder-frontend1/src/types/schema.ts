@@ -123,4 +123,5 @@ export interface FormSchema {
   themeFont?: string;             // The custom font family for the form
   fields: FormField[];
   rules?: FormRule[];
+  formValidations?: any[];
 }

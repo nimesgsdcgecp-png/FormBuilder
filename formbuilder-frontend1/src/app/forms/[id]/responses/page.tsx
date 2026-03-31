@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List, CheckCircle, Clock } from 'lucide-react';
-import { deleteSubmission, deleteSubmissionsBulk, getSubmissions, updateSubmissionStatusBulk } from '@/services/api';
+import { deleteSubmission, deleteSubmissionsBulk, getSubmissions, updateSubmissionStatusBulk, restoreSubmission, restoreSubmissionsBulk } from '@/services/api';
 import { extractApiError } from '@/utils/error-handler';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -70,6 +70,7 @@ export default function ResponsesPage() {
   const [allVersions, setAllVersions] = useState<any[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | 'all'>('all');
   const [showArchived, setShowArchived] = useState(false);
+  const [showDeletedRows, setShowDeletedRows] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -100,7 +101,10 @@ export default function ResponsesPage() {
         router.push('/login');
         return;
       }
-      if (!formRes.ok) throw new Error('Failed to fetch form data');
+      if (!formRes.ok) {
+        const errMsg = await extractApiError(formRes);
+        throw new Error(errMsg);
+      }
 
       const formData = await formRes.json();
       setFormTitle(formData.title);
@@ -129,6 +133,7 @@ export default function ResponsesPage() {
       const apiFilters: any = { ...debouncedColumnFilters };
       if (debouncedSearchTerm) apiFilters['q'] = debouncedSearchTerm;
       if (selectedVersionId !== 'all') apiFilters['form_version_id'] = selectedVersionId;
+      if (showDeletedRows) apiFilters['include_deleted'] = 'true';
 
       const response = await getSubmissions(
         formId,
@@ -181,7 +186,7 @@ export default function ResponsesPage() {
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
-  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm, selectedVersionId, showArchived]);
+  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm, selectedVersionId, showArchived, showDeletedRows]);
 
   // Reset headers when form changes
   useEffect(() => {
@@ -201,7 +206,7 @@ export default function ResponsesPage() {
     key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
   const formatCellValue = (value: any, type?: string) => {
-    if (value === null || value === undefined) return <span className="text-[var(--text-faint)] italic">—</span>;
+    if (value === null || value === undefined) return <span className="text-(--text-faint) italic">—</span>;
 
     if (type === 'FILE' && value) {
       return (
@@ -209,7 +214,7 @@ export default function ResponsesPage() {
           href={`http://localhost:8080${value}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors hover:bg-[var(--accent)] hover:text-white"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors hover:bg-(--accent) hover:text-white"
           style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
         >
           <Download size={10} /> FILE
@@ -235,11 +240,11 @@ export default function ResponsesPage() {
           return (
             <div className="flex gap-1 overflow-hidden" title={parsed.join(', ')}>
               {parsed.slice(0, 2).map((p, i) => (
-                <span key={i} className="px-1.5 py-0.5 rounded bg-[var(--bg-muted)] text-[10px] border border-[var(--border)]">
+                <span key={i} className="px-1.5 py-0.5 rounded bg-(--bg-muted) text-[10px] border border-(--border)">
                   {String(p)}
                 </span>
               ))}
-              {parsed.length > 2 && <span className="text-[10px] text-[var(--text-faint)]">+{parsed.length - 2}</span>}
+              {parsed.length > 2 && <span className="text-[10px] text-(--text-faint)">+{parsed.length - 2}</span>}
             </div>
           );
         }
@@ -256,28 +261,54 @@ export default function ResponsesPage() {
 
   // --- Export Logic ---
 
-  const prepareExportData = () => {
-    // Use data consistently as it represents the filtered set from server
-    if (data.length === 0) return [];
+  const prepareExportData = (): any[][] => {
+    // 7.1: Export only visible columns, strictly following form definition order
+    const exportHeaders = headers.filter(h => visibleColumns.has(h.key));
+    if (data.length === 0 || exportHeaders.length === 0) return [];
     
-    return data.map((row, idx) => {
-      const exportRow: any = {};
-      headers.forEach(header => {
+    // Header Row
+    const headerRow = exportHeaders.map(h => h.label);
+
+    // Data Rows
+    const dataRows = data.map((row, idx) => {
+      return exportHeaders.map(header => {
+        let value: any = '';
         if (header.key === 'serial_no') {
-          exportRow[header.label] = idx + 1;
+          const globalIdx = (currentPage - 1) * pageSize + idx;
+          value = globalIdx + 1;
         } else if (header.key === 'submitted_at') {
-          exportRow[header.label] = new Date(row[header.key]).toLocaleString();
+          value = new Date(row[header.key]).toLocaleString();
         } else {
-          exportRow[header.label] = row[header.key] || '';
+          value = row[header.key] || '';
         }
+
+        // 7.2: CSV Injection Protection
+        const strVal = String(value);
+        if (strVal.startsWith('=') || strVal.startsWith('+') || strVal.startsWith('-') || strVal.startsWith('@')) {
+          value = `'${strVal}`;
+        }
+
+        return value;
       });
-      return exportRow;
     });
+
+    return [headerRow, ...dataRows];
   };
 
   const downloadCSV = async () => {
     try {
-      const res = await fetch(`http://localhost:8080/api/v1/forms/${formId}/submissions/export`, { credentials: 'include' });
+      const exportCols = headers.filter(h => visibleColumns.has(h.key)).map(h => h.key).join(',');
+      const params = new URLSearchParams();
+      params.append('columns', exportCols);
+      params.append('sortBy', sortConfig.key);
+      params.append('sortOrder', sortConfig.direction.toUpperCase());
+      params.append('include_deleted', String(showDeletedRows));
+      if (searchTerm) params.append('q', searchTerm);
+      Object.entries(columnFilters).forEach(([key, val]) => {
+        params.append(key, val);
+      });
+
+      const res = await fetch(`http://localhost:8080/api/v1/forms/${formId}/submissions/export?${params.toString()}`, { credentials: 'include' });
       if (!res.ok) {
         const msg = await extractApiError(res);
         throw new Error(msg);
@@ -296,12 +327,12 @@ export default function ResponsesPage() {
   };
 
   const downloadXLSX = () => {
-    const exportRows = prepareExportData();
-    if (exportRows.length === 0) {
+    const aoaData = prepareExportData();
+    if (aoaData.length === 0) {
       toast.info("No data available to export");
       return;
     }
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Responses");
     XLSX.writeFile(workbook, `${formTitle.replace(/\s+/g, '_')}_responses.xlsx`);
@@ -309,14 +340,14 @@ export default function ResponsesPage() {
   };
 
   const downloadPDF = () => {
-    const exportRows = prepareExportData();
-    if (exportRows.length === 0) {
+    const aoaData = prepareExportData();
+    if (aoaData.length === 0) {
       toast.info("No data available to export");
       return;
     }
     const doc = new jsPDF('landscape');
-    const tableHeaders = headers.map(h => h.label);
-    const tableData = exportRows.map(row => headers.map(h => row[h.label]));
+    const tableHeaders = aoaData[0];
+    const tableData = aoaData.slice(1);
 
     doc.text(formTitle, 14, 15);
     autoTable(doc, {
@@ -335,19 +366,28 @@ export default function ResponsesPage() {
     const isBulk = Array.isArray(idOrIds);
     const count = isBulk ? idOrIds.length : 1;
 
-    toast(`Delete ${count} response${count > 1 ? 's' : ''} permanently?`, {
-      description: 'This action cannot be undone.',
+    toast(`Delete ${count} response${count > 1 ? 's' : ''}?`, {
+      description: 'The record will be moved to the trash.',
       action: {
         label: 'Delete',
         onClick: async () => {
           try {
             if (isBulk) {
               await deleteSubmissionsBulk(formId, idOrIds as string[]);
-              setData((prevData) => prevData.filter(row => !idOrIds.includes(row.submission_id)));
+              if (showDeletedRows) {
+                // If we are showing deleted rows, just refresh the data to update status
+                fetchData();
+              } else {
+                setData((prevData) => prevData.filter(row => !idOrIds.includes(row.submission_id)));
+              }
               setSelectedIds(new Set());
             } else {
               await deleteSubmission(formId, idOrIds as string);
-              setData((prevData) => prevData.filter(row => row.submission_id !== idOrIds));
+              if (showDeletedRows) {
+                fetchData();
+              } else {
+                setData((prevData) => prevData.filter(row => row.submission_id !== idOrIds));
+              }
               const newSelected = new Set(selectedIds);
               newSelected.delete(idOrIds as string);
               setSelectedIds(newSelected);
@@ -360,6 +400,24 @@ export default function ResponsesPage() {
       },
       cancel: { label: 'Cancel', onClick: () => { } }
     });
+  };
+
+  const handleRestore = async (idOrIds: string | string[]) => {
+    const isBulk = Array.isArray(idOrIds);
+    const count = isBulk ? idOrIds.length : 1;
+
+    try {
+      if (isBulk) {
+        await restoreSubmissionsBulk(formId, idOrIds as string[]);
+        setSelectedIds(new Set());
+      } else {
+        await restoreSubmission(formId, idOrIds as string);
+      }
+      toast.success(`${count} response${count > 1 ? 's' : ''} restored`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to restore response");
+    }
   };
 
   // SRS: Bulk status update handler
@@ -441,18 +499,18 @@ export default function ResponsesPage() {
           <div className="flex items-center gap-6">
             <button
               onClick={() => router.push('/')}
-              className="p-2 rounded-xl transition-all hover:bg-[var(--bg-muted)] group shrink-0"
+              className="p-2 rounded-xl transition-all hover:bg-(--bg-muted) group shrink-0"
               style={{ color: 'var(--text-muted)' }} 
             >
               <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5 overflow-hidden">
-                <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-[var(--text-faint)] whitespace-nowrap">Responses Page</span>
-                <span className="hidden sm:inline text-[var(--border)] font-light">/</span>
+                <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-(--text-faint) whitespace-nowrap">Responses Page</span>
+                <span className="hidden sm:inline text-(--border) font-light">/</span>
                 <h1 className="text-base sm:text-xl font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>{formTitle}</h1>
                 {formVersion !== null && (
-                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent)] text-[10px] font-black uppercase tracking-widest border border-[var(--accent-muted)]">
+                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-(--accent-subtle) text-(--accent) text-[10px] font-black uppercase tracking-widest border border-(--accent-muted)">
                     v{formVersion}.0
                   </span>
                 )}
@@ -635,7 +693,7 @@ export default function ResponsesPage() {
                     </div>
                     <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[var(--border)]">
                       {/* Archive Toggle */}
-                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-[var(--border)] mb-2">
+                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-(--border) mb-2">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Archived Fields</span>
                           <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Show old/removed field values</span>
@@ -645,6 +703,20 @@ export default function ResponsesPage() {
                           className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
                           checked={showArchived}
                           onChange={(e) => setShowArchived(e.target.checked)}
+                        />
+                      </label>
+
+                      {/* Deleted Toggle */}
+                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-(--border) mb-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Deleted Responses</span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Show records in trash</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all"
+                          checked={showDeletedRows}
+                          onChange={(e) => setShowDeletedRows(e.target.checked)}
                         />
                       </label>
 
@@ -693,13 +765,13 @@ export default function ResponsesPage() {
                     <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
                     <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                       <div className="p-2">
-                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
                         </button>
-                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
                         </button>
-                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-[var(--bg-muted)]" style={{ color: 'var(--text-primary)' }}>
+                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
                         </button>
                       </div>
@@ -775,7 +847,7 @@ export default function ResponsesPage() {
             <div className="overflow-x-auto scrollbar-thin">
               <table className="w-full border-separate border-spacing-0">
                 <thead>
-                  <tr className="bg-[var(--bg-muted)]/50">
+                  <tr className="bg-(--bg-muted)/50">
                     <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b bg-inherit" style={{ borderColor: 'var(--border)' }}>
                       <button
                         onClick={toggleSelectAll}
@@ -788,7 +860,7 @@ export default function ResponsesPage() {
                       <th
                         key={header.key}
                         onClick={() => handleSort(header.key)}
-                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest border-b cursor-pointer hover:bg-[var(--bg-hover)] transition-colors z-20 bg-inherit"
+                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest border-b cursor-pointer hover:bg-(--bg-hover) transition-colors z-20 bg-inherit"
                         style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}
                       >
                         <div className="flex items-center gap-2">
@@ -827,8 +899,8 @@ export default function ResponsesPage() {
                       return (
                         <tr
                           key={row.submission_id}
-                          className="group/row transition-colors hover:bg-slate-50/50"
-                          style={{ background: isSelected ? 'var(--bg-muted)' : 'var(--bg-surface)' }} 
+                          className={`group/row transition-colors hover:bg-slate-50/50 ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
+                          style={{ background: isSelected ? 'var(--bg-muted)' : (row.is_deleted ? '#fef2f2' : 'var(--bg-surface)') }} 
                         >
                           <td className="px-6 py-4 border-b border-slate-100">
                             <button
@@ -850,15 +922,21 @@ export default function ResponsesPage() {
                               ) : header.key === 'submitted_at' ? (
                                 <span className="text-slate-500">{new Date(row[header.key]).toLocaleString()}</span>
                               ) : header.key === 'submission_status' ? (
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                    row[header.key] === 'RESPONSE_DRAFT' 
-                                      ? 'bg-slate-100 text-slate-600 border-slate-200' 
-                                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                  }`}
-                                >
-                                  {row[header.key] || 'FINAL'}
-                                </span>
+                                row.is_deleted ? (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
+                                    DELETED
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                      row[header.key] === 'RESPONSE_DRAFT' 
+                                        ? 'bg-slate-100 text-slate-600 border-slate-200' 
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    }`}
+                                  >
+                                    {row[header.key] || 'FINAL'}
+                                  </span>
+                                )
                               ) : (
                                 <div className="max-w-[200px] truncate">
                                   {formatCellValue(row[header.key], header.type)}
@@ -887,14 +965,25 @@ export default function ResponsesPage() {
                               >
                                 <Edit size={16} />
                               </a>
-                              <button
-                                onClick={() => handleDelete(row.submission_id)}
-                                className="p-2 rounded-lg transition-all"
-                                style={{ color: 'var(--text-faint)' }}
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {row.is_deleted ? (
+                                <button
+                                  onClick={() => handleRestore(row.submission_id)}
+                                  className="p-2 rounded-lg transition-all hover:bg-emerald-500/10 hover:text-emerald-500"
+                                  style={{ color: 'var(--text-faint)' }}
+                                  title="Restore"
+                                >
+                                  <RefreshCcw size={16} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleDelete(row.submission_id)}
+                                  className="p-2 rounded-lg transition-all hover:bg-red-500/10 hover:text-red-500"
+                                  style={{ color: 'var(--text-faint)' }}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -923,16 +1012,16 @@ export default function ResponsesPage() {
                   const globalIdx = (currentPage - 1) * pageSize + idx;
                   const isSelected = selectedIds.has(row.submission_id);
                   return (
-                    <div
-                      key={row.submission_id}
-                      className={`group relative p-6 rounded-[2rem] border transition-all duration-300 ${
-                        isSelected ? 'shadow-md translate-y-[-4px]' : 'hover:shadow-xl hover:translate-y-[-4px]'
-                      }`}
-                      style={{ 
-                        background: isSelected ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-                        borderColor: isSelected ? 'var(--accent)' : 'var(--border)'
-                      }}
-                    >
+                      <div
+                        key={row.submission_id}
+                        className={`group relative p-6 rounded-4xl border transition-all duration-300 ${
+                          isSelected ? 'shadow-md translate-y-[-4px]' : 'hover:shadow-xl hover:translate-y-[-4px]'
+                        } ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
+                        style={{ 
+                          background: isSelected ? 'var(--accent-subtle)' : (row.is_deleted ? '#fef2f2' : 'var(--bg-surface)'),
+                          borderColor: isSelected ? 'var(--accent)' : 'var(--border)'
+                        }}
+                      >
                       {/* Checkbox Overlay */}
                       <button
                         onClick={() => toggleSelect(row.submission_id)}
@@ -949,13 +1038,19 @@ export default function ResponsesPage() {
                       </button>
 
                       <div className="flex justify-end mb-6">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                          row.submission_status === 'RESPONSE_DRAFT' 
-                            ? 'bg-amber-50 text-amber-600 border-amber-100' 
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        }`}>
-                          {row.submission_status || 'FINAL'}
-                        </span>
+                        {row.is_deleted ? (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
+                            DELETED
+                          </span>
+                        ) : (
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                            row.submission_status === 'RESPONSE_DRAFT' 
+                              ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          }`}>
+                            {row.submission_status || 'FINAL'}
+                          </span>
+                        )}
                       </div>
                       
                       <div className="space-y-5 mb-8">
@@ -973,7 +1068,7 @@ export default function ResponsesPage() {
                         <div className="flex flex-col">
                           <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-faint)' }}>Status</span>
                           <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                            {row.submission_status === 'RESPONSE_DRAFT' ? 'In Progress' : 'Completed'}
+                            {row.is_deleted ? 'Deleted' : (row.submission_status === 'RESPONSE_DRAFT' ? 'In Progress' : 'Completed')}
                           </span>
                         </div>
                         <div className="flex gap-1.5">
@@ -993,14 +1088,25 @@ export default function ResponsesPage() {
                            >
                             <Edit size={18} />
                            </a>
-                           <button 
-                            onClick={() => handleDelete(row.submission_id)} 
-                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-red-500/10 hover:text-red-500"
-                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
-                            title="Delete"
-                           >
-                            <Trash2 size={18} />
-                           </button>
+                           {row.is_deleted ? (
+                              <button 
+                               onClick={() => handleRestore(row.submission_id)} 
+                               className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-emerald-500/10 hover:text-emerald-500"
+                               style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                               title="Restore"
+                              >
+                               <RefreshCcw size={18} />
+                              </button>
+                           ) : (
+                              <button 
+                               onClick={() => handleDelete(row.submission_id)} 
+                               className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-red-500/10 hover:text-red-500"
+                               style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                               title="Delete"
+                              >
+                               <Trash2 size={18} />
+                              </button>
+                           )}
                         </div>
                       </div>
                     </div>
@@ -1038,7 +1144,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsLeft size={16} />
@@ -1046,7 +1152,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronLeft size={16} />
@@ -1059,7 +1165,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronRight size={16} />
@@ -1067,7 +1173,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-[var(--bg-muted)]"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsRight size={16} />
@@ -1094,28 +1200,41 @@ export default function ResponsesPage() {
               <span className="text-blue-400">{selectedIds.size}</span> Selected
             </div>
             <div className="flex items-center gap-2">
-              {/* Status Update Buttons */}
-              <button
-                onClick={() => handleBulkStatusUpdate('SUBMITTED')}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 transition-colors text-xs font-bold"
-                title="Mark as Submitted"
-              >
-                <CheckCircle size={14} /> Submitted
-              </button>
-              <button
-                onClick={() => handleBulkStatusUpdate('RESPONSE_DRAFT')}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 transition-colors text-xs font-bold"
-                title="Mark as Draft"
-              >
-                <Clock size={14} /> Draft
-              </button>
-              <div className="w-px h-6 bg-slate-700 mx-1" />
-              <button
-                onClick={() => handleDelete(Array.from(selectedIds))}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-xs font-bold"
-              >
-                <Trash2 size={14} /> Delete
-              </button>
+              {/* Status Update Buttons - Hidden in Trash View */}
+              {!showDeletedRows && (
+                <>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('SUBMITTED')}
+                    className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 transition-colors text-xs font-bold"
+                    title="Mark as Submitted"
+                  >
+                    <CheckCircle size={14} /> Submitted
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('RESPONSE_DRAFT')}
+                    className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 transition-colors text-xs font-bold"
+                    title="Mark as Draft"
+                  >
+                    <Clock size={14} /> Draft
+                  </button>
+                  <div className="w-px h-6 bg-slate-700 mx-1" />
+                </>
+              )}
+              {showDeletedRows ? (
+                <button
+                  onClick={() => handleRestore(Array.from(selectedIds))}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 transition-colors text-xs font-bold"
+                >
+                  <RefreshCcw size={14} /> Restore
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleDelete(Array.from(selectedIds))}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 transition-colors text-xs font-bold"
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              )}
               <button onClick={() => setSelectedIds(new Set())} className="p-1.5 text-slate-400 hover:text-white transition-colors">
                 <X size={18} />
               </button>
