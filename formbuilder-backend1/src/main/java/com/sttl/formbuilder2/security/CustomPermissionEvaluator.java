@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.security;
 
+import java.util.UUID;
+
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.repository.UserRepository;
 import org.springframework.security.access.PermissionEvaluator;
@@ -40,7 +42,7 @@ public class CustomPermissionEvaluator implements PermissionEvaluator {
         String permissionName = (String) permission;
 
         if ("FORM".equalsIgnoreCase(targetType)) {
-            Long formId = (Long) targetId;
+            UUID formId = (UUID) targetId;
             return user.hasPermission(permissionName, formId);
         }
 

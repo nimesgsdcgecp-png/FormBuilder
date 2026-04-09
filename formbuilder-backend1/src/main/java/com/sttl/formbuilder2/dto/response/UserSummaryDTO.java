@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.response;
 
+import java.util.UUID;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,7 +17,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserSummaryDTO {
-    private Long id;
+    private UUID id;
     private String username;
     private Set<String> roles;
 }

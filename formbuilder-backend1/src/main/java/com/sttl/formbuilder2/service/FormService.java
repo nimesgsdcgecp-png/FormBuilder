@@ -22,7 +22,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -78,6 +80,24 @@ public class FormService {
         }
     }
 
+    private void validateFormCode(String code, UUID excludeFormId) {
+        if (code == null || code.isBlank()) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code is required");
+        }
+        if (!code.matches("^[a-z][a-z0-9_]{0,99}$")) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code must start with a letter, use only lowercase alphanumeric characters and underscores, and be max 100 characters.");
+        }
+        if (RESERVED_SQL_KEYWORDS.contains(code.toUpperCase())) {
+            throw new FormBuilderException("INVALID_FORM_CODE", "Code is a reserved keyword: " + code);
+        }
+        // Check for duplicates but exclude the current form being updated
+        formRepository.findByCode(code).ifPresent(existingForm -> {
+            if (!existingForm.getId().equals(excludeFormId)) {
+                throw new FormBuilderException("DUPLICATE_FORM_CODE", "Form code already exists: " + code);
+            }
+        });
+    }
+
     // ─────────────────────────────────────────────
     // HELPER: Validate SRS Limits (Section 10)
     // ─────────────────────────────────────────────
@@ -128,7 +148,7 @@ public class FormService {
         validateFormLimits(request, request.getFields(), request.getFormValidations());
 
         Form form = new Form();
-        form.setTitle(request.getTitle());
+        form.setName(request.getName());
         form.setDescription(request.getDescription());
         form.setAllowEditResponse(request.isAllowEditResponse());
 
@@ -142,6 +162,7 @@ public class FormService {
         AppUser currentUser = getCurrentUser();
         form.setOwner(currentUser);
         form.setCreator(currentUser);
+        form.setCreatedBy(currentUser != null ? currentUser.getUsername() : "system");
         form.setIssuedByUsername(currentUser.getUsername());
 
         form = formRepository.save(form);
@@ -149,8 +170,14 @@ public class FormService {
         FormVersion version = new FormVersion();
         version.setForm(form);
         version.setVersionNumber(1);
+        version.setCreatedBy(currentUser.getUsername());
         version.setFields(formMapper.mapFields(request.getFields(), version));
         version.setRules(formMapper.serializeRules(request.getRules()));
+        try {
+            version.setDefinitionJson(objectMapper.writeValueAsString(request));
+        } catch(Exception e) {
+            version.setDefinitionJson("{}");
+        }
 
         if (incomingStatus == FormStatus.PUBLISHED) {
             version.setIsActive(true);
@@ -229,7 +256,7 @@ public class FormService {
     // READ ONE (GET /api/forms/{id})
     // ─────────────────────────────────────────────
     @Transactional(readOnly = true)
-    public FormDetailResponseDTO getFormById(Long id) {
+    public FormDetailResponseDTO getFormById(UUID id) {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Form not found with ID: " + id));
         return formMapper.toDetailDTO(form);
@@ -282,7 +309,7 @@ public class FormService {
     // UPDATE (PUT /api/forms/{id})
     // ─────────────────────────────────────────────
     @Transactional
-    public FormDetailResponseDTO updateForm(Long formId, UpdateFormRequestDTO request) {
+    public FormDetailResponseDTO updateForm(UUID formId, UpdateFormRequestDTO request) {
         // SRS Section 10: Validate limits before proceeding
         validateFormLimits(request, request.getFields(), request.getFormValidations());
 
@@ -292,17 +319,19 @@ public class FormService {
         FormStatus oldStatus = form.getStatus();
         FormStatus newStatus = request.getStatus() != null ? request.getStatus() : oldStatus;
 
-        // SRS Section 11.1: Forms with live submissions cannot be modified
+        // SRS Section 11.1: Forms with live submissions cannot be modified.
+        // If the form is currently PUBLISHED and the user attempts to PUBLISH again (Direct Publish),
+        // we block it if live submissions exist. They must save as DRAFT first (creating a new version).
         if (oldStatus == FormStatus.PUBLISHED && newStatus == FormStatus.PUBLISHED) {
             long liveSubmissions = formSubmissionMetaRepository.countByFormIdInAndIsDeletedFalseAndStatusIn(
                 java.util.List.of(formId), java.util.List.of("SUBMITTED", "FINAL"));
             if (liveSubmissions > 0) {
                 throw new FormBuilderException("FORBIDDEN", 
-                    "Form cannot be modified because it has " + liveSubmissions + " live submission(s). To make changes, save your form as a DRAFT.");
+                    "Form cannot be modified directly because it has " + liveSubmissions + " live submission(s). To make changes, please save your form as a DRAFT first.");
             }
         }
 
-        form.setTitle(request.getTitle());
+        form.setName(request.getName());
         form.setDescription(request.getDescription());
         form.setStatus(newStatus);
         form.setAllowEditResponse(request.isAllowEditResponse());
@@ -311,39 +340,90 @@ public class FormService {
             if (Boolean.TRUE.equals(form.getCodeLocked())) {
                 throw new FormBuilderException("FORBIDDEN", "Form code is locked and cannot be changed after publishing.");
             }
-            validateFormCode(request.getCode());
+            validateFormCode(request.getCode(), formId);
             form.setCode(request.getCode());
             form.setTargetTableName("form_data_" + form.getCode());
         }
 
         if (newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
+            // SRS Requirement: Sync table before publish
+            // This ensures any newly added fields (missing columns) are physically created
+            // in the database before validation or live submissions occur.
+            // Only alter if table already exists (first publish creates the table later)
+            if (dynamicTableService.tableExists(form.getTargetTableName())) {
+                dynamicTableService.alterDynamicTable(form.getTargetTableName(), request.getFields());
+            }
+
             // SRS Requirement: Block publish if current table has drifted from active schema
             dynamicTableService.validateNoSchemaDrift(form);
         }
 
-        int nextVersionNum = form.getVersions().size() + 1;
-        com.sttl.formbuilder2.model.entity.FormVersion newVersion = new com.sttl.formbuilder2.model.entity.FormVersion();
-        newVersion.setForm(form);
-        newVersion.setVersionNumber(nextVersionNum);
-        newVersion.setChangeLog("Updated via Builder");
-        newVersion.setFields(formMapper.mapFields(request.getFields(), newVersion));
-        newVersion.setRules(formMapper.serializeRules(request.getRules()));
+        // REFINEMENT: Reuse the latest version if it's currently a DRAFT (not active)
+        // This prevents creating V1, V2, V3 etc. just by clicking "Save Draft" multiple times.
+        // BUG FIX: We must only check the ABSOLUTE LATEST version. Previously, findFirst() 
+        // could pick V1 (inactive) even if V2 (active) was the current working version.
+        com.sttl.formbuilder2.model.entity.FormVersion targetVersion = form.getVersions().stream()
+                .max(Comparator.comparing(com.sttl.formbuilder2.model.entity.FormVersion::getVersionNumber))
+                .filter(v -> !v.getIsActive())
+                .orElse(null);
 
-        // REFINEMENT: Even if DRAFT, make it the "active" version for the builder to load latest changes
-        // This ensures the FormMapper picks the latest version even if it's not yet PUBLISHED.
-        form.getVersions().forEach(v -> v.setIsActive(false));
-        newVersion.setIsActive(true);
+        boolean isNewVersion = false;
+        if (targetVersion == null) {
+            int nextVersionNum = form.getVersions().size() + 1;
+            targetVersion = new com.sttl.formbuilder2.model.entity.FormVersion();
+            targetVersion.setForm(form);
+            targetVersion.setVersionNumber(nextVersionNum);
+            targetVersion.setCreatedBy(getCurrentUser().getUsername());
+            isNewVersion = true;
+        }
+
+        targetVersion.setChangeLog("Updated via Builder");
+        
+        // Fix for JpaSystemException: orphan deletion collection was no longer referenced
+        // Instead of replacing the collection, we clear and add to the existing one for reused drafts.
+        var newFields = formMapper.mapFields(request.getFields(), targetVersion);
+        if (isNewVersion) {
+            targetVersion.setFields(newFields);
+        } else {
+            // Fix for UniqueConstraintViolation: (form_version_id, field_key).
+            // Hibernate's default flush order executes inserts before deletes.
+            // By clearing and flushing the repository here, we ensure old field records
+            // are physically deleted before new ones with the same keys are added.
+            targetVersion.getFields().clear();
+            formRepository.saveAndFlush(form);
+            targetVersion.getFields().addAll(newFields);
+        }
+
+        targetVersion.setRules(formMapper.serializeRules(request.getRules()));
+        try {
+            targetVersion.setDefinitionJson(objectMapper.writeValueAsString(request));
+        } catch(Exception e) {
+            targetVersion.setDefinitionJson("{}");
+        }
+
+        // Only set isActive when publishing - drafts should remain inactive
         if (newStatus == com.sttl.formbuilder2.model.enums.FormStatus.PUBLISHED) {
-            newVersion.setActivatedAt(java.time.Instant.now());
-            newVersion.setActivatedBy(getCurrentUser().getUsername());
+            // Step 1: Deactivate ALL existing versions and flush to DB immediately.
+            // The partial unique index "uix_form_versions_one_active_per_form" only allows
+            // one active version per form. We must ensure deactivation is physically written
+            // to the database BEFORE we set the new version as active.
+            form.getVersions().forEach(v -> v.setIsActive(false));
+            formRepository.saveAndFlush(form);
+
+            // Step 2: Now safely activate the target version
+            targetVersion.setIsActive(true);
+            targetVersion.setActivatedAt(java.time.Instant.now());
+            targetVersion.setActivatedBy(getCurrentUser().getUsername());
             softDeleteDraftsForForm(formId);
         }
 
-        form.getVersions().add(newVersion);
+        if (isNewVersion) {
+            form.getVersions().add(targetVersion);
+        }
         form = formRepository.saveAndFlush(form);
 
         // Find the persisted version
-        final int vNum = nextVersionNum;
+        final int vNum = targetVersion.getVersionNumber();
         com.sttl.formbuilder2.model.entity.FormVersion persistedNewVersion = form.getVersions().stream()
                 .filter(v -> v.getVersionNumber().equals(vNum))
                 .findFirst()
@@ -365,7 +445,7 @@ public class FormService {
         return formMapper.toDetailDTO(form);
     }
 
-    private void softDeleteDraftsForForm(Long formId) {
+    private void softDeleteDraftsForForm(UUID formId) {
         Form form = formRepository.findById(formId).orElse(null);
         if (form == null) return;
         
@@ -381,7 +461,7 @@ public class FormService {
     // ─────────────────────────────────────────────
     // HELPER: Save/replace validation rules
     // ─────────────────────────────────────────────
-    private void saveValidations(java.util.List<FieldValidationRequestDTO> dtos, Long formVersionId) {
+    private void saveValidations(java.util.List<FieldValidationRequestDTO> dtos, UUID formVersionId) {
         if (dtos == null || dtos.isEmpty()) return;
         int order = 0;
         for (FieldValidationRequestDTO dto : dtos) {
@@ -389,6 +469,7 @@ public class FormService {
             fv.setFormVersionId(formVersionId);
             fv.setFieldKey(dto.getFieldKey() != null ? dto.getFieldKey() : "");
             fv.setScope(dto.getScope());
+            fv.setValidationType("EXPRESSION"); // Custom validations are expression-based
             fv.setExpression(dto.getExpression());
             fv.setErrorMessage(dto.getErrorMessage());
             fv.setExecutionOrder(dto.getExecutionOrder() != null ? dto.getExecutionOrder() : order);
@@ -401,7 +482,7 @@ public class FormService {
     // DELETE / ARCHIVE (DELETE /api/forms/{id})
     // ─────────────────────────────────────────────
     @Transactional
-    public void deleteForm(Long id) {
+    public void deleteForm(UUID id) {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         form.setStatus(FormStatus.ARCHIVED);
@@ -412,14 +493,14 @@ public class FormService {
     }
 
     @Transactional
-    public void hardDeleteForm(Long id) {
+    public void hardDeleteForm(UUID id) {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Form not found with ID: " + id));
         
         String tableName = form.getTargetTableName();
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         
-        auditService.log("FORM_HARD_DELETE", actor, "FORM", id.toString(), "Form permanently deleted: " + form.getTitle());
+        auditService.log("FORM_HARD_DELETE", actor, "FORM", id.toString(), "Form permanently deleted: " + form.getName());
         
         List<WorkflowInstance> instances = workflowInstanceRepository.findAllByFormId(id);
         workflowInstanceRepository.deleteAll(instances);
@@ -435,7 +516,7 @@ public class FormService {
     }
 
     @Transactional
-    public void restoreForm(Long id) {
+    public void restoreForm(UUID id) {
         Form form = formRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         if (form.getStatus() != FormStatus.ARCHIVED) {
@@ -472,7 +553,7 @@ public class FormService {
             activeForms = formRepository.findByAccessAndStatusNot(currentUser, username, FormStatus.ARCHIVED);
         }
 
-        List<Long> formIds = activeForms.stream().map(Form::getId).collect(java.util.stream.Collectors.toList());
+        List<UUID> formIds = activeForms.stream().map(Form::getId).collect(java.util.stream.Collectors.toList());
         long totalSubmissions = formIds.isEmpty() ? 0 : formSubmissionMetaRepository.countByFormIdInAndIsDeletedFalseAndStatusIn(formIds, List.of("SUBMITTED", "FINAL"));
 
         List<com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO> recentForms = activeForms.stream()

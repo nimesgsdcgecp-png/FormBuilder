@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Search, RefreshCcw, User, Shield, Activity, Clock, SearchCode, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import ThemeToggle from '@/components/ThemeToggle';
+import { Search, Shield, Activity, Clock, SearchCode, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, AlertTriangle } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 import Header from '@/components/Header';
+import { AUTH, ADMIN_AUDIT } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 interface AuditLog {
   id: number;
@@ -18,8 +18,11 @@ interface AuditLog {
   createdAt: string;
 }
 
+function normalizeAuditLogs(payload: unknown): AuditLog[] {
+  return extractArray<AuditLog>(payload, ['logs', 'content', 'items']);
+}
+
 export default function AuditLogsPage() {
-  const router = useRouter();
   const { assignments } = usePermissions();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,23 +35,28 @@ export default function AuditLogsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
 
-  const isSuperAdmin = assignments.some(a => a.role.name === 'ADMIN');
+  void assignments;
 
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/admin/audit', { credentials: 'include' });
-      if (res.ok) {
-        setLogs(await res.json());
-      }
+      const logsRes = await fetch(ADMIN_AUDIT.LIST, { credentials: 'include' });
       
-      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(normalizeAuditLogs(logsData));
+      } else {
+        toast.error("Access forbidden: Audit logs restricted. Please check your role.");
+      }
+
+      const userRes = await fetch(AUTH.ME, { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
       }
     } catch (err) {
       console.error("Network error during audit logs fetch:", err);
+      toast.error("Failed to load audit logs due to a server or network error.");
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +65,7 @@ export default function AuditLogsPage() {
   const handleClearLogs = async () => {
     setIsClearing(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/admin/audit/clear', { 
+      const res = await fetch(`${ADMIN_AUDIT.BASE}/clear`, { 
         method: 'DELETE',
         credentials: 'include' 
       });
@@ -68,7 +76,7 @@ export default function AuditLogsPage() {
       } else {
         toast.error("Failed to clear audit trail");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred while clearing logs");
     } finally {
       setIsClearing(false);
@@ -198,7 +206,7 @@ export default function AuditLogsPage() {
                       <td className="px-6 py-5 whitespace-nowrap">
                         <div className="flex items-center gap-2 text-xs font-mono font-bold" style={{ color: 'var(--text-secondary)' }}>
                           <Shield size={12} className="text-blue-400" />
-                          {log.resourceType}{log.resourceId ? `:${log.resourceId}` : ''}
+                          {log.resourceType}
                         </div>
                       </td>
                       <td className="px-6 py-5">

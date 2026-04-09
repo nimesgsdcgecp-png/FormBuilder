@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.response;
 
+import java.util.UUID;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,16 +12,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserRoleAssignmentResponseDTO {
-    private Long id;
+    private UUID id;
     private RoleInfo role;
-    private Long formId;
+    private UUID formId;
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RoleInfo {
-        private Long id;
+        private UUID id;
         private String name;
     }
 }

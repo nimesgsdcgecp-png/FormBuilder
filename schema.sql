@@ -1,158 +1,211 @@
 -- ==============================================================================
 -- FormBuilder3 - Physical Database Schema (PostgreSQL 17)
--- ==============================================================================
--- Notes:
--- No Liquibase/Flyway required.
--- Run these queries directly against the PostgreSQL 17 database.
+-- Updated based on Data Dictionary
 -- ==============================================================================
 
--- 1. form: Stores the logical form container.
-CREATE TABLE form (
+-- 1. Users table
+CREATE TABLE users (
     id UUID PRIMARY KEY,
-    code VARCHAR(100) UNIQUE NOT NULL,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 2. Roles table
+CREATE TABLE roles (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    created_by VARCHAR(255),
+    created_at TIMESTAMP WITHOUT TIME ZONE,
+    parent_role_id UUID REFERENCES roles(id)
+);
+
+-- 3. Permissions table
+CREATE TABLE permissions (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    category VARCHAR(255) NOT NULL,
+    feature_id VARCHAR(255)
+);
+
+-- 4. Modules table
+CREATE TABLE modules (
+    id UUID PRIMARY KEY,
+    module_name VARCHAR(255) NOT NULL,
+    prefix VARCHAR(255),
+    icon_css VARCHAR(255),
+    active BOOLEAN,
+    is_parent BOOLEAN,
+    is_sub_parent BOOLEAN,
+    parent_id UUID,
+    sub_parent_id UUID,
+    created_at TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 5. User-Form-Role assignments
+CREATE TABLE user_form_roles (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id),
+    role_id UUID NOT NULL REFERENCES roles(id),
+    form_id UUID,
+    assigned_by VARCHAR(255),
+    assigned_at TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 6. Role-Permission mapping
+CREATE TABLE role_permissions (
+    role_id UUID NOT NULL REFERENCES roles(id),
+    permission_id UUID NOT NULL REFERENCES permissions(id),
+    PRIMARY KEY (role_id, permission_id)
+);
+
+-- 7. Role-Module mapping
+CREATE TABLE role_modules (
+    id UUID PRIMARY KEY,
+    role_id UUID NOT NULL REFERENCES roles(id),
+    module_id UUID NOT NULL REFERENCES modules(id)
+);
+
+-- 8. Forms table
+CREATE TABLE forms (
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    status VARCHAR(20) NOT NULL, -- DRAFT, PUBLISHED, ARCHIVED
-    created_by VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    code VARCHAR(255) UNIQUE NOT NULL,
+    status VARCHAR(255) NOT NULL,
+    code_locked BOOLEAN NOT NULL,
+    allow_edit_response BOOLEAN NOT NULL,
+    public_share_token VARCHAR(255) UNIQUE,
+    target_table_name VARCHAR(255),
+    approval_chain TEXT,
+    issued_by_username VARCHAR(255),
+    is_deleted BOOLEAN NOT NULL,
+    owner_id UUID REFERENCES users(id),
+    creator_id UUID REFERENCES users(id),
+    approved_by_id UUID REFERENCES users(id),
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
--- Column hints (Comments) for form
-COMMENT ON COLUMN form.id IS 'Primary identifier for the logical form; stable across all versions.';
-COMMENT ON COLUMN form.code IS 'Human-readable and system-stable identifier; used for submission table naming and API references. Must never change once published.';
-COMMENT ON COLUMN form.name IS 'Display name of the form shown in UI listings and selectors.';
-COMMENT ON COLUMN form.description IS 'Optional explanatory text describing the business purpose of the form.';
-COMMENT ON COLUMN form.status IS 'Lifecycle state controlling visibility and editability (DRAFT, PUBLISHED, ARCHIVED).';
-COMMENT ON COLUMN form.created_by IS 'Identifier of the user who created the form.';
-COMMENT ON COLUMN form.created_at IS 'Timestamp when the form was first created.';
-COMMENT ON COLUMN form.updated_at IS 'Timestamp of the last metadata change to the form (not submissions).';
-
--- Create Index for form
-CREATE INDEX idx_form_code ON form(code);
-
--- ------------------------------------------------------------------------------
-
--- 2. form_version: Stores immutable form definitions.
-CREATE TABLE form_version (
+-- 9. Form Versions table
+CREATE TABLE form_versions (
     id UUID PRIMARY KEY,
-    form_id UUID NOT NULL,
+    form_id UUID NOT NULL REFERENCES forms(id),
     version_number INTEGER NOT NULL,
     is_active BOOLEAN NOT NULL,
+    change_log TEXT,
     definition_json JSONB NOT NULL,
-    created_by VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    CONSTRAINT uq_form_version UNIQUE(form_id, version_number)
+    rules TEXT,
+    activated_by VARCHAR(255),
+    activated_at TIMESTAMP WITH TIME ZONE,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uq_form_id_version UNIQUE(form_id, version_number)
 );
 
--- Column hints (Comments) for form_version
-COMMENT ON COLUMN form_version.id IS 'Unique identifier for a specific immutable version of a form.';
-COMMENT ON COLUMN form_version.form_id IS 'Reference to the parent logical form.';
-COMMENT ON COLUMN form_version.version_number IS 'Sequential version number, monotonically increasing per form.';
-COMMENT ON COLUMN form_version.is_active IS 'Indicates which version is currently used for new submissions.';
-COMMENT ON COLUMN form_version.definition_json IS 'Serialized snapshot of the full form structure (layout, sections, ordering, UI hints).';
-COMMENT ON COLUMN form_version.created_by IS 'Identifier of the user who published this version.';
-COMMENT ON COLUMN form_version.created_at IS 'Timestamp when this version was created and locked.';
-
--- Create Index for form_version
-CREATE INDEX idx_form_version_active ON form_version(form_id, is_active);
-
--- ------------------------------------------------------------------------------
-
--- 3. form_field: Represents individual fields within a form version.
-CREATE TABLE form_field (
+-- 10. Form Fields table
+CREATE TABLE form_fields (
     id UUID PRIMARY KEY,
-    form_version_id UUID NOT NULL,
-    field_key VARCHAR(100) NOT NULL,
-    label VARCHAR(255) NOT NULL,
-    field_type VARCHAR(50) NOT NULL,
+    form_version_id UUID NOT NULL REFERENCES form_versions(id),
+    field_key VARCHAR(255) NOT NULL,
+    label TEXT NOT NULL,
+    field_type VARCHAR(255) NOT NULL,
     is_required BOOLEAN NOT NULL,
     is_read_only BOOLEAN NOT NULL,
-    default_value TEXT,
+    is_hidden BOOLEAN NOT NULL,
+    is_disabled BOOLEAN NOT NULL,
+    is_multi_select BOOLEAN NOT NULL,
+    default_value VARCHAR(255),
+    help_text TEXT,
+    calculation_formula TEXT,
     display_order INTEGER NOT NULL,
+    field_options TEXT,
+    parent_column_name VARCHAR(255),
     config_json JSONB,
-    CONSTRAINT uq_form_field UNIQUE(form_version_id, field_key)
+    validation_rules JSONB,
+    CONSTRAINT uq_form_version_field UNIQUE(form_version_id, field_key)
 );
 
--- Column hints (Comments) for form_field
-COMMENT ON COLUMN form_field.id IS 'Unique identifier of the field definition.';
-COMMENT ON COLUMN form_field.form_version_id IS 'Identifies the exact form version this field belongs to.';
-COMMENT ON COLUMN form_field.field_key IS 'Stable programmatic identifier; directly maps to a column name in the submission table.';
-COMMENT ON COLUMN form_field.label IS 'Human-readable label displayed on the form UI.';
-COMMENT ON COLUMN form_field.field_type IS 'Field control type (TEXT, NUMBER, DATE, DROPDOWN, etc.).';
-COMMENT ON COLUMN form_field.is_required IS 'Indicates whether the field must be populated for a valid submission.';
-COMMENT ON COLUMN form_field.is_read_only IS 'Indicates whether the field is displayed but not editable at runtime.';
-COMMENT ON COLUMN form_field.default_value IS 'Default value applied when the form is initially rendered.';
-COMMENT ON COLUMN form_field.display_order IS 'Determines ordering of fields within the form or section.';
-COMMENT ON COLUMN form_field.config_json IS 'Field-specific configuration such as placeholder text, dropdown options, or UI hints.';
-
--- ------------------------------------------------------------------------------
-
--- 4. field_validation: Stores validation and conditional validation rules.
-CREATE TABLE field_validation (
+-- 11. Field Validations table
+CREATE TABLE field_validations (
     id UUID PRIMARY KEY,
-    form_version_id UUID NOT NULL,
-    field_key VARCHAR(100),
-    validation_type VARCHAR(50) NOT NULL,
+    form_version_id UUID NOT NULL REFERENCES form_versions(id),
+    field_key VARCHAR(255),
+    validation_type VARCHAR(255) NOT NULL,
+    scope VARCHAR(255) NOT NULL,
     expression TEXT NOT NULL,
-    error_message VARCHAR(255) NOT NULL,
-    execution_order INTEGER NOT NULL,
-    scope VARCHAR(20) NOT NULL -- FIELD, FORM
+    error_message TEXT NOT NULL,
+    execution_order INTEGER NOT NULL
 );
 
--- Column hints (Comments) for field_validation
-COMMENT ON COLUMN field_validation.id IS 'Unique identifier for a validation rule.';
-COMMENT ON COLUMN field_validation.form_version_id IS 'Indicates the form version where this validation applies.';
-COMMENT ON COLUMN field_validation.field_key IS 'Target field for the validation; NULL for form-level validations.';
-COMMENT ON COLUMN field_validation.validation_type IS 'Logical classification of the rule (REQUIRED, REGEX, CONDITIONAL, CUSTOM).';
-COMMENT ON COLUMN field_validation.expression IS 'Boolean expression evaluated against submission data to determine validity.';
-COMMENT ON COLUMN field_validation.error_message IS 'Message shown to the user when validation fails.';
-COMMENT ON COLUMN field_validation.execution_order IS 'Determines evaluation sequence when multiple validations exist.';
-COMMENT ON COLUMN field_validation.scope IS 'Defines whether validation applies at FIELD level or FORM level.';
-
--- ------------------------------------------------------------------------------
-
--- 5. form_submission_meta: Stores submission metadata only.
+-- 12. Form Submission Metadata table
 CREATE TABLE form_submission_meta (
     id UUID PRIMARY KEY,
     form_id UUID NOT NULL,
     form_version_id UUID NOT NULL,
     submission_table VARCHAR(255) NOT NULL,
     submission_row_id UUID NOT NULL,
-    status VARCHAR(20) NOT NULL, -- DRAFT, SUBMITTED
-    submitted_by VARCHAR(100),
-    submitted_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL
+    status VARCHAR(255) NOT NULL,
+    submitted_by VARCHAR(255),
+    submitted_at TIMESTAMP WITH TIME ZONE,
+    is_deleted BOOLEAN NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
--- Column hints (Comments) for form_submission_meta
-COMMENT ON COLUMN form_submission_meta.id IS 'Unique identifier for the submission metadata record.';
-COMMENT ON COLUMN form_submission_meta.form_id IS 'Logical form to which this submission belongs.';
-COMMENT ON COLUMN form_submission_meta.form_version_id IS 'Exact form version used to render and validate this submission.';
-COMMENT ON COLUMN form_submission_meta.submission_table IS 'Name of the physical table where submission data is stored.';
-COMMENT ON COLUMN form_submission_meta.submission_row_id IS 'Primary key of the corresponding row in the submission table.';
-COMMENT ON COLUMN form_submission_meta.status IS 'Submission state (DRAFT or SUBMITTED).';
-COMMENT ON COLUMN form_submission_meta.submitted_by IS 'Identifier of the user who submitted the form.';
-COMMENT ON COLUMN form_submission_meta.submitted_at IS 'Timestamp when the form was finally submitted.';
-COMMENT ON COLUMN form_submission_meta.created_at IS 'Timestamp when the submission record was first created (including drafts).';
+-- 13. Workflow Instances table
+CREATE TABLE workflow_instances (
+    id UUID PRIMARY KEY,
+    form_id UUID NOT NULL REFERENCES forms(id),
+    creator_id UUID NOT NULL REFERENCES users(id),
+    target_builder_id UUID NOT NULL REFERENCES users(id),
+    status VARCHAR(255),
+    total_steps INTEGER,
+    current_step_index INTEGER,
+    created_at TIMESTAMP WITHOUT TIME ZONE,
+    updated_at TIMESTAMP WITHOUT TIME ZONE
+);
 
--- Create Index for form_submission_meta
-CREATE INDEX idx_form_sub_meta_status ON form_submission_meta(form_id, status);
+-- 14. Workflow Steps table
+CREATE TABLE workflow_steps (
+    id UUID PRIMARY KEY,
+    instance_id UUID NOT NULL REFERENCES workflow_instances(id),
+    approver_id UUID NOT NULL REFERENCES users(id),
+    step_index INTEGER,
+    status VARCHAR(255),
+    comments TEXT,
+    decided_at TIMESTAMP WITHOUT TIME ZONE
+);
 
--- ------------------------------------------------------------------------------
--- Example dynamic submission table structure (Do NOT create universally, this is per-form)
--- e.g. form_data_employee_onboarding
--- 
--- CREATE TABLE form_data_employee_onboarding (
---     id UUID PRIMARY KEY,
---     form_version_id UUID NOT NULL,
---     employee_name TEXT,
---     date_of_joining DATE,
---     salary NUMERIC,
---     is_draft BOOLEAN NOT NULL,
---     created_at TIMESTAMP NOT NULL,
---     updated_at TIMESTAMP NOT NULL
--- );
---
--- CREATE INDEX idx_form_data_onboarding_created ON form_data_employee_onboarding(created_at);
--- CREATE INDEX idx_form_data_onboarding_draft ON form_data_employee_onboarding(is_draft);
+-- 15. Audit Logs table
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY,
+    action VARCHAR(255) NOT NULL,
+    actor VARCHAR(255) NOT NULL,
+    resource_type VARCHAR(255),
+    resource_id VARCHAR(255),
+    details TEXT,
+    deleted BOOLEAN NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 16. Level Up Requests table
+CREATE TABLE level_up_requests (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id),
+    status VARCHAR(255) NOT NULL,
+    requested_at TIMESTAMP WITHOUT TIME ZONE,
+    decided_by VARCHAR(255),
+    decided_at TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 17. System Configurations table
+CREATE TABLE system_configurations (
+    id UUID PRIMARY KEY,
+    config_key VARCHAR(255) UNIQUE NOT NULL,
+    config_value VARCHAR(255),
+    description VARCHAR(255)
+);

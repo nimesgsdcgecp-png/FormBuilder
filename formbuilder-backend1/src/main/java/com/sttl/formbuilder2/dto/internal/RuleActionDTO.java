@@ -20,7 +20,7 @@ import lombok.Data;
  *
  * Fields:
  * - {@code type} — what to do (REQUIRE, VALIDATION_ERROR, SEND_EMAIL, etc.)
- * - {@code targetField} — the columnName of the field to act on (for
+ * - {@code targetField} — the fieldKey of the field to act on (for
  * SHOW/HIDE/REQUIRE).
  * - {@code message} — custom error text for VALIDATION_ERROR, or the recipient
  * email address for SEND_EMAIL.

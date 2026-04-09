@@ -1,24 +1,33 @@
 # 🏗️ System Architecture
 
-How FormBuilder3 works and why it's designed this way.
+**Last Updated:** April 2026  
+**Status:** Production-Ready with Workflow & Rule Engine Enabled
 
 ---
 
 ## 📊 System Overview
 
-FormBuilder3 is a **dynamic form builder** where forms are backed by real PostgreSQL tables. When you publish a form, the system creates an actual database table to store responses—not just JSON.
+FormBuilder3 is a **dynamic, enterprise-grade form builder** with real PostgreSQL table generation and comprehensive workflow/approval systems.
+
+### Technology Stack
+- **Frontend:** Next.js 16.1.6, React, TypeScript, Tailwind CSS, Zustand
+- **Backend:** Spring Boot 3.5.11, Java 17, PostgreSQL 14+
+- **Authentication:** Session-based (Spring Security)
+- **Features:** Workflow engine, rule engine, versioning, soft deletes
 
 ```
-User Interface (Next.js)    Business Logic (Spring Boot)    Database (PostgreSQL)
-────────────────────────    ─────────────────────────      ──────────────────────
+User Interface (Next.js)        Business Logic (Spring Boot)        Database (PostgreSQL)
+────────────────────────        ─────────────────────────          ──────────────────────
 
-  Form Builder          →       Controllers           →      Metadata Tables
-  Canvas UI             →       Services              →      Form Schema
-  Real-time Preview     ←       Rule Engine           ←      Submissions
-  + Zustand State       →       Validation            →      (sub_form_X_vY)
+  Form Builder            →         Controllers (15)          →      Metadata Tables
+  Canvas UI               →         Services & Repositories   →      Form Schema
+  Rule Engine Tab         →         Rule Engine [ENABLED]     →      form_X tables
+  Workflow Modal          →         Workflow Engine [ENABLED] →      Submissions
+  + Zustand Store         ←         Validation Engine         ←      (sub_form_X_vY)
+                                    Version Management
 ```
 
-**Key Principle:** Forms are versioned snapshots. Every publish creates an immutable database table, so submissions are always tied to the exact schema they were entered with.
+**Key Principle:** Forms are versioned, immutable snapshots. Publishing creates a dedicated PostgreSQL table, ensuring submissions preserve schema integrity.
 
 ---
 

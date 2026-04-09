@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.Optional;
 
 /**
@@ -36,7 +37,7 @@ import java.util.Optional;
  * PostgreSQL
  */
 @Repository
-public interface FormRepository extends JpaRepository<Form, Long> {
+public interface FormRepository extends JpaRepository<Form, UUID> {
 
     /**
      * Returns all forms whose status is NOT the given value, ordered by most

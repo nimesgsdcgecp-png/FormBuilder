@@ -3,15 +3,17 @@ package com.sttl.formbuilder2.controller;
 import com.sttl.formbuilder2.dto.response.UserResponseDTO;
 import com.sttl.formbuilder2.dto.response.UserSummaryDTO;
 import com.sttl.formbuilder2.service.UserService;
+import com.sttl.formbuilder2.util.ApiConstants;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/admin/users")
+@RequestMapping(ApiConstants.ADMIN_USERS_BASE)
 @PreAuthorize("hasAuthority('MANAGE')")
 public class UserController {
 
@@ -21,7 +23,7 @@ public class UserController {
         this.userService = userService;
     }
 
-    @GetMapping
+    @GetMapping(ApiConstants.ADMIN_USERS_LIST)
     public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
@@ -31,8 +33,8 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserSummaries());
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable("id") Long id) {
+    @DeleteMapping(ApiConstants.ADMIN_USERS_DELETE)
+    public ResponseEntity<?> deleteUser(@PathVariable("id") UUID id) {
         try {
             userService.deleteUser(id);
             return ResponseEntity.ok(Map.of("message", "User deleted successfully"));
@@ -41,12 +43,12 @@ public class UserController {
         }
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable("id") Long id, @RequestBody Map<String, Object> payload) {
+    @PutMapping(ApiConstants.ADMIN_USERS_UPDATE)
+    public ResponseEntity<?> updateUser(@PathVariable("id") UUID id, @RequestBody Map<String, Object> payload) {
         try {
-            Long roleId = null;
+            UUID roleId = null;
             if (payload.get("roleId") != null) {
-                roleId = Long.valueOf(payload.get("roleId").toString());
+                roleId = UUID.fromString(payload.get("roleId").toString());
             }
 
             userService.updateUser(

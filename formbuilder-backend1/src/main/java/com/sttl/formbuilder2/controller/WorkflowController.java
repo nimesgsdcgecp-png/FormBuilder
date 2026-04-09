@@ -13,13 +13,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import com.sttl.formbuilder2.util.ApiConstants;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/workflows")
+@RequestMapping(ApiConstants.WORKFLOW_BASE)
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "feature.workflow.enabled", havingValue = "true")
 public class WorkflowController {
@@ -27,7 +29,7 @@ public class WorkflowController {
     private final WorkflowService workflowService;
     private final UserRepository userRepository;
 
-    @PostMapping("/initiate")
+    @PostMapping(ApiConstants.WORKFLOW_INITIATE)
     public ResponseEntity<?> initiate(@RequestBody WorkflowRequestDTO request, @AuthenticationPrincipal UserDetails userDetails) {
         AppUser creator = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -40,8 +42,8 @@ public class WorkflowController {
         ));
     }
 
-    @PostMapping("/steps/{id}/approve")
-    public ResponseEntity<?> approve(@PathVariable("id") Long id, @RequestBody Map<String, String> payload, @AuthenticationPrincipal UserDetails userDetails) {
+    @PostMapping(ApiConstants.WORKFLOW_APPROVE)
+    public ResponseEntity<?> approve(@PathVariable("id") UUID id, @RequestBody Map<String, String> payload, @AuthenticationPrincipal UserDetails userDetails) {
         try {
             AppUser actor = userRepository.findByUsername(userDetails.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -65,8 +67,8 @@ public class WorkflowController {
         }
     }
 
-    @PostMapping("/steps/{id}/reject")
-    public ResponseEntity<?> reject(@PathVariable("id") Long id, @RequestBody Map<String, String> payload, @AuthenticationPrincipal UserDetails userDetails) {
+    @PostMapping(ApiConstants.WORKFLOW_REJECT)
+    public ResponseEntity<?> reject(@PathVariable("id") UUID id, @RequestBody Map<String, String> payload, @AuthenticationPrincipal UserDetails userDetails) {
         AppUser actor = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -74,12 +76,12 @@ public class WorkflowController {
         return ResponseEntity.ok(Map.of("message", "Workflow rejected"));
     }
 
-    @GetMapping("/available-authorities")
-    public ResponseEntity<?> getAvailableAuthorities(@RequestParam(value = "formId", required = false) Long formId) {
+    @GetMapping(ApiConstants.WORKFLOW_AUTHORITIES)
+    public ResponseEntity<?> getAvailableAuthorities(@RequestParam(value = "formId", required = false) UUID formId) {
         return ResponseEntity.ok(workflowService.getAvailableAuthorities(formId));
     }
 
-    @GetMapping("/fix-db")
+    @GetMapping(ApiConstants.WORKFLOW_FIX_DB)
     public ResponseEntity<?> fixDb() {
         try {
             workflowService.fixDatabaseConstraints();
@@ -89,7 +91,7 @@ public class WorkflowController {
         }
     }
 
-    @GetMapping("/my-submissions")
+    @GetMapping(ApiConstants.WORKFLOW_MY_SUBMISSIONS)
     public ResponseEntity<?> getMySubmissions(@AuthenticationPrincipal UserDetails userDetails) {
         try {
             AppUser creator = userRepository.findByUsername(userDetails.getUsername())
@@ -104,7 +106,7 @@ public class WorkflowController {
         }
     }
 
-    @GetMapping("/my-handled")
+    @GetMapping(ApiConstants.WORKFLOW_MY_HANDLED)
     public ResponseEntity<?> getMyHandledWorkflows(@AuthenticationPrincipal UserDetails userDetails) {
         try {
             AppUser actor = userRepository.findByUsername(userDetails.getUsername())
@@ -119,7 +121,7 @@ public class WorkflowController {
         }
     }
 
-    @GetMapping("/my-pending")
+    @GetMapping(ApiConstants.WORKFLOW_MY_PENDING)
     public ResponseEntity<?> getMyPendingSteps(@AuthenticationPrincipal UserDetails userDetails) {
         try {
             AppUser actor = userRepository.findByUsername(userDetails.getUsername())
@@ -147,7 +149,7 @@ public class WorkflowController {
         
         Map<String, Object> formMap = new HashMap<>();
         formMap.put("id", form.getId());
-        formMap.put("title", form.getTitle());
+        formMap.put("title", form.getName());
         formMap.put("description", form.getDescription() == null ? "" : form.getDescription());
 
         Map<String, Object> creatorMap = new HashMap<>();

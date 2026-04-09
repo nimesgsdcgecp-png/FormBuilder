@@ -31,7 +31,7 @@ import java.util.Map;
  * the SQL column name (e.g. "full_name").
  * - {@code type} — determines the HTML input and PostgreSQL column type.
  * - {@code required} — mapped to
- * {@link com.sttl.formbuilder2.model.entity.FormField#isMandatory}.
+ * {@link com.sttl.formbuilder2.model.entity.FormField#isRequired}.
  * - {@code options} — JSON-compatible object for choice/grid/lookup fields.
  * - {@code validation} — map of additional constraints (min, max, minLength,
  * maxLength, pattern) stored as JSONB in {@code form_fields}.
@@ -43,7 +43,7 @@ public class FieldDefinitionRequestDTO {
     @NotBlank(message = "Field label is required")
     private String label;
 
-    private String columnName;
+    private String fieldKey;
 
     @NotNull(message = "Field type is required")
     private FieldType type;

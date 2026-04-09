@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Layout, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
+import { AUTH } from '@/utils/apiConstants';
 
 export default function RegisterPage() {
     const [username, setUsername] = useState('');
@@ -18,7 +19,7 @@ export default function RegisterPage() {
         setIsLoading(true);
 
         try {
-            const res = await fetch('http://localhost:8080/api/v1/auth/register', {
+            const res = await fetch(AUTH.REGISTER, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -33,7 +34,7 @@ export default function RegisterPage() {
                 const error = await res.json();
                 toast.error(error.error || 'Registration failed');
             }
-        } catch (err) {
+        } catch {
             toast.error('Network error. Is the backend running?');
         } finally {
             setIsLoading(false);

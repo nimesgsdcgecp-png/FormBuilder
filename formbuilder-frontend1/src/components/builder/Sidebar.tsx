@@ -20,13 +20,14 @@
 import { useDroppable } from '@dnd-kit/core';
 import { FieldType } from '@/types/schema';
 import { Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, CalendarClock, EyeOff } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { DraggableSidebarBtn } from './DraggableSidebarBtn';
 
 /** Each group has a label displayed as a section header in the sidebar. */
 interface FieldGroup {
   label: string;
   color: string; // accent color for the category header
-  fields: { type: FieldType; label: string; icon: any; category: string }[];
+  fields: { type: FieldType; label: string; icon: LucideIcon; category: string }[];
 }
 
 /** Registry of all draggable field types, organised into display groups. */

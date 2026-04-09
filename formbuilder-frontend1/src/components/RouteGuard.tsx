@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
+import { MENU } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 interface MenuNode {
   id: number;
@@ -33,9 +35,10 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
       // 2. Fetch the allowed menu tree for the user
       try {
-        const res = await fetch('http://localhost:8080/api/v1/menu', { credentials: 'include' });
+        const res = await fetch(MENU.LIST, { credentials: 'include' });
         if (res.ok) {
-          const menuTree: MenuNode[] = await res.json();
+          const raw = await res.json();
+          const menuTree = extractArray<MenuNode>(raw, ['menu', 'menuTree', 'items', 'content']);
           
           // Flatten the tree to get all allowed URLs
           const allowedUrls = new Set<string>();
@@ -63,7 +66,7 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
            // If menu fetch fails, we might be unauthenticated
            setIsAuthorized(true); // Let the backend handle 401
         }
-      } catch (err) {
+      } catch {
         setIsAuthorized(true);
       }
     };
@@ -84,8 +87,8 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
   if (isAuthorized === null || permsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-(--bg-main)">
-        <div className="w-8 h-8 border-2 border-(--accent) border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen flex items-center justify-center bg-bg-main">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }

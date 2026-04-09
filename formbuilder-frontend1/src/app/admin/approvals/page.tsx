@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Inbox, CheckCircle2, XCircle, ArrowRight, Loader2, User, Clock, FileText, RotateCcw, Plus, Search } from 'lucide-react';
+import { Inbox, CheckCircle2, XCircle, Loader2, User, Clock, FileText, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
+import { AUTH, WORKFLOW } from '@/utils/apiConstants';
 
 interface WorkflowStep {
   id: number;
@@ -28,7 +28,7 @@ interface WorkflowStep {
 }
 
 export default function ApprovalInbox() {
-  const { hasPermission, isLoading: permsLoading } = usePermissions();
+  const { isLoading: permsLoading } = usePermissions();
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [comments, setComments] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function ApprovalInbox() {
 
   const fetchPendingSteps = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/v1/workflows/my-pending', { credentials: 'include' });
+      const res = await fetch(WORKFLOW.MY_PENDING, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setSteps(data);
@@ -48,12 +48,12 @@ export default function ApprovalInbox() {
     }
 
     try {
-      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+      const userRes = await fetch(AUTH.ME, { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
       }
-    } catch (err) {}
+    } catch {}
   };
 
   useEffect(() => {
@@ -62,7 +62,9 @@ export default function ApprovalInbox() {
 
   const handleAction = async (stepId: number, action: 'approve' | 'reject', comments: string = "") => {
     try {
-      const res = await fetch(`http://localhost:8080/api/v1/workflows/steps/${stepId}/${action}`, {
+      const stepIdParam = stepId.toString();
+      const endpoint = action === 'approve' ? WORKFLOW.APPROVE(stepIdParam) : WORKFLOW.REJECT(stepIdParam);
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -75,7 +77,7 @@ export default function ApprovalInbox() {
       } else {
         toast.error(`Failed to ${action} request`);
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     }
   };

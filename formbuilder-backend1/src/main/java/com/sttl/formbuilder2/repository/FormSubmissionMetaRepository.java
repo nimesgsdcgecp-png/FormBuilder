@@ -10,20 +10,20 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.Optional;
 
 @Repository
 public interface FormSubmissionMetaRepository extends JpaRepository<FormSubmissionMeta, UUID> {
-    Optional<FormSubmissionMeta> findByFormIdAndSubmittedByAndStatus(Long formId, String submittedBy, String status);
-    Page<FormSubmissionMeta> findByFormIdAndIsDeletedFalse(Long formId, Pageable pageable);
-    List<FormSubmissionMeta> findByFormIdAndIsDeletedFalseAndStatus(Long formId, String status);
+    Optional<FormSubmissionMeta> findByFormIdAndSubmittedByAndStatus(UUID formId, String submittedBy, String status);
+    Page<FormSubmissionMeta> findByFormIdAndIsDeletedFalse(UUID formId, Pageable pageable);
+    List<FormSubmissionMeta> findByFormIdAndIsDeletedFalseAndStatus(UUID formId, String status);
     Optional<FormSubmissionMeta> findBySubmissionRowId(UUID rowId);
 
     @Query("SELECT COUNT(m) FROM FormSubmissionMeta m WHERE m.formId IN :formIds AND m.isDeleted = false AND m.status IN :statuses")
-    long countByFormIdInAndIsDeletedFalseAndStatusIn(@Param("formIds") List<Long> formIds, @Param("statuses") List<String> statuses);
+    long countByFormIdInAndIsDeletedFalseAndStatusIn(@Param("formIds") List<UUID> formIds, @Param("statuses") List<String> statuses);
 
     @Modifying
     @Query("UPDATE FormSubmissionMeta m SET m.isDeleted = true WHERE m.formId = :formId AND m.status = :status")
-    void softDeleteByFormIdAndStatus(@Param("formId") Long formId, @Param("status") String status);
+    void softDeleteByFormIdAndStatus(@Param("formId") UUID formId, @Param("status") String status);
 }

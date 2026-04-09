@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.model.entity;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -17,8 +19,8 @@ import java.util.Set;
 public class AppUser {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true)
     private String username;
@@ -51,7 +53,7 @@ public class AppUser {
     /**
      * Checks if user has a permission globally or for a specific form.
      */
-    public boolean hasPermission(String permissionName, Long formId) {
+    public boolean hasPermission(String permissionName, UUID formId) {
         for (UserFormRole ufr : userFormRoles) {
             // Check global roles (formId is null) or matching scoped roles
             if (ufr.getFormId() == null || (formId != null && formId.equals(ufr.getFormId()))) {

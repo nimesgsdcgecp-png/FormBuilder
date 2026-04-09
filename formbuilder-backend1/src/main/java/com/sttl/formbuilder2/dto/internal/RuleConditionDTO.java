@@ -19,7 +19,7 @@ import lombok.Data;
  * the database during form submission processing.
  *
  * Fields:
- * - {@code field} — the SQL columnName of the answer to evaluate.
+ * - {@code field} — the SQL fieldKey of the answer to evaluate.
  * - {@code operator} — comparison type (EQUALS, CONTAINS, GREATER_THAN, etc.)
  * - {@code value} — the target value to compare against
  * (String/Number/Boolean).

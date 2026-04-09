@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, User, Shield, Users, ShieldAlert, LogOut, LayoutGrid, Plus, Bell, SearchCode, Menu } from 'lucide-react';
+import { FileText, User, LogOut, Menu } from 'lucide-react';
 import { toast } from 'sonner';
 import ThemeToggle from './ThemeToggle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUIStore } from '@/store/useUIStore';
+import { AUTH } from '@/utils/apiConstants';
 
 interface HeaderProps {
   username: string | null;
@@ -20,7 +21,7 @@ export default function Header({ username, breadcrumbs, title, badge }: HeaderPr
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { hasPermission, assignments, clearCache } = usePermissions();
+  const { assignments, clearCache } = usePermissions();
   const { toggleMobileMenu, pendingApprovalsCount } = useUIStore();
 
 
@@ -36,16 +37,14 @@ export default function Header({ username, breadcrumbs, title, badge }: HeaderPr
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(AUTH.LOGOUT, { method: 'POST', credentials: 'include' });
       clearCache();
       router.push('/login');
       toast.success('Logged out successfully');
-    } catch (e) {
+    } catch {
       toast.error('Logout failed');
     }
   };
-
-  const isAdmin = assignments.some(a => a.role.name === 'ADMIN' || a.role.name === 'ROLE_ADMINISTRATOR');
   const totalNotifications = pendingApprovalsCount;
 
   return (

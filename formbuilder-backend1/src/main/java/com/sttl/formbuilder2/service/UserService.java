@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -82,12 +83,20 @@ public class UserService {
     }
 
     @Transactional
-    public void deleteUser(Long id) {
+    public void deleteUser(UUID id) {
         AppUser user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         if ("admin".equals(user.getUsername())) {
             throw new RuntimeException("Cannot delete system admin user");
+        }
+
+        // Check for administrative roles
+        boolean isAdmin = user.getUserFormRoles().stream()
+                .anyMatch(ufr -> List.of("ADMIN", "ROLE_ADMINISTRATOR", "ROLE_ADMIN").contains(ufr.getRole().getName()));
+        
+        if (isAdmin) {
+            throw new RuntimeException("Cannot delete users with administrative privileges as they are restricted system accounts.");
         }
 
         // Cleanup workflows involving this user
@@ -104,7 +113,7 @@ public class UserService {
     }
 
     @Transactional
-    public void updateUser(Long id, String username, String password, Long roleId) {
+    public void updateUser(UUID id, String username, String password, UUID roleId) {
         AppUser user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 

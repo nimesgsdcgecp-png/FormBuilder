@@ -21,15 +21,15 @@ import com.sttl.formbuilder2.service.AuditService;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionInformation;
 import java.util.List;
-
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import com.sttl.formbuilder2.util.ApiConstants;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping(ApiConstants.AUTH_BASE)
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
@@ -53,7 +53,7 @@ public class AuthController {
         this.sessionRegistry = sessionRegistry;
     }
 
-    @PostMapping("/login")
+    @PostMapping(ApiConstants.AUTH_LOGIN)
     public ResponseEntity<?> login(@RequestBody Map<String, String> credentials, HttpServletRequest request) {
         try {
             String username = credentials.get("username");
@@ -83,15 +83,33 @@ public class AuthController {
             }
             sessionRegistry.registerNewSession(session.getId(), principal);
 
+            // 5. Get user details for response
+            AppUser user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            // Extract roles from user
+            List<String> roles = user.getUserFormRoles().stream()
+                    .map(ufr -> {
+                        String roleName = ufr.getRole().getName();
+                        return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                    })
+                    .collect(Collectors.toList());
+
             auditService.log("LOGIN", username, "USER", null, "User logged in successfully");
-            return ResponseEntity.ok(Map.of("message", "Login successful", "username", username));
+            
+            // Return spec-compliant response with userId and roles
+            return ResponseEntity.ok(Map.of(
+                "userId", user.getId().toString(),
+                "username", username,
+                "roles", roles
+            ));
 
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid username or password"));
         }
     }
 
-    @PostMapping("/logout")
+    @PostMapping(ApiConstants.AUTH_LOGOUT)
     public ResponseEntity<?> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
@@ -104,7 +122,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "Logout successful"));
     }
 
-    @PostMapping("/register")
+    @PostMapping(ApiConstants.AUTH_REGISTER)
     public ResponseEntity<?> register(@RequestBody Map<String, String> payload) {
         String username = payload.get("username");
         String password = payload.get("password");
@@ -131,7 +149,7 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "User registered successfully"));
     }
 
-    @GetMapping("/me")
+    @GetMapping(ApiConstants.AUTH_ME)
     public ResponseEntity<?> getCurrentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -160,7 +178,7 @@ public class AuthController {
                 "roles", authorities));
     }
 
-    @GetMapping("/permissions")
+    @GetMapping(ApiConstants.AUTH_PERMISSIONS)
     public ResponseEntity<?> getUserPermissions(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

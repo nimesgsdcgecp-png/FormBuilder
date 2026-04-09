@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.request;
 
+import java.util.UUID;
+
 import lombok.Data;
 import java.util.Set;
 
@@ -7,5 +9,5 @@ import java.util.Set;
 public class RoleRequestDTO {
     private String name;
     private String description;
-    private Set<Long> permissionIds;
+    private Set<UUID> permissionIds;
 }

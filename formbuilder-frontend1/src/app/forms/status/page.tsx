@@ -2,20 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
-  FileText, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  Loader2, 
-  ChevronRight, 
-  History,
-  Activity,
-  AlertCircle
+import {
+  FileText,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Activity
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import { WORKFLOW } from '@/utils/apiConstants';
 
 interface WorkflowHistory {
   id: number;
@@ -44,7 +42,7 @@ export default function MyFormStatus() {
 
   const fetchMySubmissions = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/v1/workflows/my-submissions', { credentials: 'include' });
+      const res = await fetch(WORKFLOW.MY_SUBMISSIONS, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setInstances(data);
@@ -72,10 +70,10 @@ export default function MyFormStatus() {
 
   if (isLoading || permsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-base)]">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-bg-base">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-12 h-12 text-[var(--accent)] animate-spin" />
-          <p className="text-sm font-medium text-[var(--text-muted)] uppercase tracking-widest">Loading Status...</p>
+          <Loader2 className="w-12 h-12 text-accent animate-spin" />
+          <p className="text-sm font-medium text-text-muted uppercase tracking-widest">Loading Status...</p>
         </div>
       </div>
     );
@@ -88,18 +86,18 @@ export default function MyFormStatus() {
         <div className="w-full px-4 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <nav className="hidden lg:flex items-center gap-2 text-sm font-medium">
-              <Link href="/" className="text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Dashboard</Link>
-              <span className="text-[var(--text-faint)]">/</span>
-              <span className="text-[var(--text-primary)] font-bold">My Form Status</span>
+              <Link href="/" className="text-text-muted hover:text-accent transition-colors">Dashboard</Link>
+              <span className="text-text-faint">/</span>
+              <span className="text-text-primary font-bold">My Form Status</span>
             </nav>
-            <div className="hidden lg:block h-4 w-px bg-[var(--border)] mx-2" />
+            <div className="hidden lg:block h-4 w-px bg-border-color mx-2" />
             <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-[var(--text-primary)] truncate">Submission Tracking</h1>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] text-[10px] font-black uppercase tracking-widest shrink-0">Real-time</span>
+              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-text-primary truncate">Submission Tracking</h1>
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-accent-subtle text-accent text-[10px] font-black uppercase tracking-widest shrink-0">Real-time</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
-             <ThemeToggle />
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -108,53 +106,52 @@ export default function MyFormStatus() {
       <main className="flex-1 p-4 sm:p-8">
         <div className="max-w-5xl mx-auto space-y-8">
           {instances.length === 0 ? (
-            <div className="text-center py-24 rounded-3xl border-2 border-dashed border-[var(--border)] bg-[var(--bg-muted)]">
-              <div className="w-20 h-20 rounded-full bg-[var(--bg-base)] flex items-center justify-center mx-auto mb-6 shadow-sm border border-[var(--border)]">
-                <FileText size={40} className="text-[var(--text-faint)]" />
+            <div className="text-center py-24 rounded-3xl border-2 border-dashed bg-bg-muted" style={{ borderColor: 'var(--border)' }}>
+              <div className="w-20 h-20 rounded-full bg-bg-base flex items-center justify-center mx-auto mb-6 shadow-sm border" style={{ borderColor: 'var(--border)' }}>
+                <FileText size={40} className="text-text-faint" />
               </div>
-              <h3 className="text-xl font-bold text-[var(--text-primary)] mb-1">No Submissions Yet</h3>
-              <p className="text-sm text-[var(--text-muted)]">Forms you submit for approval will appear here.</p>
-              <Link href="/" className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--accent)] text-white font-bold hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-[var(--accent)]/20">
+              <h3 className="text-xl font-bold text-text-primary mb-1">No Submissions Yet</h3>
+              <p className="text-sm text-text-muted">Forms you submit for approval will appear here.</p>
+              <Link href="/" className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-accent text-white font-bold hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-accent/20">
                 Go to Dashboard
               </Link>
             </div>
           ) : (
             <div className="grid gap-6">
               {instances.map((instance) => (
-                <div 
+                <div
                   key={instance.id}
-                  className="group rounded-3xl border p-6 sm:p-8 transition-all hover:shadow-xl hover:shadow-[var(--accent)]/5"
+                  className="group rounded-3xl border p-6 sm:p-8 transition-all hover:shadow-xl hover:shadow-accent/5"
                   style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">
-                        <h3 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
+                        <h3 className="text-lg sm:text-xl font-bold text-text-primary group-hover:text-accent transition-colors">
                           {instance.form.title}
                         </h3>
                         <span className={`px-2 py-0.5 rounded-lg border text-[9px] font-black uppercase tracking-widest ${getStatusColor(instance.status)}`}>
                           {instance.status}
                         </span>
                       </div>
-                      <p className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+                      <p className="text-xs text-text-muted flex items-center gap-2">
                         <Clock size={12} />
-                        Submitted on {new Date(instance.createdAt).toLocaleDateString('en-US', { 
-                          month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                        Submitted on {new Date(instance.createdAt).toLocaleDateString('en-US', {
+                          month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
                         })}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col items-end gap-1.5 min-w-[120px]">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-text-faint">
                           Phase {instance.currentStepIndex} of {instance.totalSteps}
                         </span>
-                        <div className="w-full h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden border border-[var(--border)]">
-                          <div 
-                            className={`h-full transition-all duration-1000 ${
-                              instance.status === 'REJECTED' ? 'bg-red-500' : 
-                              instance.status === 'COMPLETED' ? 'bg-emerald-500' : 'gradient-accent'
-                            }`}
+                        <div className="w-full h-2 bg-bg-muted rounded-full overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                          <div
+                            className={`h-full transition-all duration-1000 ${instance.status === 'REJECTED' ? 'bg-red-500' :
+                                instance.status === 'COMPLETED' ? 'bg-emerald-500' : 'gradient-accent'
+                              }`}
                             style={{ width: `${(instance.currentStepIndex / instance.totalSteps) * 100}%` }}
                           />
                         </div>
@@ -164,47 +161,47 @@ export default function MyFormStatus() {
 
                   {/* ── Timeline Section ── */}
                   <div className="relative space-y-6">
-                    <div className="absolute left-4 top-2 bottom-2 w-px bg-[var(--border)] border-dashed hidden sm:block" />
-                    
-                    {instance.history.map((step, idx) => {
+                    <div className="absolute left-4 top-2 bottom-2 w-px border-dashed hidden sm:block" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--border)' }} />
+
+                    {instance.history.map((step) => {
                       const isComplete = step.status !== 'PENDING';
                       const isRejected = step.status === 'REJECTED';
-                      
+
                       return (
                         <div key={step.id} className="relative flex items-start gap-4 group/step">
                           <div className={`
                             relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-all shadow-sm
-                            ${isRejected ? 'bg-red-500/10 border-red-500 text-red-500' : 
-                              isComplete ? 'bg-emerald-500 border-emerald-500 text-white' : 
-                              'bg-[var(--bg-base)] border-[var(--border)] text-[var(--text-faint)] group-hover/step:border-[var(--accent)]'}
+                            ${isRejected ? 'bg-red-500/10 border-red-500 text-red-500' :
+                              isComplete ? 'bg-emerald-500 border-emerald-500 text-white' :
+                                'bg-bg-base text-text-faint group-hover/step:border-accent'}
                           `}>
-                            {isRejected ? <XCircle size={14} /> : 
-                             isComplete ? <CheckCircle2 size={14} /> : 
-                             <Activity size={14} className="animate-pulse" />}
+                            {isRejected ? <XCircle size={14} /> :
+                              isComplete ? <CheckCircle2 size={14} /> :
+                                <Activity size={14} className="animate-pulse" />}
                           </div>
 
-                          <div className="flex-1 bg-[var(--bg-muted)]/50 rounded-2xl p-4 sm:p-5 border border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-muted)] transition-all">
+                          <div className="flex-1 bg-bg-muted/50 rounded-2xl p-4 sm:p-5 border border-transparent hover:bg-bg-muted transition-all" style={{}} onMouseEnter={(e) => {e.currentTarget.style.borderColor = 'var(--border)'}} onMouseLeave={(e) => {e.currentTarget.style.borderColor = 'transparent'}}>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                              <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-text-primary flex items-center gap-2">
                                 <span className="opacity-40">#{step.stepIndex}</span>
-                                {step.approver} {step.approverRole && <span className="text-[var(--text-faint)] font-medium opacity-100">({step.approverRole})</span>}
+                                {step.approver} {step.approverRole && <span className="text-text-faint font-medium opacity-100">({step.approverRole})</span>}
                                 {!isComplete && (
-                                   <span className="px-1.5 py-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent)] text-[8px] font-black uppercase tracking-[0.1em] ml-2">Next Authority</span>
+                                  <span className="px-1.5 py-0.5 rounded-md bg-accent-subtle text-accent text-[8px] font-black uppercase tracking-widest ml-2">Next Authority</span>
                                 )}
                               </h4>
                               {step.decidedAt && (
-                                <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-tight">
+                                <span className="text-[10px] font-bold text-text-faint uppercase tracking-tight">
                                   {new Date(step.decidedAt).toLocaleString()}
                                 </span>
                               )}
                             </div>
 
                             {step.comments ? (
-                              <div className="p-3 rounded-xl bg-[var(--bg-base)] text-xs text-[var(--text-secondary)] italic border border-[var(--border)] shadow-sm">
-                                "{step.comments}"
+                              <div className="p-3 rounded-xl bg-bg-base text-xs text-text-secondary italic border shadow-sm" style={{ borderColor: 'var(--border)' }}>
+                                &quot;{step.comments}&quot;
                               </div>
                             ) : (
-                              <p className="text-xs text-[var(--text-faint)]">
+                              <p className="text-xs text-text-faint">
                                 {step.status === 'PENDING' ? 'Awaiting evaluation...' : 'No comments provided.'}
                               </p>
                             )}
@@ -214,12 +211,12 @@ export default function MyFormStatus() {
                     })}
 
                     {instance.status === 'COMPLETED' && (
-                        <div className="flex items-center gap-4 text-emerald-500 font-bold text-sm">
-                           <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
-                                <CheckCircle2 size={16} />
-                           </div>
-                           <span>Form Approved and Published!</span>
+                      <div className="flex items-center gap-4 text-emerald-500 font-bold text-sm">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
+                          <CheckCircle2 size={16} />
                         </div>
+                        <span>Form Approved and Published!</span>
+                      </div>
                     )}
                   </div>
                 </div>

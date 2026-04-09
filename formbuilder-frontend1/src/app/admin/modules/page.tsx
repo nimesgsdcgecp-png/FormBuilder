@@ -3,14 +3,12 @@
 import { useState, useEffect } from 'react';
 import { 
   Plus, 
-  Search, 
   RotateCcw, 
   Edit2, 
   Trash2, 
   LayoutGrid, 
   ChevronRight,
   Info,
-  ExternalLink,
   ShieldCheck,
   Check,
   X,
@@ -29,23 +27,46 @@ import {
   MessageSquare,
   Send
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import Link from 'next/link';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
+import { AUTH, MODULES } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 
 
 interface Module {
-  id: number;
+  id: string;
   moduleName: string;
   prefix: string;
   isParent: boolean;
   isSubParent: boolean;
-  parentId: number | null;
-  subParentId: number | null;
+  parentId: string | null;
+  subParentId: string | null;
   menuIconCss: string;
   active: boolean;
+}
+
+function normalizeModules(payload: unknown): Module[] {
+  const raw = extractArray<Record<string, unknown>>(payload, ['modules', 'content', 'items']);
+  return raw
+    .map((item) => {
+      const idRaw = item.id;
+      const id = idRaw == null ? '' : String(idRaw).trim();
+      if (!id) return null;
+      return {
+        id,
+        moduleName: typeof item.moduleName === 'string' ? item.moduleName : '',
+        prefix: typeof item.prefix === 'string' ? item.prefix : '',
+        isParent: Boolean(item.isParent),
+        isSubParent: Boolean(item.isSubParent),
+        parentId: item.parentId == null ? null : String(item.parentId),
+        subParentId: item.subParentId == null ? null : String(item.subParentId),
+        menuIconCss: typeof item.menuIconCss === 'string' ? item.menuIconCss : 'LayoutGrid',
+        active: item.active == null ? true : Boolean(item.active),
+      } satisfies Module;
+    })
+    .filter((m): m is Module => m !== null);
 }
 
 const AVAILABLE_ICONS = [
@@ -56,7 +77,7 @@ const AVAILABLE_ICONS = [
 
 // Helper to render icon by name
 const DynamicIcon = ({ name, size = 20, className = "" }: { name: string, size?: number, className?: string }) => {
-  const IconMap: Record<string, any> = { 
+  const IconMap: Record<string, LucideIcon> = { 
     LayoutDashboard, LayoutGrid, FileEdit, Users, Shield, ShieldCheck, SearchCode, 
     TrendingUp, Settings, History, Bell, FileText, FormInput, Plus, List, 
     MessageSquare, Send 
@@ -77,8 +98,8 @@ export default function ModuleManagementPage() {
     prefix: '',
     isParent: false,
     isSubParent: false,
-    parentId: null as number | null,
-    subParentId: null as number | null,
+    parentId: null as string | null,
+    subParentId: null as string | null,
     menuIconCss: 'LayoutGrid',
     active: true
   });
@@ -86,18 +107,18 @@ export default function ModuleManagementPage() {
   const fetchModules = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/modules', { credentials: 'include' });
+      const res = await fetch(MODULES.LIST, { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json();
+        const data = normalizeModules(await res.json());
         setModules(data);
       }
 
-      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+      const userRes = await fetch(AUTH.ME, { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load modules");
     } finally {
       setIsLoading(false);
@@ -137,14 +158,16 @@ export default function ModuleManagementPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     toast(`Delete this module?`, {
       description: "All associated role mappings will be removed permanently.",
       action: {
         label: "Delete Now",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/v1/modules/${id}`, {
+            // MODULES doesn't have a DELETE constant, so we construct it similar to apiConstants pattern
+            const deleteUrl = `${MODULES.LIST}/${id}`;
+            const res = await fetch(deleteUrl, {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -154,7 +177,7 @@ export default function ModuleManagementPage() {
             } else {
               toast.error("Failed to delete module");
             }
-          } catch (err) {
+          } catch {
             toast.error("An error occurred during deletion");
           }
         }
@@ -174,8 +197,8 @@ export default function ModuleManagementPage() {
 
     try {
       const url = editingModule 
-        ? `http://localhost:8080/api/v1/modules/${editingModule.id}`
-        : 'http://localhost:8080/api/v1/modules';
+        ? `${MODULES.LIST}/${editingModule.id}`
+        : MODULES.LIST;
       
       const method = editingModule ? 'PUT' : 'POST';
 
@@ -193,7 +216,7 @@ export default function ModuleManagementPage() {
       } else {
         toast.error("Failed to save module");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     }
   };
@@ -454,7 +477,7 @@ export default function ModuleManagementPage() {
                           <select 
                             disabled={formData.isParent}
                             value={formData.parentId || ''}
-                            onChange={(e) => setFormData({...formData, parentId: e.target.value ? parseInt(e.target.value) : null, subParentId: null})}
+                            onChange={(e) => setFormData({...formData, parentId: e.target.value || null, subParentId: null})}
                             className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                           >
                              <option value="">(None)</option>
@@ -468,7 +491,7 @@ export default function ModuleManagementPage() {
                           <select 
                             disabled={formData.isParent || formData.isSubParent || !formData.parentId}
                             value={formData.subParentId || ''}
-                            onChange={(e) => setFormData({...formData, subParentId: e.target.value ? parseInt(e.target.value) : null})}
+                            onChange={(e) => setFormData({...formData, subParentId: e.target.value || null})}
                             className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed"
                           >
                              <option value="">(None)</option>

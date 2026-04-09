@@ -2,27 +2,16 @@
  * Root Layout — Next.js App Router Layout
  *
  * Sets up:
- *   - Geist Sans + Geist Mono + Inter fonts
+ *   - Global font CSS variables from globals.css
  *   - Global metadata
  *   - An inline <script> that reads localStorage before first paint
  *     to apply the 'dark' class immediately — preventing FOUC (flash of wrong theme).
  *   - The Sonner <Toaster> for global toast notifications.
  */
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from 'sonner';
 import AppShell from "@/components/AppShell";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Form Builder",
@@ -58,7 +47,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
       >
         <ThemeInitScript />
         <AppShell>

@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.model.entity;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sttl.formbuilder2.model.enums.FieldType;
 import jakarta.persistence.*;
@@ -24,9 +26,9 @@ import java.util.Map;
  * Key fields:
  * - {@code fieldType} — determines which HTML input is rendered on the
  * public form page and which SQL column type is used in the submissions table.
- * - {@code columnName} — the SQL column name auto-generated from the label
+ * - {@code fieldKey} — the SQL column name auto-generated from the label
  * (e.g. "First Name" → "first_name"). Must be unique per version.
- * - {@code ordinalPosition} — the display order of this field on the form.
+ * - {@code displayOrder} — the display order of this field on the form.
  * - {@code validationRules} — stored as JSONB (requires Hibernate's
  * JdbcTypeCode
  * annotation). Contains keys like {@code required}, {@code min}, {@code max},
@@ -34,13 +36,13 @@ import java.util.Map;
  * - {@code options} — serialised JSON string for choice-based fields:
  * Dropdown/Radio — {@code ["Option A","Option B"]}
  * Grid — {@code {"rows":[...],"cols":[...]}}
- * Lookup — {@code {"formId":"3","columnName":"city"}}
+ * Lookup — {@code {"formId":"3","fieldKey":"city"}}
  * - {@code defaultValue} — pre-fills the field for the respondent; stored as
  * a String regardless of field type.
  */
 @Entity
 @Table(name = "form_fields", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "form_version_id", "columnName" })
+        @UniqueConstraint(columnNames = { "form_version_id", "field_key" })
 })
 @Getter
 @Setter
@@ -50,8 +52,8 @@ import java.util.Map;
 public class FormField {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     /**
      * Back-reference to the owning version — hidden from JSON to prevent cycles.
@@ -62,7 +64,7 @@ public class FormField {
     private FormVersion formVersion;
 
     /** Human-readable label shown to the respondent (e.g. "Your Email Address"). */
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(name = "label", nullable = false, columnDefinition = "TEXT")
     private String fieldLabel;
 
     /**
@@ -71,7 +73,7 @@ public class FormField {
      * Unique within a version to prevent duplicate columns.
      */
     @Column(nullable = false, length = 100)
-    private String columnName;
+    private String fieldKey;
 
     /** Determines the HTML input type and the PostgreSQL column type. */
     @Enumerated(EnumType.STRING)
@@ -80,11 +82,11 @@ public class FormField {
 
     /** If true, the submission is rejected if this field is left blank. */
     @Column(nullable = false)
-    private Boolean isMandatory;
+    private Boolean isRequired;
 
     /** Display position on the form canvas — lower numbers appear first. */
     @Column(nullable = false)
-    private Integer ordinalPosition;
+    private Integer displayOrder;
 
     /**
      * Pre-filled value shown to respondents; stored as String for all field types.
@@ -102,12 +104,16 @@ public class FormField {
     @Column(name = "validation_rules", columnDefinition = "jsonb")
     private Map<String, Object> validationRules;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "config_json", columnDefinition = "jsonb")
+    private Map<String, Object> configJson;
+
     /**
      * Stores option data as a JSON string (TEXT column) for choice-based fields.
      * Examples:
      * Dropdown/Radio/Checkboxes — {@code ["Option A","Option B"]}
      * Grid fields — {@code {"rows":["Row1"],"cols":["Col1"]}}
-     * Lookup field — {@code {"formId":"3","columnName":"city"}}
+     * Lookup field — {@code {"formId":"3","fieldKey":"city"}}
      */
     @Column(name = "field_options", columnDefinition = "TEXT")
     private String options;
@@ -121,7 +127,7 @@ public class FormField {
     private String calculationFormula;
 
     /**
-     * The columnName of the parent field if this field is nested (e.g., inside a
+     * The fieldKey of the parent field if this field is nested (e.g., inside a
      * section).
      * If null, the field is at the top level.
      */

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FormField, FormSchema, FormRule } from '@/types/schema';
+import { FormField, FormSchema } from '@/types/schema';
 import { FileText, Download, CheckCircle, UploadCloud, X, Info, ChevronDown, EyeOff, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { SUBMISSIONS, FILES, API_SERVER } from '@/utils/apiConstants';
 
 /** Maps font names to CSS font-family values */
 export const FONT_MAP: Record<string, string> = {
@@ -13,10 +14,85 @@ export const FONT_MAP: Record<string, string> = {
     'System UI': 'system-ui, sans-serif'
 };
 
+type AnswerValue = string | number | boolean | null | string[] | Record<string, unknown>;
+type AnswersMap = Record<string, AnswerValue | undefined>;
+
+function evaluateArithmeticExpression(expression: string): number | null {
+    const compact = expression.replace(/\s+/g, '');
+    if (!compact) return null;
+
+    const tokens = compact.match(/\d*\.?\d+|[()+\-*/]/g);
+    if (!tokens || tokens.join('') !== compact) {
+        return null;
+    }
+
+    let index = 0;
+
+    const parseExpression = (): number => {
+        let value = parseTerm();
+        while (index < tokens.length && (tokens[index] === '+' || tokens[index] === '-')) {
+            const operator = tokens[index++];
+            const nextTerm = parseTerm();
+            value = operator === '+' ? value + nextTerm : value - nextTerm;
+        }
+        return value;
+    };
+
+    const parseTerm = (): number => {
+        let value = parseFactor();
+        while (index < tokens.length && (tokens[index] === '*' || tokens[index] === '/')) {
+            const operator = tokens[index++];
+            const nextFactor = parseFactor();
+            value = operator === '*' ? value * nextFactor : value / nextFactor;
+        }
+        return value;
+    };
+
+    const parseFactor = (): number => {
+        const token = tokens[index++];
+        if (token === undefined) throw new Error('Unexpected end of expression');
+        if (token === '(') {
+            const inner = parseExpression();
+            if (tokens[index++] !== ')') throw new Error('Missing closing parenthesis');
+            return inner;
+        }
+        if (token === '-') {
+            return -parseFactor();
+        }
+        const value = Number(token);
+        if (Number.isNaN(value)) throw new Error('Invalid number token');
+        return value;
+    };
+
+    try {
+        const value = parseExpression();
+        if (index !== tokens.length) return null;
+        return Number.isFinite(value) ? value : null;
+    } catch {
+        return null;
+    }
+}
+
+interface RuntimeConditionNode {
+    type?: 'condition';
+    field?: string;
+    operator?: 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN' | 'CONTAINS';
+    value?: string | number | boolean;
+    valueType?: 'STATIC' | 'FIELD';
+}
+
+interface RuntimeGroupNode {
+    type: 'group';
+    logic?: 'AND' | 'OR';
+    conditions?: RuntimeRuleNode[];
+}
+
+type RuntimeRuleNode = RuntimeConditionNode | RuntimeGroupNode;
+
 interface FormRendererProps {
     schema: FormSchema;
-    initialAnswers?: Record<string, any>;
-    onSubmit?: (answers: Record<string, any>, status: 'RESPONSE_DRAFT' | 'FINAL') => void;
+    initialAnswers?: AnswersMap;
+    onSubmit?: (answers: AnswersMap, status: 'RESPONSE_DRAFT' | 'FINAL') => void;
     submitButtonText?: string;
     isPreview?: boolean;
 }
@@ -28,7 +104,8 @@ export default function FormRenderer({
     submitButtonText = "Submit Response",
     isPreview = false
 }: FormRendererProps) {
-    const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
+    const initialAnswersKey = React.useMemo(() => JSON.stringify(initialAnswers), [initialAnswers]);
+    const [answers, setAnswers] = useState<AnswersMap>(initialAnswers);
     const [lookupData, setLookupData] = useState<Record<string, string[]>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
@@ -36,7 +113,7 @@ export default function FormRenderer({
 
     // Initialize answers from schema defaults if not provided
     useEffect(() => {
-        const defaultAnswers: Record<string, any> = { ...initialAnswers };
+        const defaultAnswers: AnswersMap = { ...initialAnswers };
 
         const processFields = (fields: FormField[]) => {
             fields.forEach(field => {
@@ -64,7 +141,7 @@ export default function FormRenderer({
             if (JSON.stringify(prev) === JSON.stringify(defaultAnswers)) return prev;
             return defaultAnswers;
         });
-    }, [schema.id, schema.fields.length, JSON.stringify(initialAnswers)]);
+    }, [schema.id, schema.fields, initialAnswers, initialAnswersKey]);
 
     // Handle Lookup Fields
     useEffect(() => {
@@ -83,7 +160,7 @@ export default function FormRenderer({
             Promise.all(
                 lookups.map(f => {
                     const opts = f.options as { formId: string; columnName: string };
-                    return fetch(`http://localhost:8080/api/v1/forms/${opts.formId}/columns/${opts.columnName}/values`)
+                    return fetch(SUBMISSIONS.LOOKUP_VALUES(opts.formId, opts.columnName))
                         .then(res => res.json())
                         .then(values => ({ col: f.columnName, values }))
                         .catch(() => ({ col: f.columnName, values: [] }));
@@ -96,7 +173,7 @@ export default function FormRenderer({
         }
     }, [schema.fields]);
 
-    const handleInputChange = (columnName: string, value: any) => {
+    const handleInputChange = (columnName: string, value: AnswerValue) => {
         setAnswers(prev => ({ ...prev, [columnName]: value }));
         // Always try to clear the error for this field
         setErrors(prev => {
@@ -146,9 +223,8 @@ export default function FormRenderer({
                 });
 
                 if (/^[0-9+\-*/().\s]*$/.test(formula)) {
-                    // eslint-disable-next-line no-eval
-                    const result = Number(eval(formula));
-                    if (!isNaN(result) && isFinite(result)) {
+                    const result = evaluateArithmeticExpression(formula);
+                    if (result !== null && !isNaN(result) && isFinite(result)) {
                         const rounded = Math.round(result * 100) / 100;
                         if (newAnswers[field.columnName] !== rounded) {
                             newAnswers[field.columnName] = rounded;
@@ -156,8 +232,8 @@ export default function FormRenderer({
                         }
                     }
                 }
-            } catch (e) {
-                console.error(`Calculation failed for ${field.columnName}:`, e);
+            } catch (err) {
+                console.error(`Calculation failed for ${field.columnName}:`, err);
             }
         });
 
@@ -176,13 +252,13 @@ export default function FormRenderer({
         };
 
         const allFields = getAllFields(schema.fields);
-        let visibleCols = new Set(allFields.map(f => f.columnName));
-        let disabledCols = new Set<string>();
-        let enabledByRuleCols = new Set<string>();
-        let disabledByRuleCols = new Set<string>();
-        let readOnlyCols = new Set<string>();
-        let dynamicallyRequiredCols = new Set<string>();
-        let customErrors: string[] = [];
+        const visibleCols = new Set(allFields.map(f => f.columnName));
+        const disabledCols = new Set<string>();
+        const enabledByRuleCols = new Set<string>();
+        const disabledByRuleCols = new Set<string>();
+        const readOnlyCols = new Set<string>();
+        const dynamicallyRequiredCols = new Set<string>();
+        const customErrors: string[] = [];
 
         const rules = schema.rules || [];
 
@@ -207,16 +283,23 @@ export default function FormRenderer({
         rules.forEach(rule => {
             if (!rule.conditions || rule.conditions.length === 0) return;
 
-            const evaluateEntry = (entry: any): boolean => {
-                if (entry.type === 'condition') {
-                    const userAnswer = answers[entry.field];
+            const evaluateEntry = (entry: RuntimeRuleNode): boolean => {
+                if (entry.type === 'group') {
+                    const logic = entry.logic || 'AND';
+                    const results = (entry.conditions || []).map((subEntry) => evaluateEntry(subEntry));
+                    return logic === 'OR' ? results.some((r) => r === true) : results.every((r) => r === true);
+                }
+
+                const condition = entry as RuntimeConditionNode;
+                if (condition.field && condition.operator) {
+                    const userAnswer = answers[condition.field];
                     // A missing or blank answer always returns false
                     if (userAnswer === undefined || userAnswer === "" || userAnswer === null) return false;
 
                     // Resolve the target value: either a static value or another field's value
-                    let targetValue = entry.value;
-                    if (entry.valueType === 'FIELD' && typeof entry.value === 'string') {
-                        targetValue = answers[entry.value];
+                    let targetValue: AnswerValue | undefined = condition.value as AnswerValue | undefined;
+                    if (condition.valueType === 'FIELD' && typeof condition.value === 'string') {
+                        targetValue = answers[condition.value];
                         // If the target field is empty, the condition fails
                         if (targetValue === undefined || targetValue === "" || targetValue === null) return false;
                     }
@@ -227,7 +310,7 @@ export default function FormRenderer({
                     const numVal2 = Number(strVal2);
                     const isNumeric = !isNaN(numVal1) && !isNaN(numVal2) && strVal1 !== "" && strVal2 !== "";
 
-                    switch (entry.operator) {
+                    switch (condition.operator) {
                         case 'EQUALS': return isNumeric ? numVal1 === numVal2 : strVal1 === strVal2;
                         case 'NOT_EQUALS': return isNumeric ? numVal1 !== numVal2 : strVal1 !== strVal2;
                         case 'GREATER_THAN': return isNumeric ? numVal1 > numVal2 : (strVal1 > strVal2);
@@ -235,17 +318,13 @@ export default function FormRenderer({
                         case 'CONTAINS': return strVal1.includes(strVal2);
                         default: return false;
                     }
-                } else if (entry.type === 'group') {
-                    const logic = entry.logic || 'AND';
-                    const results = (entry.conditions || []).map((subEntry: any) => evaluateEntry(subEntry));
-                    return logic === 'OR' ? results.some((r: boolean) => r === true) : results.every((r: boolean) => r === true);
                 }
                 return false;
             };
 
             const ruleLogic = rule.conditionLogic || 'AND';
-            const ruleResults = rule.conditions.map(entry => evaluateEntry(entry));
-            const isMatch = ruleLogic === 'OR' ? ruleResults.some((r: boolean) => r === true) : ruleResults.every((r: boolean) => r === true);
+            const ruleResults = rule.conditions.map(entry => evaluateEntry(entry as RuntimeRuleNode));
+            const isMatch = ruleLogic === 'OR' ? ruleResults.some((r) => r === true) : ruleResults.every((r) => r === true);
 
             if (isMatch) {
                 rule.actions.forEach((action) => {
@@ -536,7 +615,7 @@ export default function FormRenderer({
                         </div>
                         <ul className="text-xs list-disc pl-5 space-y-1" style={{ color: '#dc2626' }}>
                             {customErrors.map((err, idx) => <li key={`custom-${idx}`}>{err}</li>)}
-                            {Object.entries(errors).map(([col, err], idx) => (
+                            {Object.entries(errors).map(([, err], idx) => (
                                 <li key={`field-${idx}`}>{err}</li>
                             ))}
                         </ul>
@@ -616,7 +695,7 @@ export default function FormRenderer({
 const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('http://localhost:8080/api/v1/upload', { method: 'POST', body: formData });
+    const res = await fetch(FILES.UPLOAD, { method: 'POST', body: formData });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
     return data.url;
@@ -633,9 +712,9 @@ const MultiSelectDropdown = ({
     themeColor
 }: { 
     field: FormField; 
-    value: any; 
+    value: unknown; 
     listOptions: string[]; 
-    onChange: (key: string, val: any) => void;
+    onChange: (key: string, val: AnswerValue) => void;
     isDisabled: boolean;
     isReadOnly: boolean;
     hasError: boolean;
@@ -644,7 +723,7 @@ const MultiSelectDropdown = ({
     const [isOpen, setIsOpen] = React.useState(false);
     const [search, setSearch] = React.useState('');
     const dropdownRef = React.useRef<HTMLDivElement>(null);
-    const currentValues = Array.isArray(value) ? value : (value ? [value] : []);
+    const currentValues = Array.isArray(value) ? value.map((v) => String(v)) : (value ? [String(value)] : []);
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -764,8 +843,8 @@ const MultiSelectDropdown = ({
 
 function renderInput(
     field: FormField,
-    value: any,
-    onChange: (key: string, val: any) => void,
+    value: unknown,
+    onChange: (key: string, val: AnswerValue) => void,
     lookupOptions: string[] = [],
     isPreview: boolean = false,
     isDisabled: boolean = false,
@@ -786,7 +865,7 @@ function renderInput(
         } as React.CSSProperties,
         className: `block w-full rounded-lg border p-3 text-sm transition-all focus:outline-none focus:ring-2 ${hasError ? 'focus:ring-red-500' : 'focus:ring-indigo-500'}`,
         value: (value !== undefined && value !== null) ? value : '',
-        onChange: (e: any) => onChange(field.columnName, e.target.value),
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => onChange(field.columnName, e.target.value),
         minLength: field.validation?.minLength,
         maxLength: field.validation?.maxLength,
         pattern: field.validation?.pattern,
@@ -1079,6 +1158,29 @@ function renderInput(
             );
 
         case 'FILE':
+            // File size limit: 5MB (matches backend application.properties)
+            const MAX_FILE_SIZE = 5 * 1024 * 1024;
+            // Allowed MIME types for security
+            const ALLOWED_FILE_TYPES = [
+                'application/pdf',
+                'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/plain', 'text/csv'
+            ];
+            
+            const validateFile = (file: File): { valid: boolean; error?: string } => {
+                if (file.size > MAX_FILE_SIZE) {
+                    return { valid: false, error: `File size exceeds 5MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB)` };
+                }
+                if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+                    return { valid: false, error: `File type not allowed: ${file.type || 'unknown'}. Allowed: PDF, images, Word, Excel, text files.` };
+                }
+                return { valid: true };
+            };
+            
             return (
                 <div className="space-y-4">
                     {isPreview ? (
@@ -1097,16 +1199,26 @@ function renderInput(
                                     <input
                                         id={`file-input-${field.columnName}`}
                                         type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt,.csv"
                                         className="hidden"
                                         onChange={async (e) => {
                                             const file = e.target.files?.[0];
                                             if (!file) return;
+                                            
+                                            // Client-side validation before upload
+                                            const validation = validateFile(file);
+                                            if (!validation.valid) {
+                                                toast.error(validation.error);
+                                                e.target.value = ''; // Clear the input
+                                                return;
+                                            }
+                                            
                                             const toastId = toast.loading("Uploading file...");
                                             try {
                                                 const url = await uploadFile(file);
                                                 onChange(field.columnName, url);
                                                 toast.success("File uploaded successfully", { id: toastId });
-                                            } catch (err) {
+                                            } catch {
                                                 toast.error("Upload failed", { id: toastId });
                                             }
                                         }}
@@ -1121,7 +1233,7 @@ function renderInput(
                                         Click to upload
                                     </p>
                                     <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                                        PDF, PNG, JPG or DOC up to 10MB
+                                        PDF, Images, Word, Excel up to 5MB
                                     </p>
                                 </div>
                             ) : (
@@ -1146,7 +1258,7 @@ function renderInput(
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <a
-                                            href={`http://localhost:8080${value}`}
+                                            href={`${API_SERVER}${value}`}
                                             download
                                             target="_blank"
                                             rel="noopener noreferrer"

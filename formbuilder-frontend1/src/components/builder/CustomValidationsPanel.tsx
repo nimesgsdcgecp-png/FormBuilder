@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { PlusCircle, Trash2, Info, ChevronDown } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { PlusCircle, Trash2, Info, ChevronDown, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { validateExpression } from '@/utils/expressionValidator';
 
 export interface ValidationRule {
   id: string;
@@ -25,6 +26,15 @@ const SCOPE_OPTIONS = [
 
 export default function CustomValidationsPanel({ fields, rules, onChange }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Memoize field column names for validation
+  const fieldColumnNames = useMemo(() => fields.map(f => f.columnName), [fields]);
+
+  // Get validation result for a rule's expression
+  const getExpressionValidation = (expression: string) => {
+    if (!expression) return null;
+    return validateExpression(expression, fieldColumnNames);
+  };
 
   const addRule = () => {
     const newRule: ValidationRule = {
@@ -186,19 +196,83 @@ export default function CustomValidationsPanel({ fields, rules, onChange }: Prop
                       <label className="text-[10px] font-black uppercase tracking-[0.15em] opacity-50">Condition Expression</label>
                       <span className="text-[9px] font-mono text-[var(--text-faint)]">Logic Engine v1.0</span>
                     </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={rule.expression}
-                        onChange={e => updateRule(rule.id, { expression: e.target.value })}
-                        placeholder='e.g. quantity > 10 && total < 1000'
-                        className="w-full text-xs font-mono font-bold rounded-xl pl-4 pr-10 py-3 border bg-[var(--bg-muted)] focus:ring-2 focus:ring-blue-500 outline-none"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                      />
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--accent)] opacity-50">
-                        <Info size={14} />
-                      </div>
-                    </div>
+                    {(() => {
+                      const validation = getExpressionValidation(rule.expression);
+                      const hasErrors = validation && !validation.valid;
+                      const hasWarnings = validation && validation.warnings.length > 0;
+                      const isValid = validation && validation.valid && validation.warnings.length === 0;
+                      
+                      return (
+                        <>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={rule.expression}
+                              onChange={e => updateRule(rule.id, { expression: e.target.value })}
+                              placeholder='e.g. quantity > 10 && total < 1000'
+                              className="w-full text-xs font-mono font-bold rounded-xl pl-4 pr-10 py-3 border bg-[var(--bg-muted)] focus:ring-2 outline-none transition-all"
+                              style={{ 
+                                borderColor: hasErrors ? '#ef4444' : hasWarnings ? '#f59e0b' : isValid ? '#22c55e' : 'var(--border)', 
+                                color: 'var(--text-primary)' 
+                              }}
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              {hasErrors ? (
+                                <AlertCircle size={14} className="text-red-500" />
+                              ) : hasWarnings ? (
+                                <AlertCircle size={14} className="text-amber-500" />
+                              ) : isValid ? (
+                                <CheckCircle2 size={14} className="text-green-500" />
+                              ) : (
+                                <Info size={14} className="text-[var(--accent)] opacity-50" />
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Validation errors */}
+                          {hasErrors && (
+                            <div className="flex flex-col gap-1 mt-1.5">
+                              {validation.errors.map((err, i) => (
+                                <div key={i} className="flex items-center gap-1.5 text-[10px] text-red-500">
+                                  <AlertCircle size={10} />
+                                  <span>{err.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Validation warnings (unknown fields) */}
+                          {hasWarnings && !hasErrors && (
+                            <div className="flex flex-col gap-1 mt-1.5">
+                              {validation.warnings.map((warn, i) => (
+                                <div key={i} className="flex items-center gap-1.5 text-[10px] text-amber-600">
+                                  <AlertCircle size={10} />
+                                  <span>{warn.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Referenced fields display */}
+                          {validation && validation.fieldReferences.length > 0 && !hasErrors && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              <span className="text-[9px] text-[var(--text-faint)]">References:</span>
+                              {validation.fieldReferences.map(ref => {
+                                const isKnown = fieldColumnNames.includes(ref);
+                                return (
+                                  <span 
+                                    key={ref}
+                                    className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${isKnown ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                                  >
+                                    {ref}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1.5">

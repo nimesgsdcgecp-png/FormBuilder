@@ -1,15 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
+import {
   Shield, 
-  Plus, 
   RotateCcw, 
   Check, 
-  X, 
   Save,
-  Search,
-  Filter,
   ChevronDown,
   FolderOpen,
   Folder,
@@ -17,56 +13,93 @@ import {
   LayoutGrid
 } from 'lucide-react';
 import { toast } from 'sonner';
-import Link from 'next/link';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
+import { AUTH, ADMIN_ROLES, MODULES, ROLE_MODULES } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 interface Role {
-  id: number;
+  id: string | number;
   name: string;
   description: string;
 }
 
+interface RolesResponse {
+  content?: Role[];
+}
+
+function normalizeRoles(payload: unknown): Role[] {
+  return extractArray<Role>(payload, ['roles', 'content', 'items']);
+}
+
 interface Module {
-  id: number;
+  id: string;
   moduleName: string;
   isParent: boolean;
   isSubParent: boolean;
-  parentId: number | null;
-  subParentId: number | null;
+  parentId: string | null;
+  subParentId: string | null;
+}
+
+function normalizeModules(payload: unknown): Module[] {
+  const raw = extractArray<Record<string, unknown>>(payload, ['modules', 'content', 'items']);
+  return raw
+    .map((item) => {
+      const idRaw = item.id;
+      const id = idRaw == null ? '' : String(idRaw).trim();
+      if (!id) return null;
+
+      const parentIdRaw = item.parentId == null ? null : String(item.parentId).trim();
+      const subParentIdRaw = item.subParentId == null ? null : String(item.subParentId).trim();
+
+      return {
+        id,
+        moduleName: typeof item.moduleName === 'string' ? item.moduleName : '',
+        isParent: Boolean(item.isParent),
+        isSubParent: Boolean(item.isSubParent),
+        parentId: parentIdRaw ? parentIdRaw : null,
+        subParentId: subParentIdRaw ? subParentIdRaw : null,
+      } satisfies Module;
+    })
+    .filter((item): item is Module => item !== null);
 }
 
 export default function RoleModuleMappingPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [assignedModuleIds, setAssignedModuleIds] = useState<number[]>([]);
+  const [assignedModuleIds, setAssignedModuleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
-  const [expandedParents, setExpandedParents] = useState<number[]>([]);
-  const [expandedSubParents, setExpandedSubParents] = useState<number[]>([]);
+  const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [expandedSubParents, setExpandedSubParents] = useState<string[]>([]);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
       const [rolesRes, modulesRes, userRes] = await Promise.all([
-        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/modules', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' })
+        fetch(ADMIN_ROLES.LIST, { credentials: 'include' }),
+        fetch(MODULES.LIST, { credentials: 'include' }),
+        fetch(AUTH.ME, { credentials: 'include' })
       ]);
-      const rolesData = await rolesRes.json();
-      const modulesData = await modulesRes.json();
+      if (!rolesRes.ok) toast.error("Roles restricted: Access denied.");
+      if (!modulesRes.ok) toast.error("Modules restricted: Access denied.");
+
+      const rolesData = rolesRes.ok ? (await rolesRes.json()) as Role[] | RolesResponse : [];
+      const modulesData = modulesRes.ok ? await modulesRes.json() : [];
       
-      setRoles(rolesData.content || rolesData);
-      setModules(modulesData);
+      const normalizedRoles = normalizeRoles(rolesData);
+      const normalizedModules = normalizeModules(modulesData);
+      setRoles(normalizedRoles);
+      setModules(normalizedModules);
 
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
       }
-    } catch (err) {
-      toast.error("Failed to load mapping data");
+    } catch (error) {
+      console.error("Mapping fetch error:", error);
+      toast.error("Failed to load mapping data. Check your connectivity.");
     } finally {
       setIsLoading(false);
     }
@@ -76,14 +109,17 @@ export default function RoleModuleMappingPage() {
     fetchData();
   }, []);
 
-  const fetchAssignments = async (roleId: number) => {
+  const fetchAssignments = async (roleId: string | number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/v1/roles/${roleId}/modules`, { credentials: 'include' });
+      const res = await fetch(ROLE_MODULES.GET(roleId.toString()), { credentials: 'include' });
       if (res.ok) {
-        const data: Module[] = await res.json();
-        setAssignedModuleIds(data.map(m => Number(m.id)));
+        const data = normalizeModules(await res.json());
+        setAssignedModuleIds(data.map((m) => m.id));
+      } else {
+        toast.error("Assigned modules restricted: Access denied.");
       }
-    } catch (err) {
+    } catch (error) {
+      console.error("Assignment fetch error:", error);
       toast.error("Failed to load role assignments");
     }
   };
@@ -93,15 +129,15 @@ export default function RoleModuleMappingPage() {
     fetchAssignments(role.id);
   };
 
-  const toggleModule = (moduleId: number) => {
+  const toggleModule = (moduleId: string) => {
     setAssignedModuleIds(prev => {
       const isSelected = prev.includes(moduleId);
-      let next = [...prev];
+      const next = [...prev];
 
       if (isSelected) {
         // Deselecting: Remove module and all its recursive children
-        const toRemove = new Set<number>([moduleId]);
-        const findChildren = (pid: number, isSub: boolean) => {
+        const toRemove = new Set<string>([moduleId]);
+        const findChildren = (pid: string, isSub: boolean) => {
           modules.forEach(m => {
             if (isSub && m.subParentId === pid) {
               toRemove.add(m.id);
@@ -118,7 +154,7 @@ export default function RoleModuleMappingPage() {
         return next.filter(id => !toRemove.has(id));
       } else {
         // Selecting: Add module and all its parents
-        const toAdd = new Set<number>([moduleId]);
+        const toAdd = new Set<string>([moduleId]);
         const m = modules.find(mod => mod.id === moduleId);
         if (m) {
           if (m.subParentId) {
@@ -141,7 +177,7 @@ export default function RoleModuleMappingPage() {
     if (!selectedRole) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`http://localhost:8080/api/v1/roles/${selectedRole.id}/modules`, {
+      const res = await fetch(ROLE_MODULES.ASSIGN(selectedRole.id.toString()), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -152,7 +188,7 @@ export default function RoleModuleMappingPage() {
       } else {
         toast.error("Failed to update mappings");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsSaving(false);
@@ -163,7 +199,7 @@ export default function RoleModuleMappingPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-main)' }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-(--accent) border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Loading Mapping Tool...</p>
         </div>
       </div>
@@ -185,15 +221,15 @@ export default function RoleModuleMappingPage() {
       {/* ── Toolbar ── */}
       <div className="sticky top-16 z-20 py-3 px-4 sm:px-8 border-b flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4" style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}>
            <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-            <div className="flex bg-(--bg-base) p-1 rounded-xl border border-(--border) shrink-0">
-              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-bold text-(--accent) bg-(--accent-subtle) rounded-lg whitespace-nowrap">
+            <div className="flex bg-bg-base p-1 rounded-xl border shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2 px-3 py-1 text-[10px] sm:text-xs font-bold text-accent bg-accent-subtle rounded-lg whitespace-nowrap">
                 <ShieldCheck size={14} />
                 <span className="hidden xs:inline">{roles.length} Roles Identified</span>
                 <span className="xs:hidden">{roles.length}R</span>
               </div>
             </div>
-            <div className="hidden sm:block h-6 w-px bg-(--border)" />
-            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-(--text-faint) truncate">
+            <div className="hidden sm:block h-6 w-px bg-border-color" />
+            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-text-faint truncate">
               <LayoutGrid size={12} className="shrink-0" />
               <span className="truncate">{modules.length} Available Modules</span>
             </div>
@@ -210,10 +246,11 @@ export default function RoleModuleMappingPage() {
                 {isSaving ? 'Saving...' : 'Save Mappings'}
               </button>
             )}
-            <div className="hidden sm:block h-6 w-px bg-(--border) mx-1" />
+            <div className="hidden sm:block h-6 w-px bg-border-color mx-1" />
             <button 
               onClick={fetchData} 
-              className="p-2 rounded-xl bg-(--bg-base) border border-(--border) hover:bg-(--bg-muted) text-(--text-muted) transition-all shadow-sm"
+              className="p-2 rounded-xl bg-bg-base border hover:bg-bg-muted text-text-muted transition-all shadow-sm"
+              style={{ borderColor: 'var(--border)' }}
               title="Refresh"
             >
               <RotateCcw size={16} />
@@ -225,7 +262,7 @@ export default function RoleModuleMappingPage() {
          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Roles Selection */}
             <div className="space-y-4">
-               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-(--text-faint) ml-2">Select System Role</h2>
+               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-text-faint ml-2">Select System Role</h2>
                <div className="space-y-2">
                   {roles.map(role => (
                     <button
@@ -233,12 +270,12 @@ export default function RoleModuleMappingPage() {
                       onClick={() => handleSelectRole(role)}
                       className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group ${
                         selectedRole?.id === role.id 
-                          ? 'bg-(--accent-subtle) border-(--accent) text-(--accent)' 
-                          : 'bg-(--card-bg) border-(--card-border) hover:border-(--text-faint)'
+                          ? 'bg-accent-subtle border-accent text-accent' 
+                          : 'bg-card-bg border-card-border hover:border-text-faint'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                         <Shield size={18} className={selectedRole?.id === role.id ? 'text-(--accent)' : 'text-slate-400'} />
+                         <Shield size={18} className={selectedRole?.id === role.id ? 'text-accent' : 'text-slate-400'} />
                          <span className="font-medium text-sm tracking-tight">{role.name}</span>
                       </div>
                       {selectedRole?.id === role.id && <Check size={16} />}
@@ -250,7 +287,7 @@ export default function RoleModuleMappingPage() {
             {/* Modules Mapping */}
             <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-(--text-faint) ml-1">
+                  <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-text-faint ml-1">
                     {selectedRole ? `Modules for ${selectedRole.name}` : 'Select a role to map modules'}
                   </h2>
                   {selectedRole && (
@@ -273,9 +310,9 @@ export default function RoleModuleMappingPage() {
                       const subItems = modules.filter(m => m.parentId === parent.id);
 
                       return (
-                        <div key={parent.id} className="rounded-2xl border bg-(--card-bg) overflow-hidden" style={{ borderColor: 'var(--card-border)' }}>
+                        <div key={parent.id} className="rounded-2xl border bg-card-bg overflow-hidden" style={{ borderColor: 'var(--card-border)' }}>
                           <div 
-                            className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${isExpanded ? 'bg-(--bg-muted)' : ''}`}
+                            className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${isExpanded ? 'bg-bg-muted' : ''}`}
                             onClick={() => setExpandedParents(prev => isExpanded ? prev.filter(id => id !== parent.id) : [...prev, parent.id])}
                           >
                              <div className="flex items-center gap-4">
@@ -286,20 +323,20 @@ export default function RoleModuleMappingPage() {
                                    {isSelected && <Check className="text-white" size={16} strokeWidth={4} />}
                                 </button>
                                 <div className="flex items-center gap-3">
-                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-(--accent-subtle) text-(--accent)' : 'bg-slate-50 text-slate-400'}`}>
+                                   <div className={`p-2 rounded-xl ${isSelected ? 'bg-accent-subtle text-accent' : 'bg-slate-50 text-slate-400'}`}>
                                       {isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
                                    </div>
                                    <div className="flex flex-col">
-                                      <span className="font-medium text-sm text-(--text-primary)">{parent.moduleName}</span>
-                                      <span className="text-[10px] text-(--text-faint) font-normal uppercase tracking-wider">Parent Directory</span>
+                                      <span className="font-medium text-sm text-text-primary">{parent.moduleName}</span>
+                                      <span className="text-[10px] text-text-faint font-normal uppercase tracking-wider">Parent Directory</span>
                                    </div>
                                 </div>
                              </div>
-                             <ChevronDown size={18} className={`text-(--text-faint) transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                             <ChevronDown size={18} className={`text-text-faint transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                           </div>
 
                           {isExpanded && (
-                            <div className="border-t border-(--border) bg-(--bg-base) p-4 space-y-3">
+                            <div className="border-t bg-bg-base p-4 space-y-3" style={{ borderColor: 'var(--border)' }}>
                                {!isSelected ? (
                                  <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                     <ShieldCheck className="text-slate-300 mb-2" size={24} />
@@ -313,9 +350,9 @@ export default function RoleModuleMappingPage() {
                                      const leafItems = modules.filter(m => m.subParentId === subParent.id);
 
                                      return (
-                                       <div key={subParent.id} className="rounded-xl border border-(--border) overflow-hidden bg-white/50">
+                                       <div key={subParent.id} className="rounded-xl border overflow-hidden bg-white/50" style={{ borderColor: 'var(--border)' }}>
                                           <div 
-                                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-(--bg-muted) transition-colors"
+                                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-bg-muted transition-colors"
                                             onClick={() => setExpandedSubParents(prev => isSubExpanded ? prev.filter(id => id !== subParent.id) : [...prev, subParent.id])}
                                           >
                                              <div className="flex items-center gap-3">
@@ -328,7 +365,7 @@ export default function RoleModuleMappingPage() {
                                                 <span className="font-medium text-xs">{subParent.moduleName}</span>
                                                 <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 px-2 py-0.5 bg-slate-100 rounded">Sub Category</span>
                                              </div>
-                                             <ChevronDown size={14} className={`text-(--text-faint) transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
+                                             <ChevronDown size={14} className={`text-text-faint transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
                                           </div>
 
                                           {isSubExpanded && (
@@ -350,7 +387,7 @@ export default function RoleModuleMappingPage() {
                                                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all focus:outline-none ${assignedModuleIds.includes(leaf.id) ? 'bg-blue-600 border-blue-600 shadow-sm' : 'border-slate-200 bg-white group-hover:border-blue-400'}`}>
                                                             {assignedModuleIds.includes(leaf.id) && <Check className="text-white" size={14} strokeWidth={4} />}
                                                          </div>
-                                                         <span className="text-[11px] font-normal text-(--text-muted)">{leaf.moduleName}</span>
+                                                         <span className="text-[11px] font-normal text-text-muted">{leaf.moduleName}</span>
                                                       </label>
                                                    ))}
                                                  </div>
@@ -388,11 +425,11 @@ export default function RoleModuleMappingPage() {
                   </div>
                 ) : (
                   <div className="h-100 flex flex-col items-center justify-center border-2 border-dashed rounded-[3rem] p-12 text-center" style={{ borderColor: 'var(--border)', background: 'var(--card-bg)' }}>
-                     <div className="w-20 h-20 rounded-full bg-(--bg-muted) flex items-center justify-center mb-6">
-                        <ShieldCheck className="text-(--text-faint)" size={40} />
+                     <div className="w-20 h-20 rounded-full bg-bg-muted flex items-center justify-center mb-6">
+                        <ShieldCheck className="text-text-faint" size={40} />
                      </div>
                      <h3 className="text-lg font-bold tracking-tight mb-2">Access Control Center</h3>
-                     <p className="max-w-xs text-xs font-medium text-(--text-muted) leading-relaxed">
+                     <p className="max-w-xs text-xs font-medium text-text-muted leading-relaxed">
                         Select a user role from the left panel to begin mapping sidebar modules and managing system access.
                      </p>
                   </div>

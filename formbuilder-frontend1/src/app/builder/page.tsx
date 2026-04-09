@@ -9,7 +9,7 @@
  *   - Right: PropertiesPanel (field properties editor — only in EDITOR tab)
  */
 
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext,
@@ -23,24 +23,79 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useFormStore } from '@/store/useFormStore';
-import { FieldType } from '@/types/schema';
-import { saveForm, updateForm, deleteForm } from '@/services/api';
+import { FieldType, FormField, FormSchema } from '@/types/schema';
+import { saveForm, updateForm } from '@/services/api';
 import { toast } from 'sonner';
 import LogicPanel from '@/components/builder/LogicPanel';
-import CustomValidationsPanel, { ValidationRule } from '@/components/builder/CustomValidationsPanel';
-import Header from '@/components/Header';
+import CustomValidationsPanel from '@/components/builder/CustomValidationsPanel';
+import { validateFormCode, sanitizeFormCode } from '@/utils/codeValidation';
 import { usePermissions } from '@/hooks/usePermissions';
-import { ArrowLeft, Archive, GitBranch, Layout, Link2, Save, Palette, FileText, User, ChevronRight, Check, Search, ShieldAlert, Plus, Settings2 } from 'lucide-react';
+import { Archive, GitBranch, Layout, Link2, Save, Palette, Check, ShieldAlert, Plus, Settings2, Lock, AlertCircle } from 'lucide-react';
+import { AUTH, FORMS, WORKFLOW } from '@/utils/apiConstants';
 
 import Sidebar, { FIELD_TYPES } from '@/components/builder/Sidebar';
 import { SidebarBtnOverlay } from '@/components/builder/DraggableSidebarBtn';
 import Canvas from '@/components/builder/Canvas';
 import PropertiesPanel from '@/components/builder/PropertiesPanel';
 import { SortableField } from '@/components/builder/SortableField';
-import ThemeToggle from '@/components/ThemeToggle';
-import Link from 'next/link';
-import { Eye, ExternalLink } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import VersionsPanel from '@/components/builder/VersionsPanel';
+
+interface WorkflowUser {
+  id: string | number;
+  username: string;
+  roles: string[];
+}
+
+interface BackendValidationRule {
+  id?: string;
+  scope?: 'FORM' | 'FIELD';
+  fieldKey?: string;
+  expression?: string;
+  errorMessage?: string;
+  executionOrder?: number;
+}
+
+interface BackendField {
+  id: string | number;
+  type: FieldType;
+  label: string;
+  columnName: string;
+  defaultValue?: string;
+  options?: unknown;
+  required?: boolean;
+  validation?: Record<string, unknown>;
+  placeholder?: string;
+  calculationFormula?: string;
+  helpText?: string;
+  isHidden?: boolean;
+  isReadOnly?: boolean;
+  isDisabled?: boolean;
+  isMultiSelect?: boolean;
+  children?: BackendField[];
+}
+
+interface BackendVersion {
+  isActive?: boolean;
+  versionNumber?: number;
+  rules?: unknown;
+  fields: BackendField[];
+  formValidations?: BackendValidationRule[];
+}
+
+interface BackendFormResponse {
+  id: number;
+  title: string;
+  code?: string;
+  codeLocked?: boolean;
+  description?: string;
+  allowEditResponse?: boolean;
+  status?: FormSchema['status'];
+  publicShareToken?: string;
+  themeColor?: string;
+  themeFont?: string;
+  versions: BackendVersion[];
+}
 
 function BuilderContent() {
   const router = useRouter();
@@ -57,23 +112,20 @@ function BuilderContent() {
   const [activeCanvasItemId, setActiveCanvasItemId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'EDITOR' | 'LOGIC' | 'VALIDATIONS' | 'VERSIONS'>('EDITOR');
-  const [username, setUsername] = useState<string | null>(null);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<'PALETTE' | 'CANVAS' | 'PROPERTIES'>('CANVAS');
   const [initialState, setInitialState] = useState<string>('');
   const isDirty = initialState !== JSON.stringify({ schema });
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [codeValidationError, setCodeValidationError] = useState<string | null>(null);
   const { hasPermission, assignments } = usePermissions();
-  const isAdminOrBuilder = assignments.some((a: any) => 
+  const isAdminOrBuilder = assignments.some((a) =>
     ['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'ADMINISTRATOR'].includes(a.role.name)
   );
 
   // Workflow Modal State
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [workflowType, setWorkflowType] = useState<'NORMAL' | 'LEVEL_1' | 'LEVEL_2'>('NORMAL');
-  const [availableBuilders, setAvailableBuilders] = useState<any[]>([]);
-  const [availableCustomApprovers, setAvailableCustomApprovers] = useState<any[]>([]);
+  const [availableBuilders, setAvailableBuilders] = useState<WorkflowUser[]>([]);
+  const [availableCustomApprovers, setAvailableCustomApprovers] = useState<WorkflowUser[]>([]);
   const [selectedBuilderId, setSelectedBuilderId] = useState<string>('');
   const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
 
@@ -81,36 +133,20 @@ function BuilderContent() {
     // 1. Check Auth first. If we are just creating a new form, we still need to be logged in.
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/v1/auth/me', {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          router.push('/login');
-          return;
-        }
-        const data = await response.json();
-        setUsername(data.username);
-      } catch (err) {
+        await fetch(AUTH.ME, { credentials: 'include' });
+      } catch {
         router.push('/login');
-        return;
       }
     };
     checkAuth();
 
-    // Close profile dropdown on click outside
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
 
     if (!editFormId) {
       resetForm();
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      return;
     }
 
-    fetch(`http://localhost:8080/api/v1/forms/${editFormId}`, { credentials: 'include' })
+    fetch(FORMS.GET(editFormId), { credentials: 'include' })
       .then(res => {
         if (res.status === 401) {
           router.push('/login');
@@ -118,7 +154,8 @@ function BuilderContent() {
         }
         return res.json();
       })
-      .then(data => {
+      .then((data: BackendFormResponse) => {
+        const loadedStatus: NonNullable<FormSchema['status']> = data.status ?? 'DRAFT';
         setFormId(data.id);
         setTitle(data.title);
         useFormStore.setState((state) => ({
@@ -126,10 +163,10 @@ function BuilderContent() {
         }));
         setDescription(data.description || '');
         setAllowEditResponse(data.allowEditResponse || false);
-        setStatus(data.status);
+        setStatus(loadedStatus);
 
         useFormStore.setState((state) => ({
-          schema: { ...state.schema, publicShareToken: data.publicShareToken, status: data.status }
+          schema: { ...state.schema, publicShareToken: data.publicShareToken, status: loadedStatus }
         }));
 
         if (data.themeColor) setThemeColor(data.themeColor);
@@ -138,11 +175,11 @@ function BuilderContent() {
         // Always pick the latest version by versionNumber for editing, 
         // preferring the active one if multiple exist (though usually only one is active).
         const versions = [...data.versions].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
-        const activeVersion = versions.find((v: any) => v.isActive) || versions[0];
+        const activeVersion = versions.find((v) => v.isActive) || versions[0];
 
         // Load AST custom validations from the active version
         if (activeVersion.formValidations && Array.isArray(activeVersion.formValidations)) {
-          setFormValidations(activeVersion.formValidations.map((fv: any) => ({
+          setFormValidations(activeVersion.formValidations.map((fv: BackendValidationRule) => ({
             id: fv.id || crypto.randomUUID(),
             scope: fv.scope || 'FORM',
             fieldKey: fv.fieldKey || '',
@@ -154,40 +191,41 @@ function BuilderContent() {
           setFormValidations([]);
         }
 
-        let parsedRules = [];
+        let parsedRules: FormSchema['rules'] = [];
         if (activeVersion.rules) {
-          let raw = activeVersion.rules;
+          let raw: unknown = activeVersion.rules;
           if (typeof raw === 'string') {
-            try { raw = JSON.parse(raw); } catch (e) { }
+            try { raw = JSON.parse(raw); } catch { }
           }
           // If it's our new wrapper structure { theme, logic }
-          if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as any).logic) {
-            parsedRules = (raw as any).logic;
+          if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'logic' in raw) {
+            const logicRules = (raw as { logic?: unknown }).logic;
+            parsedRules = Array.isArray(logicRules) ? logicRules : [];
           } else {
             parsedRules = Array.isArray(raw) ? raw : [];
           }
         }
         setRules(parsedRules);
 
-        const mapFieldsRecursive = (fields: any[]): any[] => {
-          return fields.map((f: any) => {
-            let parsedOptions: any = [];
+        const mapFieldsRecursive = (fields: BackendField[]): FormField[] => {
+          return fields.map((f) => {
+            let parsedOptions: unknown = [];
             if (f.options) {
               if (typeof f.options === 'string') {
                 try { parsedOptions = JSON.parse(f.options); }
-                catch (e) { parsedOptions = f.options.split(',').map((s: string) => s.trim()); }
+                catch { parsedOptions = f.options.split(',').map((s: string) => s.trim()); }
               } else {
                 parsedOptions = f.options;
               }
             }
             return {
               id: f.id.toString(),
-              type: f.fieldType,
-              label: f.fieldLabel,
+              type: f.type,
+              label: f.label,
               columnName: f.columnName,
               defaultValue: f.defaultValue,
-              options: parsedOptions,
-              validation: { required: f.isMandatory, ...f.validationRules },
+              options: parsedOptions as FormField['options'],
+              validation: { required: f.required, ...f.validation },
               placeholder: f.placeholder || '',
               calculationFormula: f.calculationFormula,
               helpText: f.helpText,
@@ -195,17 +233,17 @@ function BuilderContent() {
               isReadOnly: f.isReadOnly,
               isDisabled: f.isDisabled,
               isMultiSelect: f.isMultiSelect,
-              children: f.children ? mapFieldsRecursive(f.children) : (f.fieldType === 'SECTION_HEADER' ? [] : undefined)
+              children: f.children ? mapFieldsRecursive(f.children) : (f.type === 'SECTION_HEADER' ? [] : undefined)
             };
           });
         };
 
-        const mappedFields = mapFieldsRecursive(activeVersion.fields);
+        const mappedFields = mapFieldsRecursive(activeVersion.fields || []);
         setFields(mappedFields);
-        
+
         // Capture initial state for dirty check after all setters have run
         setTimeout(() => {
-          setInitialState(JSON.stringify({ 
+          setInitialState(JSON.stringify({
             schema: { ...useFormStore.getState().schema, fields: mappedFields, rules: parsedRules }
           }));
         }, 100);
@@ -214,36 +252,38 @@ function BuilderContent() {
         console.error("Failed to load form:", err);
         toast.error("Failed to load form data");
       });
-
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [editFormId, setFormId, setTitle, setDescription, setFields]);
+  }, [
+    editFormId, setFormId, setTitle, setDescription, setFields,
+    router, resetForm, setRules, setAllowEditResponse, setStatus,
+    setFormValidations, setThemeColor, setThemeFont
+  ]);
 
   useEffect(() => {
     // Fetch users for workflow selection
     const fetchUsers = async () => {
       try {
-        const url = editFormId 
-          ? `http://localhost:8080/api/v1/workflows/available-authorities?formId=${editFormId}`
-          : 'http://localhost:8080/api/v1/workflows/available-authorities';
-          
+        const url = editFormId
+          ? `${WORKFLOW.AUTHORITIES}?formId=${editFormId}`
+          : WORKFLOW.AUTHORITIES;
+
         const res = await fetch(url, { credentials: 'include' });
         if (res.ok) {
-          const users = await res.json();
+          const users = (await res.json()) as WorkflowUser[];
           // Filter Builders (for final step) - check if any role starts with "BUILDER"
-          setAvailableBuilders(users.filter((u: any) => 
-            u.roles.some((r: string) => r.startsWith('BUILDER'))
+          setAvailableBuilders(users.filter((u) =>
+            u.roles.some((r) => r.startsWith('BUILDER'))
           ));
           // Filter Custom Roles (for intermediate steps)
           // A user is a custom approver if they have AT LEAST ONE role that is NOT a static role
           const staticRoles = ['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'USER'];
-          setAvailableCustomApprovers(users.filter((u: any) => 
-            u.roles.some((r: string) => !staticRoles.some(s => r.startsWith(s)))
+          setAvailableCustomApprovers(users.filter((u) =>
+            u.roles.some((r) => !staticRoles.some(s => r.startsWith(s)))
           ));
         }
       } catch (err) { console.error("Failed to load users for workflow", err); }
     };
     fetchUsers();
-  }, []);
+  }, [editFormId]);
 
   // SRS: Prevent accidental navigation away from unsaved changes (beforeunload)
   useEffect(() => {
@@ -267,32 +307,40 @@ function BuilderContent() {
       toast.error("Cannot save an empty form");
       return;
     }
-    
-    
+
+    // Validate form code before save (unless already locked)
+    if (!schema.codeLocked && schema.code) {
+      const codeValidation = validateFormCode(schema.code);
+      if (!codeValidation.valid) {
+        toast.error(codeValidation.error || "Invalid form code");
+        setCodeValidationError(codeValidation.error || null);
+        return;
+      }
+    }
+
     // Only force workflow modal if:
     // 1. Trying to PUBLISH and NOT an Admin/Builder
     // 2. OR if user explicitly clicks "Request Approval" (which we will handle via its own button)
     if (status === 'PUBLISHED' && !isAdminOrBuilder) {
-        setIsWorkflowModalOpen(true);
-        return;
+      setIsWorkflowModalOpen(true);
+      return;
     }
 
     setIsSaving(true);
     try {
-      // Cast status to any to bypass the union type restriction for the DTO
-      const payload: any = { 
-        ...schema, 
+      const payload: FormSchema = {
+        ...schema,
         status: status,
       };
-      
+
       let savedForm;
       if (editFormId) {
-        savedForm = await updateForm(Number(editFormId), payload);
+        savedForm = await updateForm(editFormId, payload);
       } else {
         savedForm = await saveForm(payload);
         // After initial save, set the editFormId so subsequent saves update THIS form
         if (savedForm && savedForm.id) {
-            setFormId(savedForm.id);
+          setFormId(savedForm.id);
         }
       }
 
@@ -301,11 +349,11 @@ function BuilderContent() {
       }
 
       // Sync custom validations from the response's active version
-      const returnedVersion = savedForm.versions?.find((v: any) => v.isActive) || 
-                             [...savedForm.versions || []].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))[0];
-      
+      const returnedVersion = (savedForm.versions as BackendVersion[] | undefined)?.find((v) => v.isActive) ||
+        [...savedForm.versions || []].sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))[0];
+
       if (returnedVersion && Array.isArray(returnedVersion.formValidations)) {
-        setFormValidations(returnedVersion.formValidations.map((fv: any) => ({
+        setFormValidations(returnedVersion.formValidations.map((fv: BackendValidationRule) => ({
           id: fv.id || crypto.randomUUID(),
           scope: fv.scope || 'FORM',
           fieldKey: fv.fieldKey || '',
@@ -316,15 +364,15 @@ function BuilderContent() {
       }
 
       toast.success(`Form ${status === 'PUBLISHED' ? 'published successfully!' : 'saved as draft!'}`);
-      
+
       // Update initial state after successful save
       setInitialState(JSON.stringify({ schema: payload }));
-      
+
       // Don't push to '/' yet, allow user to keep editing or "Request Approval"
       // router.push('/'); 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.message || "Failed to save form");
+      toast.error(error instanceof Error ? error.message : "Failed to save form");
     } finally {
       setIsSaving(false);
     }
@@ -338,20 +386,20 @@ function BuilderContent() {
     setIsSaving(true);
     try {
       // 1. Save form first if it's new
-      const currentPayload: any = { ...schema, status: 'DRAFT' };
+      const currentPayload: FormSchema = { ...schema, status: 'DRAFT' };
       const savedForm = await saveForm(currentPayload);
       const formId = savedForm.id;
 
       // 2. Initiate Workflow
-      const res = await fetch('http://localhost:8080/api/v1/workflows/initiate', {
+      const res = await fetch(WORKFLOW.INITIATE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           formId,
           workflowType,
-          targetBuilderId: parseInt(selectedBuilderId),
-          intermediateAuthorityIds: selectedApproverIds.map(id => parseInt(id))
+          targetBuilderId: selectedBuilderId,
+          intermediateAuthorityIds: selectedApproverIds
         })
       });
 
@@ -359,7 +407,7 @@ function BuilderContent() {
         const result = await res.json();
         console.log("Workflow initiated successfully:", result);
         toast.success("Workflow initiated successfully!");
-        
+
         // Update local status to reflect that it's now pending approval
         // The backend transition for a new workflow initiation sets it to PENDING_PUBLISH or similar
         // Let's refetch or manually set a temporary status. 
@@ -370,46 +418,17 @@ function BuilderContent() {
         console.error("Workflow initiation failed:", res.status, errorText);
         toast.error(`Failed to initiate workflow: ${res.status}`);
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleArchive = () => {
-    if (!editFormId) return;
-    toast('Archive this form?', {
-      description: 'You will be redirected to the dashboard.',
-      action: {
-        label: 'Archive',
-        onClick: async () => {
-          try {
-            await deleteForm(Number(editFormId));
-            toast.success("Form archived");
-            router.push('/');
-          } catch (err) {
-            toast.error("Failed to archive form");
-          }
-        }
-      },
-      cancel: { label: 'Cancel', onClick: () => { } }
-    });
-  };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
-      router.push('/login');
-      toast.success('Logged out successfully');
-    } catch (e) {
-      toast.error('Logout failed');
-    }
-  };
-
-  const findParentField = (fields: any[], id: string): any | null => {
+  const findParentField = (fields: FormField[], id: string): FormField | null => {
     for (const f of fields) {
-      if (f.children?.some((c: any) => c.id === id)) return f;
+      if (f.children?.some((c) => c.id === id)) return f;
       if (f.children) {
         const parent = findParentField(f.children, id);
         if (parent) return parent;
@@ -451,8 +470,8 @@ function BuilderContent() {
 
       // 2. Drop over a specific field (potentially nested)
       const parent = findParentField(schema.fields, over.id as string);
-      const targetList = parent ? parent.children : schema.fields;
-      const overIndex = targetList.findIndex((f: any) => f.id === over.id);
+      const targetList = parent?.children ?? schema.fields;
+      const overIndex = targetList.findIndex((f) => f.id === over.id);
 
       if (overIndex !== -1) {
         insertField(activeData.type, overIndex, parent?.id);
@@ -469,9 +488,9 @@ function BuilderContent() {
 
       // Reordering within the same container
       if (activeParent?.id === overParent?.id) {
-        const targetList = activeParent ? activeParent.children : schema.fields;
-        const oldIndex = targetList.findIndex((f: any) => f.id === active.id);
-        const newIndex = targetList.findIndex((f: any) => f.id === over.id);
+        const targetList = activeParent?.children ?? schema.fields;
+        const oldIndex = targetList.findIndex((f) => f.id === active.id);
+        const newIndex = targetList.findIndex((f) => f.id === over.id);
         reorderFields(arrayMove(targetList, oldIndex, newIndex), activeParent?.id);
       } else {
         // Moving between containers (Optional enhancement - for now just prevent or handle simply)
@@ -504,7 +523,7 @@ function BuilderContent() {
 
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* ── Builder Toolbar (Sub-Header) ── */}
-          <div 
+          <div
             className="h-14 border-b flex items-center justify-between px-6 shrink-0 z-20"
             style={{ background: 'var(--bg-header)', borderColor: 'var(--border)' }}
           >
@@ -512,16 +531,16 @@ function BuilderContent() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => router.push('/')}
-                className="p-2 rounded-lg hover:bg-[var(--bg-muted)] transition-colors group"
+                className="p-2 rounded-lg hover:bg-bg-muted transition-colors group"
                 title="Back to Dashboard"
               >
-                <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={20} />
+                <Plus className="rotate-45 text-text-muted group-hover:text-accent" size={20} />
               </button>
 
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-widest pl-0.5">Form Title</span>
+                    <span className="text-[9px] font-black text-text-faint uppercase tracking-widest pl-0.5">Form Title</span>
                     <input
                       type="text"
                       value={schema.title}
@@ -531,28 +550,49 @@ function BuilderContent() {
                       placeholder="Untitled Form"
                     />
                   </div>
-                  
-                  <div className="h-8 w-px bg-[var(--border)] mx-1" />
 
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-widest pl-0.5">Form Code identifier</span>
+                  <div className="h-8 w-px bg-border-color mx-1" />
+
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[9px] font-black text-text-faint uppercase tracking-widest pl-0.5">Form Code</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-[var(--accent)]">/</span>
+                      <span className="text-[10px] font-bold text-accent">/</span>
                       <input
                         type="text"
                         value={schema.code || ''}
-                        onChange={(e) => useFormStore.setState(s => ({ schema: { ...s.schema, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]+/g, '_') } }))}
+                        onChange={(e) => {
+                          const sanitized = sanitizeFormCode(e.target.value);
+                          useFormStore.setState(s => ({ schema: { ...s.schema, code: sanitized } }));
+                          
+                          // Validate in real-time
+                          const validation = validateFormCode(sanitized);
+                          setCodeValidationError(validation.valid ? null : validation.error || null);
+                        }}
                         disabled={schema.codeLocked}
-                        className="bg-transparent border-none p-0 text-xs font-bold focus:ring-0 w-[140px] focus:outline-none"
-                        style={{ color: schema.codeLocked ? 'var(--text-faint)' : 'var(--text-secondary)' }}
+                        className="bg-transparent border-none p-0 text-xs font-bold focus:ring-0 w-[120px] focus:outline-none"
+                        style={{ color: schema.codeLocked ? 'var(--text-faint)' : codeValidationError ? '#ef4444' : 'var(--text-secondary)' }}
                         placeholder={schema.codeLocked ? 'locked' : 'unique_code...'}
+                        title={schema.codeLocked ? 'Code is locked after publishing' : codeValidationError || 'Lowercase letters, numbers, underscores only'}
                       />
+                      {schema.codeLocked && (
+                        <span title="Code is locked and cannot be changed">
+                          <Lock size={12} className="text-text-faint shrink-0" />
+                        </span>
+                      )}
+                      {!schema.codeLocked && codeValidationError && (
+                        <span title={codeValidationError}>
+                          <AlertCircle size={12} className="text-red-500 shrink-0" />
+                        </span>
+                      )}
+                      {!schema.codeLocked && !codeValidationError && schema.code && (
+                        <span className="text-[9px] text-green-600 shrink-0">✓</span>
+                      )}
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[9px] font-bold text-[var(--accent)] uppercase tracking-[0.2em] bg-[var(--accent-subtle)] px-1.5 py-0.5 rounded">
+                  <span className="text-[9px] font-bold text-accent uppercase tracking-widest bg-accent-subtle px-1.5 py-0.5 rounded">
                     {schema.status}
                   </span>
                   <span className="text-[9px] font-semibold opacity-40 uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
@@ -564,28 +604,28 @@ function BuilderContent() {
             </div>
 
             {/* Centre: View Mode Switcher - Hidden on tiny screens or simplified */}
-            <div className="hidden sm:flex bg-[var(--bg-muted)] p-1 rounded-lg border border-[var(--border)]">
+            <div className="hidden sm:flex bg-bg-muted p-1 rounded-lg border" style={{ borderColor: 'var(--border)' }}>
               <button
                 onClick={() => setActiveTab('EDITOR')}
-                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'EDITOR' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'EDITOR' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
               >
                 <Layout size={13} /> Editor
               </button>
-              {/* <button
+              <button
                 onClick={() => setActiveTab('LOGIC')}
-                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'LOGIC' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'LOGIC' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
               >
-                <Link2 size={13} /> Logic
-              </button> */}
+                <Link2 size={13} /> Rule Engine
+              </button>
               <button
                 onClick={() => setActiveTab('VALIDATIONS')}
-                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VALIDATIONS' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VALIDATIONS' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
               >
                 <Check size={13} /> Validations
               </button>
               <button
                 onClick={() => setActiveTab('VERSIONS')}
-                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VERSIONS' ? 'bg-[var(--card-bg)] shadow-sm text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}
+                className={`flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-md transition-all ${activeTab === 'VERSIONS' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
               >
                 <Archive size={13} /> Versions
               </button>
@@ -595,7 +635,7 @@ function BuilderContent() {
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setThemePanelOpen(!isThemePanelOpen)}
-                className={`p-2 rounded-lg transition-colors shrink-0 ${isThemePanelOpen ? 'bg-[var(--accent)] text-white' : ''}`}
+                className={`p-2 rounded-lg transition-colors shrink-0 ${isThemePanelOpen ? 'bg-accent text-white' : ''}`}
                 style={!isThemePanelOpen ? { color: 'var(--text-muted)' } : {}}
                 title="Theme Options"
               >
@@ -606,34 +646,33 @@ function BuilderContent() {
                 <button
                   onClick={async () => {
                     try {
-                      const payload: any = { ...schema, status: 'DRAFT' };
+                      const payload: FormSchema = { ...schema, status: 'DRAFT' };
                       const saved = await saveForm(payload);
                       window.open(`/f/${saved.publicShareToken}`, '_blank');
-                    } catch (e) {
+                    } catch {
                       toast.error("Save failed before preview");
                     }
                   }}
-                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[var(--bg-muted)] transition-all"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-bg-muted transition-all"
                   style={{ color: 'var(--text-secondary)' }}
                 >
                   <Eye size={14} /> Preview
                 </button>
               )}
 
-              {/* Workflow - Hidden for now as per user request */}
-              {/* <button
+              <button
                 onClick={() => setIsWorkflowModalOpen(true)}
                 className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold text-white gradient-accent shadow-sm hover:shadow-md shrink-0"
               >
-                <ShieldAlert size={14} className="sm:mr-1.5" /> <span className="hidden lg:inline">Request Approval</span>
-              </button> */}
+                <ShieldAlert size={14} className="sm:mr-1.5" /> <span className="hidden lg:inline">Initiate Workflow</span>
+              </button>
 
               {isAdminOrBuilder && (
                 <>
                   <button
                     onClick={() => handleSave('DRAFT')}
                     disabled={isSaving}
-                    className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold border bg-[var(--bg-muted)] hover:bg-[var(--bg-subtle)] transition-all shrink-0"
+                    className="flex items-center justify-center w-8 h-8 sm:w-auto sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold border bg-bg-muted hover:bg-bg-subtle transition-all shrink-0"
                     style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
                   >
                     <Save size={14} className="sm:mr-1.5" /> <span className="hidden sm:inline">Save</span>
@@ -641,8 +680,9 @@ function BuilderContent() {
 
                   <button
                     onClick={() => handleSave('PUBLISHED')}
-                    disabled={isSaving || !isDirty}
-                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-black shadow-sm transition-all uppercase tracking-widest shrink-0 ${isSaving || !isDirty ? 'bg-[var(--bg-muted)] text-[var(--text-muted)] border border-[var(--border)] cursor-not-allowed' : 'gradient-accent text-white hover:shadow-md'}`}
+                    disabled={isSaving || (!isDirty && schema.status !== 'DRAFT')}
+                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-black shadow-sm transition-all uppercase tracking-widest shrink-0 ${isSaving || !isDirty ? 'bg-bg-muted text-text-muted border cursor-not-allowed' : 'gradient-accent text-white hover:shadow-md'}`}
+                    style={isSaving || !isDirty ? { borderColor: 'var(--border)' } : {}}
                   >
                     {isSaving ? '...' : (status === 'PUBLISHED' && !isDirty ? 'Published' : 'Publish')}
                   </button>
@@ -653,26 +693,26 @@ function BuilderContent() {
 
           <div className="flex flex-1 overflow-hidden relative">
             {/* ── Mobile View Toggle Tabs ── */}
-            <div className="flex lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-[var(--card-bg)] border border-[var(--border)] p-1.5 rounded-2xl shadow-2xl backdrop-blur-xl">
+            <div className="flex lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-60 bg-card-bg border p-1.5 rounded-2xl shadow-2xl backdrop-blur-xl" style={{ borderColor: 'var(--border)' }}>
               <button
                 onClick={() => setActiveMobileTab('PALETTE')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PALETTE' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PALETTE' ? 'bg-accent text-white shadow-lg' : 'text-text-muted'}`}
               >
-                <Plus size={14} /> 
+                <Plus size={14} />
                 <span className={activeMobileTab === 'PALETTE' ? 'inline' : 'hidden md:inline'}>Fields</span>
               </button>
               <button
                 onClick={() => setActiveMobileTab('CANVAS')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'CANVAS' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'CANVAS' ? 'bg-accent text-white shadow-lg' : 'text-text-muted'}`}
               >
-                <Layout size={14} /> 
+                <Layout size={14} />
                 <span className={activeMobileTab === 'CANVAS' ? 'inline' : 'hidden md:inline'}>Canvas</span>
               </button>
               <button
                 onClick={() => setActiveMobileTab('PROPERTIES')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PROPERTIES' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-[var(--text-muted)]'}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMobileTab === 'PROPERTIES' ? 'bg-accent text-white shadow-lg' : 'text-text-muted'}`}
               >
-                <Settings2 size={14} /> 
+                <Settings2 size={14} />
                 <span className={activeMobileTab === 'PROPERTIES' ? 'inline' : 'hidden md:inline'}>Setup</span>
               </button>
             </div>
@@ -691,13 +731,13 @@ function BuilderContent() {
               ) : activeTab === 'LOGIC' ? (
                 <LogicPanel />
               ) : activeTab === 'VALIDATIONS' ? (
-                <CustomValidationsPanel 
+                <CustomValidationsPanel
                   fields={schema.fields.map(f => ({ columnName: f.columnName, label: f.label }))}
                   rules={schema.formValidations || []}
                   onChange={setFormValidations}
                 />
               ) : (
-                <VersionsPanel editFormId={editFormId} />
+                <VersionsPanel editFormId={schema.id?.toString() || editFormId} />
               )}
             </main>
 
@@ -715,44 +755,48 @@ function BuilderContent() {
 
         {/* Workflow Initiation Modal */}
         {isWorkflowModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-300">
-            <div className="w-full max-w-2xl rounded-[3rem] border shadow-2xl bg-[var(--card-bg)] border-[var(--card-border)] animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col overflow-hidden">
-              
+          <div className="fixed inset-0 flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-300" style={{ zIndex: 9999 }}>
+            <div className="w-full max-w-2xl rounded-[3rem] border shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col overflow-hidden" style={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)' }}>
+
               {/* Modal Header */}
               <div className="px-10 pt-10 pb-6 flex justify-between items-center shrink-0">
                 <div>
                   <h2 className="text-3xl font-black tracking-tighter uppercase leading-none mb-2">Initiate <span className="gradient-text">Approval</span></h2>
-                  <p className="text-[10px] font-black text-[var(--text-faint)] uppercase tracking-[0.2em]">Select your chain of responsibility</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Select your chain of responsibility</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsWorkflowModalOpen(false)}
-                  className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-[var(--bg-muted)] transition-all transform hover:rotate-90 group"
+                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all transform hover:rotate-90 group"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-muted)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
-                  <Plus className="rotate-45 text-[var(--text-muted)] group-hover:text-[var(--accent)]" size={28} />
+                  <Plus className="rotate-45" size={28} />
                 </button>
               </div>
 
               {/* Modal Body - Scrollable */}
-              <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar style={{ scrollbarGutter: 'stable' }}">
+              <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar" style={{ scrollbarGutter: 'stable' }}>
                 <div className="space-y-8">
                   {/* Workflow Type Selector */}
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.3em] ml-1 text-[var(--text-faint)]">Approval Strategy</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest ml-1" style={{ color: 'var(--text-faint)' }}>Approval Strategy</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {[
+                      {([
                         { id: 'NORMAL', label: 'Self Publish', desc: 'Direct approval' },
                         { id: 'LEVEL_1', label: 'Level 1 Flow', desc: '1-Step Review' },
                         { id: 'LEVEL_2', label: 'Level 2 Flow', desc: '2-Step Review' }
-                      ].map((t) => (
+                      ] as const).map((t) => (
                         <button
                           key={t.id}
                           onClick={() => {
-                            setWorkflowType(t.id as any);
+                            setWorkflowType(t.id);
                             setSelectedApproverIds([]);
                           }}
-                          className={`p-5 rounded-3xl border-2 transition-all text-left ${workflowType === t.id ? 'border-[var(--accent)] bg-[var(--accent-subtle)] shadow-xl -translate-y-1' : 'border-[var(--border)] bg-[var(--card-bg)] hover:border-[var(--text-faint)]'}`}
+                          className={`p-5 rounded-3xl border-2 transition-all text-left ${workflowType === t.id ? 'shadow-xl -translate-y-1' : 'hover:border-gray-400'}`}
+                          style={workflowType === t.id ? { borderColor: 'var(--accent)', background: 'var(--accent-subtle)' } : { borderColor: 'var(--border)', background: 'var(--card-bg)' }}
                         >
-                          <p className={`text-xs font-black mb-1 ${workflowType === t.id ? 'text-[var(--accent)]' : ''}`}>{t.label}</p>
+                          <p className={`text-xs font-black mb-1`} style={workflowType === t.id ? { color: 'var(--accent)' } : {}}>{t.label}</p>
                           <p className="text-[9px] font-bold opacity-50 leading-tight uppercase tracking-tight">{t.desc}</p>
                         </button>
                       ))}
@@ -760,7 +804,7 @@ function BuilderContent() {
                   </div>
 
                   {/* Authority Chain */}
-                  <div className="space-y-6 bg-[var(--bg-muted)] p-8 rounded-[2rem] border border-[var(--border)] relative overflow-hidden">
+                  <div className="space-y-6 p-8 rounded-4xl border relative overflow-hidden" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 rounded-full gradient-accent flex items-center justify-center text-white">
                         <GitBranch size={16} />
@@ -770,22 +814,23 @@ function BuilderContent() {
 
                     <div className="space-y-8 relative">
                       {/* Vertical line connector */}
-                      <div className="absolute left-6 top-8 bottom-8 w-px border-l-2 border-dashed border-[var(--border)]"></div>
+                      <div className="absolute left-6 top-8 bottom-8 w-px border-l-2 border-dashed" style={{ borderColor: 'var(--border)' }}></div>
 
                       {/* Intermediate steps */}
                       {(workflowType === 'LEVEL_1' || workflowType === 'LEVEL_2') && (
                         <div className="relative flex items-start gap-6">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg)] border border-[var(--border)] flex items-center justify-center font-black text-xs z-10 shrink-0">1</div>
+                          <div className="w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-xs z-10 shrink-0" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>1</div>
                           <div className="flex-1">
                             <label className="text-[10px] font-black uppercase tracking-widest mb-2 block opacity-50">Intermediate Authority</label>
-                            <select 
+                            <select
                               value={selectedApproverIds[0] || ''}
                               onChange={(e) => {
                                 const newIds = [...selectedApproverIds];
                                 newIds[0] = e.target.value;
                                 setSelectedApproverIds(newIds);
                               }}
-                              className="w-full px-5 py-4 rounded-xl border bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-bold text-sm"
+                              className="w-full px-5 py-4 rounded-xl border outline-none appearance-none font-bold text-sm"
+                              style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
                             >
                               <option value="">Choose Custom Authority...</option>
                               {availableCustomApprovers.map(u => <option key={u.id} value={u.id}>{u.username} ({u.roles.join(', ')})</option>)}
@@ -796,17 +841,18 @@ function BuilderContent() {
 
                       {workflowType === 'LEVEL_2' && (
                         <div className="relative flex items-start gap-6">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg)] border border-[var(--border)] flex items-center justify-center font-black text-xs z-10 shrink-0">2</div>
+                          <div className="w-12 h-12 rounded-2xl border flex items-center justify-center font-black text-xs z-10 shrink-0" style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}>2</div>
                           <div className="flex-1">
                             <label className="text-[10px] font-black uppercase tracking-widest mb-2 block opacity-50">Secondary Reviewer</label>
-                            <select 
+                            <select
                               value={selectedApproverIds[1] || ''}
                               onChange={(e) => {
                                 const newIds = [...selectedApproverIds];
                                 newIds[1] = e.target.value;
                                 setSelectedApproverIds(newIds);
                               }}
-                              className="w-full px-5 py-4 rounded-xl border bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-bold text-sm"
+                              className="w-full px-5 py-4 rounded-xl border outline-none appearance-none font-bold text-sm"
+                              style={{ background: 'var(--card-bg)', borderColor: 'var(--border)' }}
                             >
                               <option value="">Choose Custom Authority...</option>
                               {availableCustomApprovers
@@ -819,20 +865,21 @@ function BuilderContent() {
 
                       {/* Final step (Builder) */}
                       <div className="relative flex items-start gap-6">
-                        <div className="w-12 h-12 rounded-2xl bg-[var(--accent)] text-white flex items-center justify-center font-black text-xs z-10 shrink-0 shadow-lg shadow-blue-500/20">
+                        <div className="w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-xs z-10 shrink-0 shadow-lg shadow-blue-500/20" style={{ background: 'var(--accent)' }}>
                           {workflowType === 'NORMAL' ? '1' : workflowType === 'LEVEL_1' ? '2' : '3'}
                         </div>
                         <div className="flex-1">
-                          <label className="text-[10px] font-black uppercase tracking-widest mb-2 block text-[var(--accent)]">Final Target (Builder)</label>
-                          <select 
+                          <label className="text-[10px] font-black uppercase tracking-widest mb-2 block" style={{ color: 'var(--accent)' }}>Final Target (Builder)</label>
+                          <select
                             value={selectedBuilderId}
                             onChange={(e) => setSelectedBuilderId(e.target.value)}
-                            className="w-full px-5 py-4 rounded-xl border border-[var(--accent)] bg-[var(--card-bg)] focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none font-black text-sm"
+                            className="w-full px-5 py-4 rounded-xl border outline-none appearance-none font-black text-sm"
+                            style={{ background: 'var(--card-bg)', borderColor: 'var(--accent)' }}
                           >
                             <option value="">Select Target Builder...</option>
                             {availableBuilders.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                           </select>
-                          <p className="mt-2 text-[10px] font-medium text-[var(--text-muted)] italic flex items-center gap-1">
+                          <p className="mt-2 text-[10px] font-medium italic flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
                             <ShieldAlert size={10} /> After approval, this person will own this form.
                           </p>
                         </div>
@@ -841,14 +888,14 @@ function BuilderContent() {
                   </div>
 
                   <div className="pt-4">
-                    <button 
+                    <button
                       onClick={handleInitiateWorkflow}
                       disabled={isSaving}
-                      className="w-full py-5 rounded-3xl text-sm font-black text-white gradient-accent shadow-xl shadow-blue-500/30 hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 uppercase tracking-[0.2em]"
+                      className="w-full py-5 rounded-3xl text-sm font-black text-white gradient-accent shadow-xl shadow-blue-500/30 hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 uppercase tracking-widest"
                     >
                       {isSaving ? 'Processing Chain...' : 'Submit Request →'}
                     </button>
-                    <p className="text-center mt-4 text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-widest">Form will be locked during approval process</p>
+                    <p className="text-center mt-4 text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Form will be locked during approval process</p>
                   </div>
                 </div>
               </div>

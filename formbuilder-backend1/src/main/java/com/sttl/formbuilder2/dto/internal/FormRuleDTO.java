@@ -4,6 +4,7 @@ import com.sttl.formbuilder2.model.enums.ConditionLogic;
 import lombok.Data;
 import java.util.List;
 
+
 /**
  * FormRuleDTO — Internal Rule Representation for the Rule Engine
  *

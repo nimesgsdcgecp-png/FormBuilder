@@ -5,24 +5,25 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
-public interface RoleModuleRepository extends JpaRepository<RoleModule, Long> {
+public interface RoleModuleRepository extends JpaRepository<RoleModule, UUID> {
     
     @org.springframework.data.jpa.repository.Query("SELECT rm FROM RoleModule rm JOIN FETCH rm.module WHERE rm.role.id = :roleId")
-    List<RoleModule> findByRoleId(@org.springframework.data.repository.query.Param("roleId") Long roleId);
+    List<RoleModule> findByRoleId(@org.springframework.data.repository.query.Param("roleId") UUID roleId);
 
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
     @org.springframework.transaction.annotation.Transactional
     @org.springframework.data.jpa.repository.Query("DELETE FROM RoleModule rm WHERE rm.role.id = :roleId")
-    void deleteByRoleId(@org.springframework.data.repository.query.Param("roleId") Long roleId);
+    void deleteByRoleId(@org.springframework.data.repository.query.Param("roleId") UUID roleId);
     
     // Find modules for a specific role that are active
     @org.springframework.data.jpa.repository.Query("SELECT rm FROM RoleModule rm JOIN FETCH rm.module WHERE rm.role.id = :roleId AND rm.module.active = true")
-    List<RoleModule> findByRoleIdAndModuleActiveTrue(@org.springframework.data.repository.query.Param("roleId") Long roleId);
+    List<RoleModule> findByRoleIdAndModuleActiveTrue(@org.springframework.data.repository.query.Param("roleId") UUID roleId);
 
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
     @org.springframework.transaction.annotation.Transactional
     @org.springframework.data.jpa.repository.Query("DELETE FROM RoleModule rm WHERE rm.module.id = :moduleId")
-    void deleteByModuleId(@org.springframework.data.repository.query.Param("moduleId") Long moduleId);
+    void deleteByModuleId(@org.springframework.data.repository.query.Param("moduleId") UUID moduleId);
 }

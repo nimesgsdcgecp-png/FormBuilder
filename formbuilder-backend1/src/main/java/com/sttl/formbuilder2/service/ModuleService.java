@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -29,7 +30,7 @@ public class ModuleService {
         return moduleRepository.save(module);
     }
 
-    public Module updateModule(Long id, Module moduleDetails) {
+    public Module updateModule(UUID id, Module moduleDetails) {
         Module module = moduleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Module not found with id: " + id));
         
@@ -46,7 +47,7 @@ public class ModuleService {
     }
 
     @Transactional
-    public void deleteModule(Long id) {
+    public void deleteModule(UUID id) {
         // First delete role mappings
         roleModuleRepository.deleteByModuleId(id);
         // Then delete the module
@@ -54,7 +55,7 @@ public class ModuleService {
     }
 
     @Transactional(readOnly = true)
-    public List<MenuDTO> getMenuForRole(Long roleId) {
+    public List<MenuDTO> getMenuForRole(UUID roleId) {
         List<RoleModule> roleModules = roleModuleRepository.findByRoleIdAndModuleActiveTrue(roleId);
         List<Module> modules = roleModules.stream()
                 .map(RoleModule::getModule)
@@ -65,7 +66,7 @@ public class ModuleService {
 
     private List<MenuDTO> buildMenuTree(List<Module> modules) {
         // Map Modules to MenuDTOs
-        Map<Long, MenuDTO> dtoMap = modules.stream().collect(Collectors.toMap(
+        Map<UUID, MenuDTO> dtoMap = modules.stream().collect(Collectors.toMap(
                 Module::getId,
                 this::convertToDTO
         ));

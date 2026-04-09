@@ -52,10 +52,6 @@ export function DraggableSidebarBtn({ type, label, icon: Icon, category = 'basic
     },
   });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-  };
-
   const colors = CATEGORY_COLORS[category] || CATEGORY_COLORS.basic;
 
   return (

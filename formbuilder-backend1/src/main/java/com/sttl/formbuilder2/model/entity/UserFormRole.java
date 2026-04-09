@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.model.entity;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -15,8 +17,8 @@ import java.time.LocalDateTime;
 public class UserFormRole {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -28,7 +30,7 @@ public class UserFormRole {
     private Role role;
 
     @Column(name = "form_id")
-    private Long formId; // Nullable for global roles
+    private UUID formId; // Nullable for global roles
 
     @Column(name = "assigned_by")
     private String assignedBy;

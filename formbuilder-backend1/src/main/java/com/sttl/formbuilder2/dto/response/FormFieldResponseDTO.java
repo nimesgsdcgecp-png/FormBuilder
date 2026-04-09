@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.response;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sttl.formbuilder2.model.enums.FieldType;
 import lombok.Builder;
@@ -28,7 +30,7 @@ import java.util.Map;
  *
  * Key fields:
  * - {@code fieldType} — determines how the field is rendered (TEXT, DATE, etc.)
- * - {@code columnName} — SQL column name; used as the key when building the
+ * - {@code fieldKey} — SQL column name; used as the key when building the
  * submission JSON payload.
  * - {@code validationRules} — deserialized JSONB constraints (required, min,
  * max, etc.)
@@ -38,22 +40,43 @@ import java.util.Map;
 @Data
 @Builder
 public class FormFieldResponseDTO {
-    private Long id;
-    private String fieldLabel;
+    private UUID id;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("label")
+    private String label;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("columnName")
     private String columnName;
+    
     private String parentColumnName;
-    private FieldType fieldType;
-    private Boolean isMandatory;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("type")
+    private FieldType type;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("required")
+    private Boolean required;
+    
     private String defaultValue;
     private Object options;
-    private Map<String, Object> validationRules;
-    private Integer ordinalPosition;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("validation")
+    private Map<String, Object> validation;
+    
+    private Integer displayOrder;
     private String calculationFormula;
     private String helpText;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("isHidden")
     private Boolean isHidden;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("isReadOnly")
     private Boolean isReadOnly;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("isDisabled")
     private Boolean isDisabled;
+    
     @JsonProperty("isMultiSelect")
     private Boolean isMultiSelect;
+    
     private java.util.List<FormFieldResponseDTO> children;
 }

@@ -1,14 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Lock, Shield, ArrowUpCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import { User, Lock, Shield, ArrowUpCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import { usePermissions } from '@/hooks/usePermissions';
+import { AUTH, PROFILE, LEVEL_UP } from '@/utils/apiConstants';
+
+interface RoleAuthority {
+  authority: string;
+}
+
+interface ProfileUser {
+  username: string;
+  roles?: RoleAuthority[];
+}
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<ProfileUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -18,13 +28,13 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+      const res = await fetch(AUTH.ME, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setUser(data);
         setFormData({ username: data.username, password: '' });
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load profile");
     } finally {
       setIsLoading(false);
@@ -39,7 +49,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/profile/update', {
+      const res = await fetch(PROFILE.UPDATE, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -51,7 +61,7 @@ export default function ProfilePage() {
         if (formData.username !== user.username) {
           toast.info("Username changed. Logging out...");
           setTimeout(() => {
-             fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+             fetch(AUTH.LOGOUT, { method: 'POST', credentials: 'include' });
              clearCache();
              router.push('/login');
           }, 2000);
@@ -62,7 +72,7 @@ export default function ProfilePage() {
         const data = await res.json();
         toast.error(data.error || "Update failed");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsUpdating(false);
@@ -72,7 +82,7 @@ export default function ProfilePage() {
   const handleLevelUpRequest = async () => {
     setIsRequesting(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/profile/level-up', {
+      const res = await fetch(LEVEL_UP.REQUEST, {
         method: 'POST',
         credentials: 'include'
       });
@@ -83,7 +93,7 @@ export default function ProfilePage() {
         const data = await res.json();
         toast.error(data.error || "Request failed");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsRequesting(false);
@@ -98,11 +108,11 @@ export default function ProfilePage() {
     );
   }
 
-  const isAdmin = user?.roles?.some((r: any) => 
+  const isAdmin = user?.roles?.some((r) => 
     r.authority === 'ROLE_ADMIN' || r.authority === 'ADMIN' || r.authority === 'ROLE_ADMINISTRATOR'
   );
 
-  const isAlreadyBuilderOrAdmin = isAdmin || user?.roles?.some((r: any) => 
+  const isAlreadyBuilderOrAdmin = isAdmin || user?.roles?.some((r) => 
     r.authority === 'ROLE_BUILDER' || r.authority === 'BUILDER'
   );
 

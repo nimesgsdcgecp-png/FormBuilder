@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { AUTH } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 export type Permission = 
   | 'READ' 
@@ -14,8 +16,8 @@ export type Permission =
   | 'VISIBILITY';
 
 interface UserAssignment {
-  id: number;
-  formId: number | null;
+  id: string | number;
+  formId: string | number | null;
   role: {
     id: number;
     name: string;
@@ -50,7 +52,7 @@ export function usePermissions() {
 
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/auth/permissions', {
+      const res = await fetch(AUTH.PERMISSIONS, {
         credentials: 'include'
       });
       
@@ -61,14 +63,15 @@ export function usePermissions() {
         }
         throw new Error('Failed to fetch permissions');
       }
-      const data = await res.json();
-      
+      const raw = await res.json();
+      const data = extractArray<UserAssignment>(raw, ['assignments', 'content']);
+
       permissionsCache = data;
       lastFetchTime = Date.now();
       setAssignments(data);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch permissions');
     } finally {
       setIsLoading(false);
     }
@@ -83,10 +86,12 @@ export function usePermissions() {
    * @param permission The permission to check for.
    * @param formId Optional form ID for scoped permission check.
    */
-  const hasPermission = useCallback((permission: Permission, formId?: number | null) => {
+  const hasPermission = useCallback((permission: Permission, formId?: string | number | null) => {
     return assignments.some(assignment => {
       // Check if assignment is global (formId is null) or matches specific formId
-      const matchesScope = assignment.formId === null || (formId !== undefined && assignment.formId === formId);
+      // Use string comparison to handle both UUID strings and legacy numbers
+      const matchesScope = !assignment.formId || 
+                          (formId !== undefined && String(assignment.formId) === String(formId));
       
       if (matchesScope) {
         return assignment.role.permissions.some(p => p.name === permission);

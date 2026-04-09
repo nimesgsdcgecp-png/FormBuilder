@@ -15,17 +15,13 @@
  * Used in Dashboard header, Builder header, and public form page.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
-    const [isDark, setIsDark] = useState(false);
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-        setIsDark(document.documentElement.classList.contains('dark'));
-    }, []);
+    const [isDark, setIsDark] = useState(() =>
+        typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+    );
 
     const toggle = () => {
         const next = !isDark;
@@ -49,8 +45,7 @@ export default function ThemeToggle() {
         hover:bg-[var(--bg-muted)] border border-transparent
         hover:border-[var(--border)]"
         >
-            {/* Before mount: always render Moon to match SSR output. After mount: render true state. */}
-            {!mounted || !isDark ? <Moon size={18} /> : <Sun size={18} />}
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
         </button>
     );
 }

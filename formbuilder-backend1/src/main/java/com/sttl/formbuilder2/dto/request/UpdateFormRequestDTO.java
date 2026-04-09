@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
+
 /**
  * UpdateFormRequestDTO — Request Body for PUT /api/forms/{id}
  *
@@ -35,7 +36,7 @@ import java.util.List;
 @Data
 public class UpdateFormRequestDTO {
     @NotBlank(message = "Title is required")
-    private String title;
+    private String name;
 
     @jakarta.validation.constraints.Pattern(regexp = "^[a-z][a-z0-9_]{0,99}$", message = "Code must be lowercase with underscores only")
     @NotBlank(message = "Code is required")

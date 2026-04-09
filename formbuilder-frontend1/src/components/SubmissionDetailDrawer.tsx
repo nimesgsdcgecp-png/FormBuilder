@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import { X, Calendar, User, FileText, CheckCircle2, Clock, Download, ExternalLink } from 'lucide-react';
+import { X, FileText, CheckCircle2, Clock, Download } from 'lucide-react';
+import { FILES, API_SERVER } from '@/utils/apiConstants';
 
 interface SubmissionDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  submission: any;
-  headers: any[];
+  submission: Record<string, unknown> | null;
+  headers: Array<{ key: string; label: string; type?: string }>;
   formTitle: string;
 }
 
@@ -20,16 +21,27 @@ const SubmissionDetailDrawer: React.FC<SubmissionDetailDrawerProps> = ({
 }) => {
   if (!isOpen || !submission) return null;
 
-  const formatValue = (value: any, type?: string) => {
+  const formatValue = (value: unknown, type?: string) => {
     if (value === null || value === undefined) return <span className="italic" style={{ color: 'var(--text-faint)' }}>No response</span>;
     
-    if (type === 'FILE' && value) {
-      const fileUrl = value.startsWith('http') ? value : `http://localhost:8080${value}`;
+    if (type === 'FILE' && typeof value === 'string' && value) {
+      // If value is a full URL, use it. If it's just a filename or path, construct the full URL
+      let fileUrl: string;
+      if (value.startsWith('http')) {
+        fileUrl = value;
+      } else if (value.startsWith('/')) {
+        // Value is a path like "/api/v1/files/filename"
+        fileUrl = `${API_SERVER}${value}`;
+      } else {
+        // Value is just a filename, use FILES.DOWNLOAD
+        fileUrl = FILES.DOWNLOAD(value);
+      }
       return (
         <a
           href={fileUrl}
           target="_blank"
           rel="noopener noreferrer"
+          download
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
           style={{ background: '#2563eb' }}
         >
@@ -54,7 +66,7 @@ const SubmissionDetailDrawer: React.FC<SubmissionDetailDrawerProps> = ({
         if (Array.isArray(parsed)) {
           return (
             <div className="flex flex-wrap gap-2 mt-1">
-              {parsed.map((item: any, i: number) => (
+              {parsed.map((item: unknown, i: number) => (
                 <span key={i} className="px-3 py-1.5 rounded-xl text-[10px] font-bold border" style={{ background: 'var(--bg-muted)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}>
                   {String(item)}
                 </span>
@@ -62,7 +74,7 @@ const SubmissionDetailDrawer: React.FC<SubmissionDetailDrawerProps> = ({
             </div>
           );
         }
-      } catch (e) {}
+      } catch {}
     }
 
     return <span className="break-words font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>{String(value)}</span>;
@@ -149,7 +161,7 @@ const SubmissionDetailDrawer: React.FC<SubmissionDetailDrawerProps> = ({
               <p className="text-xs text-slate-400 mb-6 font-medium">Internal trace identifier</p>
               <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
                 <code className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-                  UUID: {submission.submission_id}
+                  UUID: {submission.id}
                 </code>
               </div>
             </div>

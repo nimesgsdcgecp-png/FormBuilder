@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.service;
 
+import java.util.UUID;
+
 import com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO;
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.model.entity.Form;
@@ -27,7 +29,7 @@ public class FormWorkflowService {
     private final AuditService auditService;
 
     @Transactional
-    public void finalizeWorkflowForm(Long formId, AppUser targetOwner, AppUser approver) {
+    public void finalizeWorkflowForm(UUID formId, AppUser targetOwner, AppUser approver) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new EntityNotFoundException("Form not found"));
 
@@ -58,8 +60,8 @@ public class FormWorkflowService {
         FieldDefinitionRequestDTO dto = new FieldDefinitionRequestDTO();
         dto.setLabel(f.getFieldLabel());
         dto.setType(f.getFieldType());
-        dto.setRequired(f.getIsMandatory());
-        dto.setColumnName(f.getColumnName());
+        dto.setRequired(f.getIsRequired());
+        dto.setFieldKey(f.getFieldKey());
         return dto;
     }
 }

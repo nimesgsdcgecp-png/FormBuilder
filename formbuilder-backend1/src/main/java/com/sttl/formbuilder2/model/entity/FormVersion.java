@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * FormVersion — Snapshot of a Form's Schema at the Time of Publishing
@@ -39,7 +40,7 @@ import java.util.List;
  */
 @Entity
 @Table(name = "form_versions", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "form_id", "versionNumber" })
+        @UniqueConstraint(columnNames = { "form_id", "version_number" })
 })
 @Getter
 @Setter
@@ -49,8 +50,8 @@ import java.util.List;
 public class FormVersion {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     /**
      * Back-reference to the parent form. Hidden from JSON output to avoid cycles.
@@ -79,7 +80,7 @@ public class FormVersion {
      * syncs to the {@code form_fields} table.
      */
     @OneToMany(mappedBy = "formVersion", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("ordinalPosition ASC")
+    @OrderBy("displayOrder ASC")
     @Builder.Default
     private List<FormField> fields = new ArrayList<>();
 
@@ -93,12 +94,18 @@ public class FormVersion {
     @Column(name = "rules", columnDefinition = "TEXT")
     private String rules;
 
+    @Column(name = "definition_json", columnDefinition = "jsonb", nullable = false)
+    private String definitionJson;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = false;
 
     @Column(name = "activated_by")
     private String activatedBy;
+
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
 
     @Column(name = "activated_at")
     private Instant activatedAt;

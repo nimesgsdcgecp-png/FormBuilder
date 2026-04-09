@@ -1,5 +1,6 @@
 package com.sttl.formbuilder2.controller;
 
+import com.sttl.formbuilder2.util.ApiConstants;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -24,7 +25,7 @@ import java.util.UUID;
  * and serving them for download.
  */
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping(ApiConstants.FILES_BASE)
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class FileUploadController {
 
@@ -51,7 +52,7 @@ public class FileUploadController {
      * @param file The uploaded {@code MultipartFile} sent with the key "file".
      * @return A map containing the relative access URL and the original filename.
      */
-    @PostMapping("/upload")
+    @PostMapping(ApiConstants.FILES_UPLOAD)
     public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
             // Preserve the original file extension
@@ -70,7 +71,7 @@ public class FileUploadController {
 
             // Return a relative URL — the frontend prefixes it with the backend base URL
             Map<String, String> response = new HashMap<>();
-            response.put("url", "/api/v1/files/" + fileName);
+            response.put("url", ApiConstants.API_BASE + ApiConstants.FILES_DOWNLOAD.replace("{filename}", fileName));
             response.put("fileName", originalFileName);
 
             return ResponseEntity.ok(response);
@@ -88,8 +89,8 @@ public class FileUploadController {
      * @param fileName The UUID-based filename (e.g. "3f2e...abc.pdf").
      * @return The file as a downloadable binary response, or 404 if not found.
      */
-    @GetMapping("/files/{fileName:.+}")
-    public ResponseEntity<Resource> downloadFile(@PathVariable("fileName") String fileName) {
+    @GetMapping(ApiConstants.FILES_DOWNLOAD)
+    public ResponseEntity<Resource> downloadFile(@PathVariable("filename") String fileName) {
         try {
             Path filePath = this.fileStorageLocation.resolve(fileName).normalize();
             Resource resource = new UrlResource(filePath.toUri());

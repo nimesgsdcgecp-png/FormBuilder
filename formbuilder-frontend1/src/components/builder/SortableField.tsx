@@ -1,6 +1,7 @@
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Type, Hash, Calendar, ToggleLeft, AlignLeft, List, Disc, Layers, Clock, Star, BarChartHorizontal, Upload, Grid3X3, Table, Link2, Heading, Info, Divide, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { FormField } from '@/types/schema';
 import React, { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
@@ -16,7 +17,7 @@ interface SortableFieldProps {
 }
 
 /** Map each FieldType to its icon and category color */
-const FIELD_TYPE_META: Record<string, { icon: any; iconColor: string; iconBg: string; label: string }> = {
+const FIELD_TYPE_META: Record<string, { icon: LucideIcon; iconColor: string; iconBg: string; label: string }> = {
   TEXT: { icon: Type, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Text Input' },
   NUMERIC: { icon: Hash, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Number' },
   DATE: { icon: Calendar, iconColor: '#3b82f6', iconBg: '#eff6ff', label: 'Date Picker' },

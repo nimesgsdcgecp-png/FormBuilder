@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.response;
 
+import java.util.UUID;
+
 import lombok.Builder;
 import lombok.Data;
 import java.util.Set;
@@ -7,14 +9,14 @@ import java.util.Set;
 @Data
 @Builder
 public class UserAssignmentDTO {
-    private Long id;
-    private Long formId;
+    private UUID id;
+    private UUID formId;
     private RoleInfo role;
 
     @Data
     @Builder
     public static class RoleInfo {
-        private Long id;
+        private UUID id;
         private String name;
         private Set<PermissionInfo> permissions;
     }
@@ -22,7 +24,7 @@ public class UserAssignmentDTO {
     @Data
     @Builder
     public static class PermissionInfo {
-        private Long id;
+        private UUID id;
         private String name;
     }
 }

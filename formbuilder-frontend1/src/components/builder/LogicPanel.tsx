@@ -8,7 +8,22 @@
 import React from 'react';
 import { useFormStore } from '@/store/useFormStore';
 import { Plus, Trash2, GitBranch, Type, Columns } from 'lucide-react';
-import { RuleOperator, ActionType, ConditionLogic } from '@/types/schema';
+import { RuleOperator, ActionType, ConditionLogic, FormField } from '@/types/schema';
+
+type LogicCondition = {
+  type: 'condition';
+  field: string;
+  operator: RuleOperator;
+  value: string;
+  valueType?: 'STATIC' | 'FIELD';
+};
+
+type LogicGroup = {
+  type: 'group';
+  id: string;
+  logic: ConditionLogic;
+  conditions: Array<LogicCondition | LogicGroup>;
+};
 
 const selectStyle: React.CSSProperties = {
   background: 'var(--input-bg)',
@@ -30,17 +45,17 @@ const inputStyle: React.CSSProperties = {
 export default function LogicPanel() {
   const { schema, addRule, updateRule, deleteRule } = useFormStore();
   const rules = schema.rules || [];
-  const fields = schema.fields || [];
+  const fields = schema.fields;
 
   const flattenedFields = React.useMemo(() => {
-    const flat: any[] = [];
-    const traverse = (list: any[]) => {
+    const flat: FormField[] = [];
+    const traverse = (list: FormField[]) => {
       list.forEach(f => {
         flat.push(f);
         if (f.children) traverse(f.children);
       });
     };
-    traverse(fields);
+    traverse(fields || []);
     return flat;
   }, [fields]);
 
@@ -227,7 +242,7 @@ export default function LogicPanel() {
               <GitBranch size={32} className="mx-auto mb-3 opacity-30" />
               <p className="text-sm">No rules defined yet.</p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
-                Click "Add Rule" to start building logic.
+                Click &quot;Add Rule&quot; to start building logic.
               </p>
             </div>
           )}
@@ -246,13 +261,13 @@ const ConditionGroupBuilder = ({
   isRoot = false,
   fields,
 }: {
-  conditions: any[];
+  conditions: Array<LogicCondition | LogicGroup>;
   logic: ConditionLogic;
-  onUpdate: (newConditions: any[]) => void;
+  onUpdate: (newConditions: Array<LogicCondition | LogicGroup>) => void;
   onUpdateLogic: (newLogic: ConditionLogic) => void;
   onDelete?: () => void;
   isRoot?: boolean;
-  fields: any[];
+  fields: FormField[];
 }) => {
   return (
     <div
@@ -337,8 +352,8 @@ const ConditionGroupBuilder = ({
                 >
                   <option value="">Select Field...</option>
                   {fields
-                    .filter((f: any) => f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL')
-                    .map((f: any) => <option key={f.id} value={f.columnName}>{f.label}</option>)}
+                    .filter((f) => f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL')
+                    .map((f) => <option key={f.id} value={f.columnName}>{f.label}</option>)}
                 </select>
 
                 <select
@@ -368,8 +383,8 @@ const ConditionGroupBuilder = ({
                       onUpdate(updated);
                     }}
                     className="p-2 rounded-lg border transition-all hover:bg-slate-100"
-                    style={{ 
-                      borderColor: 'var(--border)', 
+                    style={{
+                      borderColor: 'var(--border)',
                       background: entry.valueType === 'FIELD' ? 'var(--accent-subtle)' : 'var(--bg-muted)',
                       color: entry.valueType === 'FIELD' ? 'var(--accent)' : 'var(--text-faint)'
                     }}
@@ -390,8 +405,8 @@ const ConditionGroupBuilder = ({
                     >
                       <option value="">Select Field...</option>
                       {fields
-                        .filter((f: any) => f.id !== entry.field && f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL' && f.columnName !== entry.field)
-                        .map((f: any) => <option key={f.id} value={f.columnName}>{f.label}</option>)}
+                        .filter((f) => f.id !== entry.field && f.type !== 'SECTION_HEADER' && f.type !== 'INFO_LABEL' && f.columnName !== entry.field)
+                        .map((f) => <option key={f.id} value={f.columnName}>{f.label}</option>)}
                     </select>
                   ) : (
                     <input

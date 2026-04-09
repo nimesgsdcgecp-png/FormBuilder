@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Users, Shield, Search, ArrowLeft, Loader2, UserCircle, Trash2, ChevronDown, Plus, RotateCcw, ArrowUpCircle, CheckCircle2, XCircle, Clock, Edit2 } from 'lucide-react';
+import { Users, Shield, Search, Loader2, Trash2, ChevronDown, RotateCcw, ArrowUpCircle, Clock, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
+import { AUTH, ADMIN_USERS, ADMIN_ROLES, LEVEL_UP } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 interface UserSummary {
   id: number;
@@ -22,13 +23,43 @@ interface LevelUpRequest {
   requestedAt: string;
 }
 
+interface RoleAuthority {
+  authority: string;
+}
+
+interface CurrentUser {
+  username: string;
+  roles?: RoleAuthority[];
+}
+
+interface RoleSummary {
+  id: number;
+  name: string;
+}
+
+interface RolesResponse {
+  content?: RoleSummary[];
+}
+
+function normalizeUsers(payload: unknown): UserSummary[] {
+  return extractArray<UserSummary>(payload, ['users', 'content', 'items', 'data']);
+}
+
+function normalizeRoles(payload: unknown): RoleSummary[] {
+  return extractArray<RoleSummary>(payload, ['roles', 'content', 'items', 'data']);
+}
+
+function normalizeLevelUpRequests(payload: unknown): LevelUpRequest[] {
+  return extractArray<LevelUpRequest>(payload, ['requests', 'content', 'items', 'data']);
+}
+
 export default function UserManagementPage() {
   const { hasPermission, isLoading: permsLoading } = usePermissions();
   const router = useRouter();
   
   const [users, setUsers] = useState<UserSummary[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [roles, setRoles] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [defaultRole, setDefaultRole] = useState("USER");
   const [pendingRequests, setPendingRequests] = useState<LevelUpRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,36 +74,36 @@ export default function UserManagementPage() {
 
   const fetchData = async () => {
     try {
-      const meRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
-      let me: any = null;
+      const meRes = await fetch(AUTH.ME, { credentials: 'include' });
+      let me: CurrentUser | null = null;
       if (meRes.ok) {
         me = await meRes.json();
         setCurrentUser(me);
       }
 
-      const isAdmin = me?.roles?.some((r: any) => 
+      const isAdmin = me?.roles?.some((r) => 
         r.authority === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMINISTRATOR' || r.authority === 'ADMIN'
       );
 
-      const fetchPromises: any[] = [
-        fetch('http://localhost:8080/api/v1/admin/users/summary', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/admin/users/default-role', { credentials: 'include' })
+      const fetchPromises: Promise<Response>[] = [
+        fetch(`${ADMIN_USERS.BASE}/summary`, { credentials: 'include' }),
+        fetch(ADMIN_ROLES.LIST, { credentials: 'include' }),
+        fetch(`${ADMIN_USERS.BASE}/default-role`, { credentials: 'include' })
       ];
 
       if (isAdmin) {
-        fetchPromises.push(fetch('http://localhost:8080/api/v1/admin/level-up/pending', { credentials: 'include' }));
+        fetchPromises.push(fetch(LEVEL_UP.PENDING, { credentials: 'include' }));
       }
 
       const results = await Promise.all(fetchPromises);
       
       if (!results[0].ok) throw new Error("Failed to fetch user data");
       const usersData = await results[0].json();
-      setUsers(usersData);
+      setUsers(normalizeUsers(usersData));
 
       if (results[1].ok) {
-        const rolesData = await results[1].json();
-        setRoles(rolesData.content || rolesData);
+        const rolesData = (await results[1].json()) as RolesResponse | RoleSummary[];
+        setRoles(normalizeRoles(rolesData));
       }
 
       if (results[2].ok) {
@@ -82,11 +113,11 @@ export default function UserManagementPage() {
 
       if (isAdmin && results[3] && results[3].ok) {
         const data = await results[3].json();
-        setPendingRequests(data);
+        setPendingRequests(normalizeLevelUpRequests(data));
       } else if (!isAdmin) {
         setPendingRequests([]);
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load users data");
     } finally {
       setIsLoading(false);
@@ -99,7 +130,7 @@ export default function UserManagementPage() {
 
   const handleLevelUpAction = async (id: number, action: 'APPROVE' | 'REJECT') => {
     try {
-      const res = await fetch(`http://localhost:8080/api/v1/admin/level-up/${id}/action`, {
+      const res = await fetch(LEVEL_UP.DECIDE(String(id)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -112,7 +143,7 @@ export default function UserManagementPage() {
       } else {
         toast.error("Failed to process request");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     }
   };
@@ -128,7 +159,7 @@ export default function UserManagementPage() {
         label: "Delete",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/v1/admin/users/${id}`, {
+            const res = await fetch(ADMIN_USERS.DELETE(String(id)), {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -140,7 +171,7 @@ export default function UserManagementPage() {
               const err = await res.json();
               toast.error(err.error || "Failed to delete user");
             }
-          } catch (err) {
+          } catch {
             toast.error("An error occurred during deletion");
           }
         },
@@ -154,7 +185,7 @@ export default function UserManagementPage() {
 
   const handleUpdateDefaultRole = async (roleName: string) => {
     try {
-      const res = await fetch('http://localhost:8080/api/v1/admin/users/default-role', {
+      const res = await fetch(`${ADMIN_USERS.BASE}/default-role`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -167,7 +198,7 @@ export default function UserManagementPage() {
       } else {
         toast.error("Failed to update default role");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     }
   };
@@ -191,7 +222,7 @@ export default function UserManagementPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
       <Header 
-        username={currentUser?.username} 
+        username={currentUser?.username ?? null} 
         breadcrumbs={[
           { label: 'Dashboard', href: '/' },
           { label: 'User Management', href: '/admin/users' }
@@ -249,7 +280,7 @@ export default function UserManagementPage() {
         <div className="max-w-7xl mx-auto space-y-8">
           
           {/* ── Level Up Section ── */}
-          {currentUser?.roles?.some((r: any) => r.authority === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMINISTRATOR' || r.authority === 'ADMIN') && (
+          {currentUser?.roles?.some((r) => r.authority === 'ROLE_ADMIN' || r.authority === 'ROLE_ADMINISTRATOR' || r.authority === 'ADMIN') && (
             <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                <div className="flex items-center gap-2 mb-4 px-2">
                   <ArrowUpCircle className="text-amber-500" size={20} />
@@ -327,18 +358,14 @@ export default function UserManagementPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b" style={{ background: 'var(--bg-subtle)', borderColor: 'var(--border)' }}>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">System ID</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">Username</th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">Roles & Scope</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">User Entity</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--text-faint)]">Access Privileges</th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-right text-[var(--text-faint)]">Management</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
                     {filteredUsers.map(user => (
                       <tr key={user.id} className="group hover:bg-[var(--bg-subtle)] transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-mono font-bold text-[var(--text-faint)]">#{user.id}</span>
-                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full gradient-accent flex items-center justify-center text-white text-[10px] font-bold">
@@ -414,7 +441,6 @@ export default function UserManagementPage() {
                         </div>
                         <div>
                           <h3 className="text-sm font-black text-[var(--text-primary)]">{user.username}</h3>
-                          <span className="text-[10px] font-mono font-bold text-[var(--text-faint)] uppercase tracking-wider">#{user.id}</span>
                         </div>
                       </div>
                       

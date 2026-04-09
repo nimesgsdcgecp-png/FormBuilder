@@ -4,19 +4,17 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Loader2 } from 'lucide-react';
-import Header from '@/components/Header';
-import { usePathname } from 'next/navigation';
+import { AUTH } from '@/utils/apiConstants';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const { isLoading, assignments } = usePermissions();
+  const { isLoading } = usePermissions();
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/v1/auth/me', {
+        const response = await fetch(AUTH.ME, {
           credentials: 'include'
         });
         if (!response.ok) {
@@ -24,7 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
         setIsAuthChecking(false);
-      } catch (err) {
+      } catch {
         router.push('/login');
       }
     };

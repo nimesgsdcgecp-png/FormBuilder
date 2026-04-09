@@ -2,6 +2,7 @@ package com.sttl.formbuilder2.controller;
 
 import com.sttl.formbuilder2.model.entity.AppUser;
 import com.sttl.formbuilder2.repository.UserRepository;
+import com.sttl.formbuilder2.util.ApiConstants;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/profile")
+@RequestMapping(ApiConstants.PROFILE_BASE)
 public class ProfileController {
 
     private final UserRepository userRepository;
@@ -21,7 +22,7 @@ public class ProfileController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @PutMapping("/update")
+    @PutMapping(ApiConstants.PROFILE_UPDATE)
     public ResponseEntity<?> updateProfile(@RequestBody Map<String, String> payload, Authentication auth) {
         AppUser user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));

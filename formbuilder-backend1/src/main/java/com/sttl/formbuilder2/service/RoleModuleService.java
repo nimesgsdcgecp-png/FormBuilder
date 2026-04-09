@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,7 +23,7 @@ public class RoleModuleService {
     private final ModuleRepository moduleRepository;
 
     @Transactional
-    public void assignModulesToRole(Long roleId, List<Long> moduleIds) {
+    public void assignModulesToRole(UUID roleId, List<UUID> moduleIds) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
@@ -44,7 +45,7 @@ public class RoleModuleService {
     }
 
     @Transactional(readOnly = true)
-    public List<Module> getModulesByRole(Long roleId) {
+    public List<Module> getModulesByRole(UUID roleId) {
         return roleModuleRepository.findByRoleId(roleId).stream()
                 .map(RoleModule::getModule)
                 .collect(Collectors.toList());

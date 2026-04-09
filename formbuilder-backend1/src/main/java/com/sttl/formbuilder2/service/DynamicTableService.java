@@ -11,8 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * DynamicTableService — DDL Management for Form Submission Tables
@@ -28,8 +28,9 @@ public class DynamicTableService {
     public void repairLongFieldKeys() {
         // PostgreSQL physically truncates identifiers to 63 chars.
         // We must sync our metadata (form_fields) if it contains longer strings.
-        jdbcTemplate.execute("UPDATE form_fields SET column_name = LEFT(column_name, 63) WHERE LENGTH(column_name) > 63");
-        jdbcTemplate.execute("UPDATE form_fields SET parent_column_name = LEFT(parent_column_name, 63) WHERE LENGTH(parent_column_name) > 63");
+        jdbcTemplate.execute("UPDATE form_fields SET field_key = LEFT(field_key, 63) WHERE LENGTH(field_key) > 63");
+        jdbcTemplate.execute(
+                "UPDATE form_fields SET parent_column_name = LEFT(parent_column_name, 63) WHERE LENGTH(parent_column_name) > 63");
     }
 
     @Transactional
@@ -37,8 +38,8 @@ public class DynamicTableService {
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE TABLE IF NOT EXISTS \"").append(tableName).append("\" (");
 
-        sql.append("submission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
-        sql.append("form_version_id BIGINT, ");
+        sql.append("id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ");
+        sql.append("form_version_id UUID, ");
         sql.append("submitted_by VARCHAR(100), ");
         sql.append("is_draft BOOLEAN DEFAULT FALSE, ");
         sql.append("submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, ");
@@ -54,12 +55,12 @@ public class DynamicTableService {
                     || field.getType() == FieldType.PAGE_BREAK) {
                 continue;
             }
-            String columnName = field.getColumnName();
-            if (columnName == null || columnName.trim().isEmpty()) {
-                columnName = generateColumnName(field.getLabel());
+            String fieldKey = field.getFieldKey();
+            if (fieldKey == null || fieldKey.trim().isEmpty()) {
+                fieldKey = generateColumnName(field.getLabel());
             }
             String sqlType = mapToSqlType(field.getType());
-            sql.append("\"").append(columnName).append("\" ").append(sqlType).append(", ");
+            sql.append("\"").append(fieldKey).append("\" ").append(sqlType).append(", ");
         }
 
         if (!allFields.isEmpty()) {
@@ -72,7 +73,7 @@ public class DynamicTableService {
 
     @Transactional
     public void alterDynamicTable(String tableName, List<FieldDefinitionRequestDTO> newFields) {
-        String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ?";
+        String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'";
         List<String> existingColumns = jdbcTemplate.queryForList(checkSql, String.class, tableName);
 
         List<FieldDefinitionRequestDTO> allNewFields = new java.util.ArrayList<>();
@@ -83,45 +84,46 @@ public class DynamicTableService {
                     || field.getType() == FieldType.PAGE_BREAK) {
                 continue;
             }
-            String columnName = field.getColumnName();
-            if (columnName == null || columnName.trim().isEmpty()) {
-                columnName = generateColumnName(field.getLabel());
+            String fieldKey = field.getFieldKey();
+            if (fieldKey == null || fieldKey.trim().isEmpty()) {
+                fieldKey = generateColumnName(field.getLabel());
             }
-            if (!existingColumns.contains(columnName)) {
+            if (!existingColumns.contains(fieldKey)) {
                 String sql = "ALTER TABLE \"" + tableName + "\""
-                        + " ADD COLUMN \"" + columnName + "\""
+                        + " ADD COLUMN IF NOT EXISTS \"" + fieldKey + "\""
                         + " " + mapToSqlType(field.getType());
                 jdbcTemplate.execute(sql);
             }
         }
 
         if (!existingColumns.contains("submission_status")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN submission_status VARCHAR(20) DEFAULT 'SUBMITTED'";
+            String sql = "ALTER TABLE \"" + tableName
+                    + "\" ADD COLUMN IF NOT EXISTS submission_status VARCHAR(20) DEFAULT 'SUBMITTED'";
             jdbcTemplate.execute(sql);
         }
 
         if (!existingColumns.contains("updated_at")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
             jdbcTemplate.execute(sql);
         }
 
         if (!existingColumns.contains("is_deleted")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE";
             jdbcTemplate.execute(sql);
         }
 
         if (!existingColumns.contains("form_version_id")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN form_version_id BIGINT";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN IF NOT EXISTS form_version_id UUID";
             jdbcTemplate.execute(sql);
         }
 
         if (!existingColumns.contains("submitted_by")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN submitted_by VARCHAR(100)";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN IF NOT EXISTS submitted_by VARCHAR(100)";
             jdbcTemplate.execute(sql);
         }
 
         if (!existingColumns.contains("is_draft")) {
-            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN is_draft BOOLEAN DEFAULT FALSE";
+            String sql = "ALTER TABLE \"" + tableName + "\" ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT FALSE";
             jdbcTemplate.execute(sql);
         }
     }
@@ -130,13 +132,14 @@ public class DynamicTableService {
         List<String> dbColumns = getTableColumns(tableName);
         List<String> missing = new java.util.ArrayList<>();
         for (com.sttl.formbuilder2.model.entity.FormField field : fields) {
-            String cname = field.getColumnName();
-            if (cname == null || cname.trim().isEmpty()) continue;
-            
+            String cname = field.getFieldKey();
+            if (cname == null || cname.trim().isEmpty())
+                continue;
+
             // PostgreSQL truncates identifiers to 63 characters.
             // We must truncate before comparison to ensure sync.
             String physicalName = cname.length() > 63 ? cname.substring(0, 63) : cname;
-            
+
             if (!dbColumns.contains(physicalName)) {
                 missing.add(cname);
             }
@@ -146,37 +149,46 @@ public class DynamicTableService {
 
     public void validateNoSchemaDrift(Form form) {
         String tableName = form.getTargetTableName();
-        if (tableName == null) return;
+        if (tableName == null)
+            return;
         List<com.sttl.formbuilder2.model.entity.FormVersion> versions = form.getVersions();
-        if (versions == null || versions.isEmpty()) return;
-        
+        if (versions == null || versions.isEmpty())
+            return;
+
         com.sttl.formbuilder2.model.entity.FormVersion activeVersion = versions.stream()
-            .filter(v -> Boolean.TRUE.equals(v.getIsActive()))
-            .findFirst()
-            .orElse(null);
-            
-        if (activeVersion == null) return; 
-        
-        if (!tableExists(tableName)) return; 
-            
+                .filter(v -> Boolean.TRUE.equals(v.getIsActive()))
+                .findFirst()
+                .orElse(null);
+
+        if (activeVersion == null)
+            return;
+
+        if (!tableExists(tableName))
+            return;
+
         List<String> missingCols = detectSchemaDrift(tableName, activeVersion.getFields());
         if (!missingCols.isEmpty()) {
             throw new com.sttl.formbuilder2.exception.FormBuilderException("SCHEMA_DRIFT_DETECTED",
-                "Table " + tableName + " is missing columns: " + missingCols);
+                    "Table " + tableName + " is missing columns: " + missingCols);
         }
 
-        // Requirement 3.3: Field Type Stability (Check existing columns match new schema types)
+        // Requirement 3.3: Field Type Stability (Check existing columns match new
+        // schema types)
         Map<String, String> dbTypes = getTableColumnTypes(tableName);
         for (com.sttl.formbuilder2.model.entity.FormField field : activeVersion.getFields()) {
-            String cname = field.getColumnName();
-            if (cname == null || cname.isBlank()) continue;
+            String cname = field.getFieldKey();
+            if (cname == null || cname.isBlank())
+                continue;
             String expectedType = mapToSqlType(field.getFieldType());
-            if (expectedType == null) continue; // Skip non-data fields
-            
-            String actualType = dbTypes.get(cname.length() > 63 ? cname.substring(0, 63).toLowerCase() : cname.toLowerCase());
+            if (expectedType == null)
+                continue; // Skip non-data fields
+
+            String actualType = dbTypes
+                    .get(cname.length() > 63 ? cname.substring(0, 63).toLowerCase() : cname.toLowerCase());
             if (actualType != null && !isTypeCompatible(actualType, expectedType)) {
                 throw new com.sttl.formbuilder2.exception.FormBuilderException("TYPE_STABILITY_VIOLATED",
-                    String.format("Field '%s' type cannot be changed from %s to %s", field.getFieldLabel(), actualType, expectedType));
+                        String.format("Field '%s' type cannot be changed from %s to %s", field.getFieldLabel(),
+                                actualType, expectedType));
             }
         }
     }
@@ -188,12 +200,12 @@ public class DynamicTableService {
         List<Object> params = new java.util.ArrayList<>();
 
         List<String> existingColumns = getTableColumns(tableName);
-        
+
         data.forEach((col, val) -> {
             if (existingColumns.contains(col)) {
                 sql.append("\"").append(col).append("\", ");
                 values.append("?, ");
-                
+
                 // Convert complex types to JSON string before saving to DB
                 if (val instanceof java.util.Collection || val instanceof java.util.Map) {
                     try {
@@ -226,9 +238,9 @@ public class DynamicTableService {
         List<String> existingColumns = getTableColumns(tableName);
 
         data.forEach((col, val) -> {
-            if (existingColumns.contains(col) && !col.equals("submission_id")) {
+            if (existingColumns.contains(col) && !col.equals("id")) {
                 sql.append("\"").append(col).append("\" = ?, ");
-                
+
                 // Convert complex types to JSON string before saving to DB
                 if (val instanceof java.util.Collection || val instanceof java.util.Map) {
                     try {
@@ -247,17 +259,20 @@ public class DynamicTableService {
         }
 
         sql.setLength(sql.length() - 2);
-        sql.append(" WHERE submission_id = ?");
+        sql.append(" WHERE id = ?");
         params.add(id);
 
         jdbcTemplate.update(sql.toString(), params.toArray());
     }
-    public Map<String, Object> fetchData(String tableName, int page, int size, String sortBy, String sortOrder, Map<String, String> filters) {
+
+    public Map<String, Object> fetchData(String tableName, int page, int size, String sortBy, String sortOrder,
+            Map<String, String> filters) {
         List<String> existingColumns = getTableColumns(tableName);
         CommonFilterResult filterResult = buildWhereClause(filters, existingColumns);
 
         String countSql = "SELECT COUNT(*) FROM \"" + tableName + "\"" + filterResult.where;
-        long totalElements = jdbcTemplate.queryForObject(countSql, Long.class, filterResult.params.toArray());
+        Long totalElementsObj = jdbcTemplate.queryForObject(countSql, Long.class, filterResult.params.toArray());
+        long totalElements = totalElementsObj != null ? totalElementsObj : 0L;
 
         String dataSql = "SELECT * FROM \"" + tableName + "\"" + filterResult.where +
                 " ORDER BY \"" + sortBy + "\" " + sortOrder +
@@ -268,11 +283,11 @@ public class DynamicTableService {
         return Map.of(
                 "content", content,
                 "totalElements", totalElements,
-                "totalPages", (int) Math.ceil((double) totalElements / size)
-        );
+                "totalPages", (int) Math.ceil((double) totalElements / size));
     }
 
-    public List<Map<String, Object>> fetchAllDataFiltered(String tableName, String sortBy, String sortOrder, Map<String, String> filters) {
+    public List<Map<String, Object>> fetchAllDataFiltered(String tableName, String sortBy, String sortOrder,
+            Map<String, String> filters) {
         List<String> existingColumns = getTableColumns(tableName);
         CommonFilterResult filterResult = buildWhereClause(filters, existingColumns);
 
@@ -289,22 +304,28 @@ public class DynamicTableService {
 
     private CommonFilterResult buildWhereClause(Map<String, String> filters, List<String> existingColumns) {
         boolean includeDeleted = Boolean.parseBoolean(filters.get("include_deleted"));
-        StringBuilder where = new StringBuilder(includeDeleted ? " WHERE is_deleted = true" : " WHERE is_deleted = false");
+        StringBuilder where = new StringBuilder(
+                includeDeleted ? " WHERE is_deleted = true" : " WHERE is_deleted = false");
         List<Object> params = new java.util.ArrayList<>();
 
         String globalSearch = filters.get("q");
 
         filters.forEach((col, val) -> {
-            if (val != null && !val.isBlank() && !col.equals("q") && !col.equals("include_deleted") && existingColumns.contains(col)) {
+            if (val != null && !val.isBlank() && !col.equals("q") && !col.equals("include_deleted")
+                    && existingColumns.contains(col)) {
                 if (col.equals("form_version_id") || col.equals("id")) {
                     where.append(" AND \"").append(col).append("\" = ?");
                     try {
-                        params.add(Long.parseLong(val));
-                    } catch (NumberFormatException e) {
-                        params.add(-1L);
+                        params.add(java.util.UUID.fromString(val));
+                    } catch (Exception e) {
+                        try {
+                            params.add(Long.parseLong(val));
+                        } catch (NumberFormatException nfe) {
+                            params.add(val);
+                        }
                     }
                 } else {
-                    where.append(" AND \"").append(col).append("\" ILIKE ?");
+                    where.append(" AND CAST(\"").append(col).append("\" AS TEXT) ILIKE ?");
                     params.add("%" + val + "%");
                 }
             }
@@ -330,27 +351,29 @@ public class DynamicTableService {
     }
 
     public Map<String, Object> fetchRowById(String tableName, UUID id) {
-        String sql = "SELECT * FROM \"" + tableName + "\" WHERE submission_id = ? AND is_deleted = false";
+        String sql = "SELECT * FROM \"" + tableName + "\" WHERE id = ? AND is_deleted = false";
         return jdbcTemplate.queryForMap(sql, id);
     }
 
     @Transactional
     public void deleteRow(String tableName, UUID id) {
-        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE submission_id = ?";
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE id = ?";
         jdbcTemplate.update(sql, id);
     }
 
     @Transactional
     public void deleteRowsBulk(String tableName, List<UUID> ids) {
-        if (ids == null || ids.isEmpty()) return;
+        if (ids == null || ids.isEmpty())
+            return;
         String placeholders = ids.stream().map(i -> "?").collect(java.util.stream.Collectors.joining(","));
-        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE submission_id IN (" + placeholders + ")";
+        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE id IN (" + placeholders + ")";
         jdbcTemplate.update(sql, ids.toArray());
     }
 
     @Transactional
-    public void softDeleteRowsByForm(String tableName, Long formId) {
-        if (tableName == null || !tableExists(tableName)) return;
+    public void softDeleteRowsByForm(String tableName, UUID formId) {
+        if (tableName == null || !tableExists(tableName))
+            return;
         String sql = "UPDATE \"" + tableName + "\" SET is_deleted = true WHERE is_draft = true";
         jdbcTemplate.update(sql);
     }
@@ -360,9 +383,11 @@ public class DynamicTableService {
      */
     @Transactional
     public void updateStatusBulk(String tableName, List<UUID> ids, String newStatus) {
-        if (ids == null || ids.isEmpty()) return;
+        if (ids == null || ids.isEmpty())
+            return;
         String placeholders = ids.stream().map(i -> "?").collect(java.util.stream.Collectors.joining(","));
-        String sql = "UPDATE \"" + tableName + "\" SET submission_status = ?, updated_at = NOW() WHERE submission_id IN (" + placeholders + ")";
+        String sql = "UPDATE \"" + tableName
+                + "\" SET submission_status = ?, updated_at = NOW() WHERE id IN (" + placeholders + ")";
         Object[] params = new Object[ids.size() + 1];
         params[0] = newStatus;
         for (int i = 0; i < ids.size(); i++) {
@@ -371,44 +396,45 @@ public class DynamicTableService {
         jdbcTemplate.update(sql, params);
     }
 
-    public List<String> getColumnValues(Long formId, String columnName) {
+    public List<String> getColumnValues(UUID formId, String fieldKey) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
         boolean columnExists = form.getVersions().get(0).getFields().stream()
-                .anyMatch(f -> f.getColumnName().equals(columnName));
+                .anyMatch(f -> f.getFieldKey().equals(fieldKey));
 
         if (!columnExists) {
-            throw new RuntimeException("Invalid column name: " + columnName);
+            throw new RuntimeException("Invalid column name: " + fieldKey);
         }
 
         String tableName = form.getTargetTableName();
-        String sql = "SELECT DISTINCT \"" + columnName + "\" FROM \"" + tableName + "\""
-                + " WHERE \"" + columnName + "\" IS NOT NULL";
+        String sql = "SELECT DISTINCT \"" + fieldKey + "\" FROM \"" + tableName + "\""
+                + " WHERE \"" + fieldKey + "\" IS NOT NULL";
 
         return jdbcTemplate.queryForList(sql, String.class);
     }
 
     @Transactional
     public void dropTable(String tableName) {
-        if (tableName == null || tableName.trim().isEmpty()) return;
+        if (tableName == null || tableName.trim().isEmpty())
+            return;
         String sql = "DROP TABLE IF EXISTS \"" + tableName + "\" CASCADE";
         jdbcTemplate.execute(sql);
     }
 
     public boolean tableExists(String tableName) {
-        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?";
+        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ? AND table_schema = 'public'";
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
         return count != null && count > 0;
     }
 
     public List<String> getTableColumns(String tableName) {
-        String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ?";
+        String checkSql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'";
         return jdbcTemplate.queryForList(checkSql, String.class, tableName);
     }
 
     private Map<String, String> getTableColumnTypes(String tableName) {
-        String sql = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ?";
+        String sql = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'";
         Map<String, String> types = new HashMap<>();
         jdbcTemplate.query(sql, (rs) -> {
             types.put(rs.getString("column_name").toLowerCase(), rs.getString("data_type").toUpperCase());
@@ -418,18 +444,28 @@ public class DynamicTableService {
 
     private boolean isTypeCompatible(String dbType, String schemaType) {
         // Simple compatibility mapping
-        if (schemaType.startsWith("VARCHAR") && dbType.contains("CHARACTER")) return true;
-        
-        // Requirement 3.3 Refinement: Allow widening conversions (e.g. INTEGER to DOUBLE PRECISION)
-        // This avoids crashing on legacy forms where numeric fields were created as integers.
-        if (schemaType.equals("DOUBLE PRECISION") && (dbType.contains("DOUBLE") || dbType.contains("NUMERIC") || dbType.contains("DECIMAL") || dbType.contains("INT") || dbType.contains("SERIAL"))) return true;
-        
-        if (schemaType.equals("TEXT") && (dbType.contains("TEXT") || dbType.contains("CHARACTER"))) return true;
-        if (schemaType.equals("BOOLEAN") && dbType.contains("BOOL")) return true;
-        if (schemaType.equals("DATE") && dbType.contains("DATE")) return true;
-        if (schemaType.equals("TIME") && dbType.contains("TIME")) return true;
-        if (schemaType.equals("TIMESTAMP") && dbType.contains("TIMESTAMP")) return true;
-        
+        if (schemaType.startsWith("VARCHAR") && dbType.contains("CHARACTER"))
+            return true;
+
+        // Requirement 3.3 Refinement: Allow widening conversions (e.g. INTEGER to
+        // DOUBLE PRECISION)
+        // This avoids crashing on legacy forms where numeric fields were created as
+        // integers.
+        if (schemaType.equals("DOUBLE PRECISION") && (dbType.contains("DOUBLE") || dbType.contains("NUMERIC")
+                || dbType.contains("DECIMAL") || dbType.contains("INT") || dbType.contains("SERIAL")))
+            return true;
+
+        if (schemaType.equals("TEXT") && (dbType.contains("TEXT") || dbType.contains("CHARACTER")))
+            return true;
+        if (schemaType.equals("BOOLEAN") && dbType.contains("BOOL"))
+            return true;
+        if (schemaType.equals("DATE") && dbType.contains("DATE"))
+            return true;
+        if (schemaType.equals("TIME") && dbType.contains("TIME"))
+            return true;
+        if (schemaType.equals("TIMESTAMP") && dbType.contains("TIMESTAMP"))
+            return true;
+
         return dbType.replace(" ", "").contains(schemaType.replace(" ", ""));
     }
 
@@ -477,16 +513,18 @@ public class DynamicTableService {
 
     @Transactional
     public void restoreRow(String tableName, UUID submissionId) {
-        String sql = "UPDATE \"" + tableName + "\" SET is_deleted = false, updated_at = CURRENT_TIMESTAMP WHERE submission_id = ?";
+        String sql = "UPDATE \"" + tableName
+                + "\" SET is_deleted = false, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
         jdbcTemplate.update(sql, submissionId);
     }
 
     @Transactional
     public void normalizeAllTableStatuses() {
         List<String> tables = jdbcTemplate.queryForList(
-            "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'form_data_%'", String.class);
+                "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'form_data_%'", String.class);
         for (String table : tables) {
-            jdbcTemplate.execute("UPDATE \"" + table + "\" SET submission_status = 'SUBMITTED' WHERE submission_status = 'FINAL'");
+            jdbcTemplate.execute(
+                    "UPDATE \"" + table + "\" SET submission_status = 'SUBMITTED' WHERE submission_status = 'FINAL'");
         }
     }
 }

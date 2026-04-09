@@ -20,7 +20,7 @@ import lombok.Data;
  * → evaluated by RuleEngineService.evaluateCondition()
  *
  * Fields:
- * - {@code field} — the SQL {@code columnName} of the field being evaluated.
+ * - {@code field} — the SQL {@code fieldKey} of the field being evaluated.
  * - {@code operator} — comparison operator (e.g. EQUALS, GREATER_THAN).
  * - {@code value} — the value to compare the submission answer against.
  */

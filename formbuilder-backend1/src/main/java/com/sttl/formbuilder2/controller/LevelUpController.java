@@ -8,6 +8,7 @@ import com.sttl.formbuilder2.repository.LevelUpRequestRepository;
 import com.sttl.formbuilder2.repository.RoleRepository;
 import com.sttl.formbuilder2.repository.UserRepository;
 import com.sttl.formbuilder2.service.RoleService;
+import com.sttl.formbuilder2.util.ApiConstants;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -15,12 +16,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping(ApiConstants.LEVEL_UP_BASE)
 @ConditionalOnProperty(name = "feature.workflow.enabled", havingValue = "true")
 public class LevelUpController {
 
@@ -41,7 +42,7 @@ public class LevelUpController {
 
     }
 
-    @PostMapping("/profile/level-up")
+    @PostMapping(ApiConstants.LEVEL_UP_REQUEST)
     public ResponseEntity<?> requestLevelUp(Authentication auth) {
         AppUser user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -73,15 +74,15 @@ public class LevelUpController {
         return ResponseEntity.ok(Map.of("message", "Request submitted successfully"));
     }
 
-    @GetMapping("/admin/level-up/pending")
+    @GetMapping(ApiConstants.LEVEL_UP_PENDING)
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMINISTRATOR')")
     public ResponseEntity<List<LevelUpRequest>> getPendingRequests() {
         return ResponseEntity.ok(levelUpRequestRepository.findByStatus("PENDING"));
     }
 
-    @PostMapping("/admin/level-up/{id}/action")
+    @PostMapping(ApiConstants.LEVEL_UP_DECIDE)
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMINISTRATOR')")
-    public ResponseEntity<?> actionRequest(@PathVariable("id") Long id, @RequestBody Map<String, String> payload, Authentication auth) {
+    public ResponseEntity<?> actionRequest(@PathVariable("id") UUID id, @RequestBody Map<String, String> payload, Authentication auth) {
         String action = payload.get("action"); // APPROVE or REJECT
         LevelUpRequest request = levelUpRequestRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Request not found"));

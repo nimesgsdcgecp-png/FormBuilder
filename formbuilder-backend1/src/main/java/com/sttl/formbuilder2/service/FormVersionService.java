@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,7 +33,7 @@ public class FormVersionService {
     private final DraftService draftService;
     private final DynamicTableService dynamicTableService;
 
-    public FormVersionResponseDTO createVersion(Long formId) {
+    public FormVersionResponseDTO createVersion(UUID formId) {
         Form form = formRepository.findById(formId)
             .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "Form not found"));
         if (form.getStatus() == FormStatus.ARCHIVED) {
@@ -48,6 +49,11 @@ public class FormVersionService {
         int nextNum = (latest != null ? latest.getVersionNumber() : 0) + 1;
         newVersion.setVersionNumber(nextNum);
         newVersion.setIsActive(false);
+        String actor = SecurityContextHolder.getContext().getAuthentication() != null
+            ? SecurityContextHolder.getContext().getAuthentication().getName()
+            : "system";
+        newVersion.setCreatedBy(actor);
+        newVersion.setDefinitionJson("{}");
         if (latest != null) {
             latest.getFields().forEach(f -> {
                 FormField clone = cloneField(f, newVersion);
@@ -60,7 +66,7 @@ public class FormVersionService {
     }
 
     @Transactional
-    public void activateVersion(Long formId, Long versionId) {
+    public void activateVersion(UUID formId, UUID versionId) {
         FormVersion toActivate = formVersionRepository.findById(versionId)
             .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "Version not found"));
         if (!toActivate.getForm().getId().equals(formId)) {
@@ -73,7 +79,7 @@ public class FormVersionService {
         formVersionRepository.findByFormIdAndIsActiveTrue(formId)
             .ifPresent(prev -> {
                 prev.setIsActive(false);
-                formVersionRepository.save(prev);
+                formVersionRepository.saveAndFlush(prev);
                 dropDraftsForVersion(formId, prev.getId());
             });
 
@@ -85,14 +91,14 @@ public class FormVersionService {
 
         // SYNC TABLE SCHEMA: Ensure the physical table matches the restored version
         String tableName = toActivate.getForm().getTargetTableName();
-        if (tableName != null) {
+        if (tableName != null && dynamicTableService.tableExists(tableName)) {
             List<com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO> fieldDtos = toActivate.getFields().stream()
                 .map(f -> {
                     com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO dto = new com.sttl.formbuilder2.dto.request.FieldDefinitionRequestDTO();
                     dto.setLabel(f.getFieldLabel());
-                    dto.setColumnName(f.getColumnName());
+                    dto.setFieldKey(f.getFieldKey());
                     dto.setType(f.getFieldType());
-                    dto.setRequired(Boolean.TRUE.equals(f.getIsMandatory()));
+                    dto.setRequired(Boolean.TRUE.equals(f.getIsRequired()));
                     dto.setValidation(f.getValidationRules());
                     return dto;
                 }).collect(Collectors.toList());
@@ -102,12 +108,12 @@ public class FormVersionService {
         auditService.log("VERSION_ACTIVATE", actor, "FORM_VERSION", versionId.toString(), "Activated");
     }
 
-    public List<FormVersionResponseDTO> listVersions(Long formId) {
+    public List<FormVersionResponseDTO> listVersions(UUID formId) {
         return formVersionRepository.findByFormIdOrderByVersionNumberDesc(formId)
             .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
-    public FormVersionResponseDTO getVersion(Long formId, Long versionId) {
+    public FormVersionResponseDTO getVersion(UUID formId, UUID versionId) {
         FormVersion version = formVersionRepository.findById(versionId)
             .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "Version not found"));
         if (!version.getForm().getId().equals(formId)) {
@@ -120,10 +126,10 @@ public class FormVersionService {
         return FormField.builder()
             .formVersion(newVersion)
             .fieldLabel(f.getFieldLabel())
-            .columnName(f.getColumnName())
+            .fieldKey(f.getFieldKey())
             .fieldType(f.getFieldType())
-            .isMandatory(f.getIsMandatory())
-            .ordinalPosition(f.getOrdinalPosition())
+            .isRequired(f.getIsRequired())
+            .displayOrder(f.getDisplayOrder())
             .defaultValue(f.getDefaultValue())
             .validationRules(f.getValidationRules())
             .options(f.getOptions())
@@ -137,7 +143,7 @@ public class FormVersionService {
             .build();
     }
 
-    private void dropDraftsForVersion(Long formId, Long oldVersionId) {
+    private void dropDraftsForVersion(UUID formId, UUID oldVersionId) {
         draftService.dropDraftsForVersion(formId, oldVersionId);
     }
 
@@ -179,13 +185,13 @@ public class FormVersionService {
         }
         return FormFieldResponseDTO.builder()
                 .id(field.getId())
-                .fieldLabel(field.getFieldLabel())
-                .columnName(field.getColumnName())
-                .fieldType(field.getFieldType())
-                .isMandatory(field.getIsMandatory())
-                .ordinalPosition(field.getOrdinalPosition())
+                .label(field.getFieldLabel())
+                .columnName(field.getFieldKey())
+                .type(field.getFieldType())
+                .required(field.getIsRequired())
+                .displayOrder(field.getDisplayOrder())
                 .defaultValue(field.getDefaultValue())
-                .validationRules(field.getValidationRules())
+                .validation(field.getValidationRules())
                 .options(parsedOptions)
                 .calculationFormula(field.getCalculationFormula())
                 .parentColumnName(field.getParentColumnName())

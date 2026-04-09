@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.model.entity;
 
+import java.util.UUID;
+
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,14 +14,17 @@ import lombok.*;
 @Builder
 public class FieldValidation {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
     
     @Column(name = "form_version_id", nullable = false)
-    private Long formVersionId;
+    private UUID formVersionId;
 
     @Column(name = "field_key", nullable = false, length = 64)
     private String fieldKey; // Empty validation targets the entire form
+
+    @Column(nullable = false, length = 20)
+    private String validationType;
 
     @Column(nullable = false, length = 20)
     private String scope; // "FIELD" or "FORM"

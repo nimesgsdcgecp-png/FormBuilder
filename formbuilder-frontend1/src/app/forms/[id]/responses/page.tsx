@@ -8,9 +8,9 @@
  * system columns (ID, Date). Each row has Edit and Delete action buttons.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileJson, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List, CheckCircle, Clock } from 'lucide-react';
+import { Download, ArrowLeft, Plus, Trash2, Edit, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, CheckSquare, Square, X, FileSpreadsheet, FileText, ChevronDown, Eye, Filter, RefreshCcw, Settings2, LayoutGrid, List, CheckCircle, Clock } from 'lucide-react';
 import { deleteSubmission, deleteSubmissionsBulk, getSubmissions, updateSubmissionStatusBulk, restoreSubmission, restoreSubmissionsBulk } from '@/services/api';
 import { extractApiError } from '@/utils/error-handler';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -20,6 +20,8 @@ import SubmissionDetailDrawer from '@/components/SubmissionDetailDrawer';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { FORMS, SUBMISSIONS, API_SERVER, FILES } from '@/utils/apiConstants';
+import { sanitizeFormulaInjection } from '@/utils/sanitization';
 
 interface FormHeader {
   key: string;
@@ -27,14 +29,52 @@ interface FormHeader {
   type?: string;
 }
 
+type ResponseRow = Record<string, unknown> & {
+  id: string;
+  submitted_at?: string;
+  submission_status?: string;
+  is_deleted?: boolean;
+};
+
+function normalizeResponseRows(payload: unknown): ResponseRow[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)
+    .map((row) => {
+      const idRaw = row.id;
+      const id = idRaw == null ? '' : String(idRaw);
+      return {
+        ...row,
+        id,
+      } as ResponseRow;
+    })
+    .filter((row) => row.id.length > 0);
+}
+
+interface VersionField {
+  columnName: string;
+  label: string;
+  type: string;
+  ordinalPosition?: number;
+}
+
+interface FormVersionMeta {
+  id: string | number;
+  versionNumber: number;
+  isActive?: boolean;
+  fields: VersionField[];
+}
+
+type ExportCell = string | number | boolean | null | undefined;
+
 export default function ResponsesPage() {
   const params = useParams();
   const router = useRouter();
   const formId = params.id as string;
-  const { hasPermission, isLoading: permsLoading } = usePermissions();
+  const { hasPermission } = usePermissions();
 
   const [headers, setHeaders] = useState<FormHeader[]>([]);
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<ResponseRow[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [formTitle, setFormTitle] = useState('');
@@ -57,7 +97,7 @@ export default function ResponsesPage() {
 
   // Detail Drawer State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+  const [selectedSubmission, setSelectedSubmission] = useState<ResponseRow | null>(null);
 
   // View Mode (Grid vs Table)
   const [viewMode, setViewMode] = useState<'TABLE' | 'GRID'>('TABLE');
@@ -67,7 +107,7 @@ export default function ResponsesPage() {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   // Version Filtering Extensions
-  const [allVersions, setAllVersions] = useState<any[]>([]);
+  const [allVersions, setAllVersions] = useState<FormVersionMeta[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | 'all'>('all');
   const [showArchived, setShowArchived] = useState(false);
   const [showDeletedRows, setShowDeletedRows] = useState(false);
@@ -86,17 +126,17 @@ export default function ResponsesPage() {
     }, 500);
     return () => clearTimeout(timer);
   }, [columnFilters]);
-  
-  const fetchData = async (signal?: AbortSignal) => {
+
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!formId) return;
     setIsFetching(true);
     try {
       // 1. Fetch Form Meta (to get headers)
-      const formRes = await fetch(`http://localhost:8080/api/v1/forms/${formId}`, { 
+      const formRes = await fetch(FORMS.GET(formId), {
         credentials: 'include',
-        signal 
+        signal
       });
-      
+
       if (formRes.status === 401) {
         router.push('/login');
         return;
@@ -109,28 +149,28 @@ export default function ResponsesPage() {
       const formData = await formRes.json();
       setFormTitle(formData.title);
       setPublicToken(formData.publicShareToken);
-      
-      const versions = formData.versions || [];
+
+      const versions = (formData.versions || []) as FormVersionMeta[];
       setAllVersions(versions);
 
       // Determine which version to use for column headers
       let targetVersion = null;
       if (selectedVersionId === 'all') {
-        targetVersion = versions.find((v: any) => v.isActive) || versions[0];
+        targetVersion = versions.find((v) => v.isActive) || versions[0];
       } else {
-        targetVersion = versions.find((v: any) => v.id.toString() === selectedVersionId);
+        targetVersion = versions.find((v) => v.id.toString() === selectedVersionId);
       }
 
       setFormVersion(targetVersion?.versionNumber || null);
-      
+
       const currentFields = (targetVersion?.fields || [])
-        .filter((f: any) => f.fieldType !== 'SECTION_HEADER' && f.fieldType !== 'PAGE_BREAK')
-        .sort((a: any, b: any) => (a.ordinalPosition || 0) - (b.ordinalPosition || 0));
-        
-      const currentFieldNames = new Set(currentFields.map((f: any) => f.columnName));
+        .filter((f) => f.type !== 'SECTION_HEADER' && f.type !== 'PAGE_BREAK')
+        .sort((a, b) => (a.ordinalPosition || 0) - (b.ordinalPosition || 0));
+
+      const currentFieldNames = new Set(currentFields.map((f) => f.columnName));
 
       // 2. Fetch Submissions with Pagination, Sorting, and Filtering
-      const apiFilters: any = { ...debouncedColumnFilters };
+      const apiFilters: Record<string, string> = { ...debouncedColumnFilters };
       if (debouncedSearchTerm) apiFilters['q'] = debouncedSearchTerm;
       if (selectedVersionId !== 'all') apiFilters['form_version_id'] = selectedVersionId;
       if (showDeletedRows) apiFilters['include_deleted'] = 'true';
@@ -144,16 +184,17 @@ export default function ResponsesPage() {
         apiFilters
       );
 
-      setData(response.content);
+      const responseRows = normalizeResponseRows(response.content);
+      setData(response.content as unknown as ResponseRow[]);
       setTotalElements(response.totalElements);
       setTotalPages(response.totalPages);
 
       // 3. Build Headers
       let ghostHeaders: FormHeader[] = [];
-      if (showArchived && response.content.length > 0) {
-        const allDbKeys = Object.keys(response.content[0]);
+      if (showArchived && responseRows.length > 0) {
+        const allDbKeys = Object.keys(responseRows[0]);
         const ghostKeys = allDbKeys.filter(key =>
-          key !== 'submission_id' && key !== 'submitted_at' && key !== 'submission_status' && 
+          key !== 'id' && key !== 'submitted_at' && key !== 'submission_status' &&
           key !== 'form_version_id' && key !== 'is_deleted' && key !== 'is_draft' && key !== 'submitted_by' &&
           !currentFieldNames.has(key)
         );
@@ -165,28 +206,39 @@ export default function ResponsesPage() {
         { key: 'submission_status', label: 'Status' },
         { key: 'submitted_at', label: 'Date' }
       ];
-      const formHeaders = currentFields.map((f: any) => ({
-        key: f.columnName, label: f.fieldLabel, type: f.fieldType
+      const formHeaders = currentFields.map((f) => ({
+        key: f.columnName, label: f.label, type: f.type
       }));
 
       // Only force reset visible columns if headers actually change structure
       const newHeaders = [...standardHeaders, ...formHeaders, ...ghostHeaders];
       setHeaders(newHeaders);
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error("Error loading responses:", error);
-      toast.error(error.message || "Failed to load response data");
+      toast.error(error instanceof Error ? error.message : "Failed to load response data");
     } finally {
       setIsFetching(false);
       setIsInitialLoading(false);
     }
-  };
+  }, [
+    formId,
+    currentPage,
+    pageSize,
+    sortConfig,
+    debouncedColumnFilters,
+    debouncedSearchTerm,
+    selectedVersionId,
+    showArchived,
+    showDeletedRows,
+    router
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
-  }, [formId, currentPage, pageSize, sortConfig, debouncedColumnFilters, debouncedSearchTerm, selectedVersionId, showArchived, showDeletedRows]);
+  }, [fetchData]);
 
   // Reset headers when form changes
   useEffect(() => {
@@ -197,24 +249,36 @@ export default function ResponsesPage() {
 
   // Sync visible columns when headers are initially loaded
   useEffect(() => {
-    if (headers.length > 0 && visibleColumns.size === 0) {
-      setVisibleColumns(new Set(headers.map(h => h.key)));
-    }
+    if (headers.length === 0) return;
+    setVisibleColumns((prev) => {
+      if (prev.size > 0) return prev;
+      return new Set(headers.map((h) => h.key));
+    });
   }, [headers]);
 
   const formatLabel = (key: string) =>
     key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
-  const formatCellValue = (value: any, type?: string) => {
-    if (value === null || value === undefined) return <span className="text-(--text-faint) italic">—</span>;
+  const formatCellValue = (value: unknown, type?: string) => {
+    if (value === null || value === undefined) return <span className="text-text-faint italic">—</span>;
 
     if (type === 'FILE' && value) {
+      // Handle different URL formats - use same logic as SubmissionDetailDrawer
+      let fileUrl: string;
+      if (String(value).startsWith('http')) {
+        fileUrl = value;
+      } else if (String(value).startsWith('/')) {
+        fileUrl = `${API_SERVER}${value}`;
+      } else {
+        fileUrl = FILES.DOWNLOAD(value);
+      }
       return (
         <a
-          href={`http://localhost:8080${value}`}
+          href={fileUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors hover:bg-(--accent) hover:text-white"
+          download
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors hover:bg-accent hover:text-white"
           style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', borderColor: 'var(--accent-muted)' }}
         >
           <Download size={10} /> FILE
@@ -224,9 +288,8 @@ export default function ResponsesPage() {
 
     if (typeof value === 'boolean') {
       return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-          value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-        }`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+          }`}>
           {value ? 'Yes' : 'No'}
         </span>
       );
@@ -240,15 +303,15 @@ export default function ResponsesPage() {
           return (
             <div className="flex gap-1 overflow-hidden" title={parsed.join(', ')}>
               {parsed.slice(0, 2).map((p, i) => (
-                <span key={i} className="px-1.5 py-0.5 rounded bg-(--bg-muted) text-[10px] border border-(--border)">
+                <span key={i} className="px-1.5 py-0.5 rounded bg-bg-muted text-[10px] border" style={{ borderColor: 'var(--border)' }}>
                   {String(p)}
                 </span>
               ))}
-              {parsed.length > 2 && <span className="text-[10px] text-(--text-faint)">+{parsed.length - 2}</span>}
+              {parsed.length > 2 && <span className="text-[10px] text-text-faint">+{parsed.length - 2}</span>}
             </div>
           );
         }
-      } catch (e) {}
+      } catch { }
     }
 
     const str = String(value);
@@ -261,32 +324,31 @@ export default function ResponsesPage() {
 
   // --- Export Logic ---
 
-  const prepareExportData = (): any[][] => {
+  const prepareExportData = (): ExportCell[][] => {
     // 7.1: Export only visible columns, strictly following form definition order
     const exportHeaders = headers.filter(h => visibleColumns.has(h.key));
     if (data.length === 0 || exportHeaders.length === 0) return [];
-    
+
     // Header Row
     const headerRow = exportHeaders.map(h => h.label);
 
     // Data Rows
     const dataRows = data.map((row, idx) => {
       return exportHeaders.map(header => {
-        let value: any = '';
+        let value: ExportCell = '';
         if (header.key === 'serial_no') {
           const globalIdx = (currentPage - 1) * pageSize + idx;
           value = globalIdx + 1;
         } else if (header.key === 'submitted_at') {
-          value = new Date(row[header.key]).toLocaleString();
+          const dateVal = row[header.key];
+          value = dateVal ? new Date(dateVal as string | number).toLocaleString() : '';
         } else {
-          value = row[header.key] || '';
+          value = (row[header.key] as ExportCell) || '';
         }
 
-        // 7.2: CSV Injection Protection
-        const strVal = String(value);
-        if (strVal.startsWith('=') || strVal.startsWith('+') || strVal.startsWith('-') || strVal.startsWith('@')) {
-          value = `'${strVal}`;
-        }
+        // 7.2: CSV Injection Protection (matches backend SubmissionService.java:513-516)
+        // Sanitize for CSV export to prevent formula injection
+        value = sanitizeFormulaInjection(value, 'csv');
 
         return value;
       });
@@ -308,7 +370,7 @@ export default function ResponsesPage() {
         params.append(key, val);
       });
 
-      const res = await fetch(`http://localhost:8080/api/v1/forms/${formId}/submissions/export?${params.toString()}`, { credentials: 'include' });
+      const res = await fetch(`${SUBMISSIONS.EXPORT(formId)}?${params.toString()}`, { credentials: 'include' });
       if (!res.ok) {
         const msg = await extractApiError(res);
         throw new Error(msg);
@@ -321,8 +383,8 @@ export default function ResponsesPage() {
       a.click();
       setShowExportMenu(false);
       toast.success("CSV Downloaded Successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to generate CSV export");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate CSV export");
     }
   };
 
@@ -332,11 +394,18 @@ export default function ResponsesPage() {
       toast.info("No data available to export");
       return;
     }
-    const worksheet = XLSX.utils.aoa_to_sheet(aoaData);
+    
+    // Apply formula injection protection for XLSX format
+    const sanitizedData = aoaData.map(row => 
+      row.map(cell => sanitizeFormulaInjection(cell, 'xlsx'))
+    );
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(sanitizedData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Responses");
     XLSX.writeFile(workbook, `${formTitle.replace(/\s+/g, '_')}_responses.xlsx`);
     setShowExportMenu(false);
+    toast.success("XLSX Downloaded Successfully");
   };
 
   const downloadPDF = () => {
@@ -345,9 +414,12 @@ export default function ResponsesPage() {
       toast.info("No data available to export");
       return;
     }
+    
     const doc = new jsPDF('landscape');
-    const tableHeaders = aoaData[0];
-    const tableData = aoaData.slice(1);
+    const tableHeaders = aoaData[0].map(h => sanitizeFormulaInjection(h, 'pdf'));
+    const tableData = aoaData.slice(1).map(row => 
+      row.map(cell => sanitizeFormulaInjection(cell, 'pdf'))
+    );
 
     doc.text(formTitle, 14, 15);
     autoTable(doc, {
@@ -360,6 +432,7 @@ export default function ResponsesPage() {
 
     doc.save(`${formTitle.replace(/\s+/g, '_')}_responses.pdf`);
     setShowExportMenu(false);
+    toast.success("PDF Downloaded Successfully");
   };
 
   const handleDelete = (idOrIds: string | string[]) => {
@@ -378,7 +451,7 @@ export default function ResponsesPage() {
                 // If we are showing deleted rows, just refresh the data to update status
                 fetchData();
               } else {
-                setData((prevData) => prevData.filter(row => !idOrIds.includes(row.submission_id)));
+                setData((prevData) => prevData.filter(row => !idOrIds.includes(row.id)));
               }
               setSelectedIds(new Set());
             } else {
@@ -386,15 +459,15 @@ export default function ResponsesPage() {
               if (showDeletedRows) {
                 fetchData();
               } else {
-                setData((prevData) => prevData.filter(row => row.submission_id !== idOrIds));
+                setData((prevData) => prevData.filter(row => row.id !== idOrIds));
               }
               const newSelected = new Set(selectedIds);
               newSelected.delete(idOrIds as string);
               setSelectedIds(newSelected);
             }
             toast.success(`${count} response${count > 1 ? 's' : ''} deleted`);
-          } catch (err: any) {
-            toast.error(err.message || "Failed to delete response");
+          } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : "Failed to delete response");
           }
         }
       },
@@ -415,8 +488,8 @@ export default function ResponsesPage() {
       }
       toast.success(`${count} response${count > 1 ? 's' : ''} restored`);
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to restore response");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore response");
     }
   };
 
@@ -430,14 +503,14 @@ export default function ResponsesPage() {
       await updateSubmissionStatusBulk(formId, ids, newStatus);
       // Update local data to reflect new status
       setData((prevData) => prevData.map(row =>
-        ids.includes(row.submission_id)
+        ids.includes(row.id)
           ? { ...row, submission_status: newStatus }
           : row
       ));
       setSelectedIds(new Set());
       toast.success(`${count} response${count > 1 ? 's' : ''} marked as ${statusLabel}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update status");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update status");
     }
   };
 
@@ -453,17 +526,12 @@ export default function ResponsesPage() {
     setCurrentPage(1); // Reset to first page
   };
 
-  const getSortIcon = (key: string) => {
-    if (sortConfig.key !== key) return <ArrowUpDown size={14} className="opacity-30" />;
-    return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />;
-  };
-
   // Selection helpers
   const toggleSelectAll = () => {
     if (selectedIds.size === paginatedData.length && paginatedData.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(paginatedData.map(r => r.submission_id)));
+      setSelectedIds(new Set(paginatedData.map(r => r.id)));
     }
   };
 
@@ -499,18 +567,18 @@ export default function ResponsesPage() {
           <div className="flex items-center gap-6">
             <button
               onClick={() => router.push('/')}
-              className="p-2 rounded-xl transition-all hover:bg-(--bg-muted) group shrink-0"
-              style={{ color: 'var(--text-muted)' }} 
+              className="p-2 rounded-xl transition-all hover:bg-bg-muted group shrink-0"
+              style={{ color: 'var(--text-muted)' }}
             >
               <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5 overflow-hidden">
-                <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-(--text-faint) whitespace-nowrap">Responses Page</span>
-                <span className="hidden sm:inline text-(--border) font-light">/</span>
+                <span className="hidden sm:inline text-[8px] font-black uppercase tracking-[0.2em] text-text-faint whitespace-nowrap">Responses Page</span>
+                <span className="hidden sm:inline text-border-color font-light">/</span>
                 <h1 className="text-base sm:text-xl font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>{formTitle}</h1>
                 {formVersion !== null && (
-                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-(--accent-subtle) text-(--accent) text-[10px] font-black uppercase tracking-widest border border-(--accent-muted)">
+                  <span className="shrink-0 px-2 py-0.5 rounded-md bg-accent-subtle text-accent text-[10px] font-black uppercase tracking-widest border border-accent-muted">
                     v{formVersion}.0
                   </span>
                 )}
@@ -524,12 +592,12 @@ export default function ResponsesPage() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            
+
             <a
               href={`/f/${publicToken}`}
               target="_blank"
               className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
-              style={{ background: '#2563eb' }} 
+              style={{ background: '#2563eb' }}
             >
               <Plus size={14} className="sm:size-4" /> <span className="hidden xs:inline">New Record</span>
             </a>
@@ -562,7 +630,7 @@ export default function ResponsesPage() {
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Version Filter */}
             <div className="relative shrink-0">
-               <select
+              <select
                 value={selectedVersionId}
                 onChange={(e) => {
                   setSelectedVersionId(e.target.value);
@@ -573,7 +641,7 @@ export default function ResponsesPage() {
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <option value="all">All Versions</option>
-                {allVersions.map((v: any) => (
+                {allVersions.map((v) => (
                   <option key={v.id} value={v.id.toString()}>
                     Version {v.versionNumber} {v.isActive ? '(Active)' : ''}
                   </option>
@@ -585,16 +653,15 @@ export default function ResponsesPage() {
             <div className="relative">
               <button
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                  Object.keys(columnFilters).length > 0 || showFilterPanel ? 'bg-blue-600 border-blue-600 text-white' : 'hover:border-blue-400'
-                }`}
-                style={{ 
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${Object.keys(columnFilters).length > 0 || showFilterPanel ? 'bg-blue-600 border-blue-600 text-white' : 'hover:border-blue-400'
+                  }`}
+                style={{
                   background: Object.keys(columnFilters).length > 0 || showFilterPanel ? '#2563eb' : 'var(--bg-surface)',
                   borderColor: Object.keys(columnFilters).length > 0 || showFilterPanel ? '#2563eb' : 'var(--border)',
                   color: Object.keys(columnFilters).length > 0 || showFilterPanel ? 'white' : 'var(--text-muted)'
                 }}
               >
-                <Filter size={16} /> 
+                <Filter size={16} />
                 <span className="hidden lg:inline">Filters</span>
                 {Object.keys(columnFilters).length > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 rounded-full bg-white text-blue-600 text-[10px]">{Object.keys(columnFilters).length}</span>
@@ -610,8 +677,8 @@ export default function ResponsesPage() {
                         <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>Advanced Filtering</span>
                         <span className="text-[9px]" style={{ color: 'var(--text-faint)' }}>Match specific column values</span>
                       </div>
-                      <button 
-                        onClick={() => { setColumnFilters({}); setCurrentPage(1); }} 
+                      <button
+                        onClick={() => { setColumnFilters({}); setCurrentPage(1); }}
                         className="text-[10px] font-bold text-blue-600 hover:underline"
                       >
                         Reset
@@ -670,16 +737,15 @@ export default function ResponsesPage() {
             <div className="relative">
               <button
                 onClick={() => setShowColumnConfig(!showColumnConfig)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                  showColumnConfig ? '' : 'hover:border-slate-300'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${showColumnConfig ? '' : 'hover:border-slate-300'
+                  }`}
                 style={{
                   background: showColumnConfig ? 'var(--text-primary)' : 'var(--bg-surface)',
                   borderColor: showColumnConfig ? 'var(--text-primary)' : 'var(--border)',
                   color: showColumnConfig ? 'var(--bg-surface)' : 'var(--text-muted)'
                 }}
               >
-                <Settings2 size={16} /> 
+                <Settings2 size={16} />
                 <span className="hidden lg:inline">Columns</span>
               </button>
 
@@ -693,7 +759,7 @@ export default function ResponsesPage() {
                     </div>
                     <div className="max-h-80 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-[var(--border)]">
                       {/* Archive Toggle */}
-                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-(--border) mb-2">
+                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-border-color mb-2">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Archived Fields</span>
                           <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Show old/removed field values</span>
@@ -707,7 +773,7 @@ export default function ResponsesPage() {
                       </label>
 
                       {/* Deleted Toggle */}
-                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-(--border) mb-2">
+                      <label className="flex items-center justify-between cursor-pointer group pb-2 border-b border-border-color mb-2">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Deleted Responses</span>
                           <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Show records in trash</span>
@@ -748,14 +814,14 @@ export default function ResponsesPage() {
             </div>
 
             {/* Export */}
-            {hasPermission('EXPORT', Number(formId)) && (
+            {hasPermission('EXPORT', formId) && (
               <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all hover:border-slate-300"
                   style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                 >
-                  <Download size={16} /> 
+                  <Download size={16} />
                   <span className="hidden lg:inline">Export</span>
                   <ChevronDown size={14} className={`transition-transform duration-200 ${showExportMenu ? 'rotate-180' : ''}`} />
                 </button>
@@ -765,13 +831,13 @@ export default function ResponsesPage() {
                     <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
                     <div className="absolute right-0 mt-3 w-56 rounded-2xl shadow-2xl border z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                       <div className="p-2">
-                         <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
+                        <button onClick={downloadXLSX} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-bg-muted" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center"><FileSpreadsheet size={16} /></div> Excel (.xlsx)
                         </button>
-                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
+                        <button onClick={downloadCSV} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-bg-muted" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center"><FileText size={16} /></div> CSV (.csv)
                         </button>
-                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-(--bg-muted)" style={{ color: 'var(--text-primary)' }}>
+                        <button onClick={downloadPDF} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold transition-colors hover:bg-bg-muted" style={{ color: 'var(--text-primary)' }}>
                           <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center"><FileText size={16} /></div> PDF (.pdf)
                         </button>
                       </div>
@@ -787,7 +853,7 @@ export default function ResponsesPage() {
         {(Object.keys(columnFilters).length > 0 || searchTerm) && (
           <div className="flex flex-wrap items-center gap-2 mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-2">Applied Filters:</span>
-            
+
             {searchTerm && (
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-xs font-bold">
                 <Search size={12} />
@@ -805,7 +871,7 @@ export default function ResponsesPage() {
                   <Filter size={12} style={{ color: 'var(--text-muted)' }} />
                   <span className="font-medium" style={{ color: 'var(--text-muted)' }}>{header?.label || key}:</span>
                   <span>{value}</span>
-                  <button 
+                  <button
                     onClick={() => {
                       setColumnFilters(prev => {
                         const updated = { ...prev };
@@ -822,7 +888,7 @@ export default function ResponsesPage() {
             })}
 
             {(Object.keys(columnFilters).length + (searchTerm ? 1 : 0)) > 1 && (
-              <button 
+              <button
                 onClick={() => { setColumnFilters({}); setSearchTerm(''); setCurrentPage(1); }}
                 className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-all ml-2 flex items-center gap-1 group"
               >
@@ -843,280 +909,276 @@ export default function ResponsesPage() {
           </div>
 
           {viewMode === 'TABLE' ? (
-          <div className="rounded-3xl border shadow-sm overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full border-separate border-spacing-0">
-                <thead>
-                  <tr className="bg-(--bg-muted)/50">
-                    <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b bg-inherit" style={{ borderColor: 'var(--border)' }}>
-                      <button
-                        onClick={toggleSelectAll}
-                        className={`p-2 rounded-lg transition-all ${selectedIds.size === paginatedData.length && paginatedData.length > 0 ? 'text-blue-600' : 'text-slate-300'}`}
-                      >
-                        {selectedIds.size === paginatedData.length && paginatedData.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
-                      </button>
-                    </th>
-                    {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
-                      <th
-                        key={header.key}
-                        onClick={() => handleSort(header.key)}
-                        className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest border-b cursor-pointer hover:bg-(--bg-hover) transition-colors z-20 bg-inherit"
-                        style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}
-                      >
-                        <div className="flex items-center gap-2">
-                          {header.label}
-                          {sortConfig.key === header.key ? (
-                            sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />
-                          ) : (
-                            <ArrowUpDown size={12} className="text-slate-300 opacity-0 group-hover:opacity-100" />
-                          )}
-                        </div>
-                      </th>
-                    ))}
-                    <th className="sticky top-0 right-0 px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest border-b z-30 bg-inherit" style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                  {paginatedData.length === 0 ? (
-                    <tr>
-                      <td colSpan={visibleColumns.size + 2} className="px-6 py-24 text-center">
-                        <div className="flex flex-col items-center justify-center space-y-4">
-                          <div className="w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
-                            <Search size={32} />
-                          </div>
-                          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                            {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedData.map((row, idx) => {
-                      const globalIdx = (currentPage - 1) * pageSize + idx;
-                      const isSelected = selectedIds.has(row.submission_id);
-                      return (
-                        <tr
-                          key={row.submission_id}
-                          className={`group/row transition-colors hover:bg-slate-50/50 ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
-                          style={{ background: isSelected ? 'var(--bg-muted)' : (row.is_deleted ? '#fef2f2' : 'var(--bg-surface)') }} 
+            <div className="rounded-3xl border shadow-sm overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full border-separate border-spacing-0">
+                  <thead>
+                    <tr className="bg-bg-muted/50">
+                      <th className="sticky top-0 px-6 py-5 text-left w-12 z-30 border-b bg-inherit" style={{ borderColor: 'var(--border)' }}>
+                        <button
+                          onClick={toggleSelectAll}
+                          className={`p-2 rounded-lg transition-all ${selectedIds.size === paginatedData.length && paginatedData.length > 0 ? 'text-blue-600' : 'text-slate-300'}`}
                         >
-                          <td className="px-6 py-4 border-b border-slate-100">
-                            <button
-                              onClick={() => toggleSelect(row.submission_id)}
-                              className="p-2 rounded-lg transition-all"
-                              style={{ color: isSelected ? 'var(--accent)' : 'var(--text-faint)' }}
-                            >
-                              {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                            </button>
-                          </td>
-                          {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
-                            <td
-                              key={`${row.submission_id}-${header.key}`}
-                              className="px-6 py-4 text-sm border-b whitespace-nowrap"
-                              style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }} 
-                            >
-                              {header.key === 'serial_no' ? (
-                                <span className="font-mono text-slate-400">{globalIdx + 1}</span>
-                              ) : header.key === 'submitted_at' ? (
-                                <span className="text-slate-500">{new Date(row[header.key]).toLocaleString()}</span>
-                              ) : header.key === 'submission_status' ? (
-                                row.is_deleted ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
-                                    DELETED
-                                  </span>
-                                ) : (
-                                  <span
-                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                                      row[header.key] === 'RESPONSE_DRAFT' 
-                                        ? 'bg-slate-100 text-slate-600 border-slate-200' 
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                    }`}
-                                  >
-                                    {row[header.key] || 'FINAL'}
-                                  </span>
-                                )
-                              ) : (
-                                <div className="max-w-[200px] truncate">
-                                  {formatCellValue(row[header.key], header.type)}
-                                </div>
-                              )}
-                            </td>
-                          ))}
-                          <td className="px-6 py-4 border-b text-right sticky right-0 z-10 bg-inherit" style={{ borderColor: 'var(--border)' }}>
-                            <div className="flex justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => {
-                                  setSelectedSubmission(row);
-                                  setIsDrawerOpen(true);
-                                }}
-                                className="p-2 rounded-lg transition-all"
-                                style={{ color: 'var(--text-faint)' }}
-                                title="View Details"
-                              >
-                                <Eye size={16} />
-                              </button>
-                              <a
-                                href={`/f/${publicToken}?edit=${row.submission_id}`}
-                                className="p-2 rounded-lg transition-all"
-                                style={{ color: 'var(--text-faint)' }}
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </a>
-                              {row.is_deleted ? (
-                                <button
-                                  onClick={() => handleRestore(row.submission_id)}
-                                  className="p-2 rounded-lg transition-all hover:bg-emerald-500/10 hover:text-emerald-500"
-                                  style={{ color: 'var(--text-faint)' }}
-                                  title="Restore"
-                                >
-                                  <RefreshCcw size={16} />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleDelete(row.submission_id)}
-                                  className="p-2 rounded-lg transition-all hover:bg-red-500/10 hover:text-red-500"
-                                  style={{ color: 'var(--text-faint)' }}
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
+                          {selectedIds.size === paginatedData.length && paginatedData.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
+                        </button>
+                      </th>
+                      {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
+                        <th
+                          key={header.key}
+                          onClick={() => handleSort(header.key)}
+                          className="sticky top-0 px-6 py-5 text-left text-[10px] font-black uppercase tracking-widest border-b cursor-pointer hover:bg-bg-hover transition-colors z-20 bg-inherit"
+                          style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}
+                        >
+                          <div className="flex items-center gap-2">
+                            {header.label}
+                            {sortConfig.key === header.key ? (
+                              sortConfig.direction === 'asc' ? <ArrowUp size={12} className="text-blue-500" /> : <ArrowDown size={12} className="text-blue-500" />
+                            ) : (
+                              <ArrowUpDown size={12} className="text-slate-300 opacity-0 group-hover:opacity-100" />
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                      <th className="sticky top-0 right-0 px-6 py-5 text-right text-[10px] font-black uppercase tracking-widest border-b z-30 bg-inherit" style={{ color: 'var(--text-faint)', borderColor: 'var(--border)' }}>
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                    {paginatedData.length === 0 ? (
+                      <tr>
+                        <td colSpan={visibleColumns.size + 2} className="px-6 py-24 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <div className="w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
+                              <Search size={32} />
                             </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          /* ── Grid View ── */
-          <div className="space-y-8">
-            {paginatedData.length === 0 ? (
-              <div className="rounded-3xl border border-dashed py-20 text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
-                <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
-                  <Search size={32} />
-                </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                  {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
-                </p>
+                            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+                              {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedData.map((row, idx) => {
+                        const globalIdx = (currentPage - 1) * pageSize + idx;
+                        const isSelected = selectedIds.has(row.id);
+                        return (
+                          <tr
+                            key={row.id}
+                            className={`group/row transition-colors hover:bg-slate-50/50 ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
+                            style={{ background: isSelected ? 'var(--bg-muted)' : (row.is_deleted ? '#fef2f2' : 'var(--bg-surface)') }}
+                          >
+                            <td className="px-6 py-4 border-b border-slate-100">
+                              <button
+                                onClick={() => toggleSelect(row.id)}
+                                className="p-2 rounded-lg transition-all"
+                                style={{ color: isSelected ? 'var(--accent)' : 'var(--text-faint)' }}
+                              >
+                                {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                              </button>
+                            </td>
+                            {headers.filter(h => visibleColumns.has(h.key)).map((header) => (
+                              <td
+                                key={`${row.id}-${header.key}`}
+                                className="px-6 py-4 text-sm border-b whitespace-nowrap"
+                                style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                              >
+                                {header.key === 'serial_no' ? (
+                                  <span className="font-mono text-slate-400">{globalIdx + 1}</span>
+                                ) : header.key === 'submitted_at' ? (
+                                  <span className="text-slate-500">{row[header.key] ? new Date(row[header.key] as string | number).toLocaleString() : ''}</span>
+                                ) : header.key === 'submission_status' ? (
+                                  row.is_deleted ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
+                                      DELETED
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${row[header.key] === 'RESPONSE_DRAFT'
+                                          ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                          : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        }`}
+                                    >
+                                      {row[header.key] || 'FINAL'}
+                                    </span>
+                                  )
+                                ) : (
+                                  <div className="max-w-[200px] truncate">
+                                    {formatCellValue(row[header.key], header.type)}
+                                  </div>
+                                )}
+                              </td>
+                            ))}
+                            <td className="px-6 py-4 border-b text-right sticky right-0 z-10 bg-inherit" style={{ borderColor: 'var(--border)' }}>
+                              <div className="flex justify-end gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => {
+                                    setSelectedSubmission(row);
+                                    setIsDrawerOpen(true);
+                                  }}
+                                  className="p-2 rounded-lg transition-all"
+                                  style={{ color: 'var(--text-faint)' }}
+                                  title="View Details"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                                <a
+                                  href={`/f/${publicToken}?edit=${row.id}`}
+                                  className="p-2 rounded-lg transition-all"
+                                  style={{ color: 'var(--text-faint)' }}
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </a>
+                                {row.is_deleted ? (
+                                  <button
+                                    onClick={() => handleRestore(row.id)}
+                                    className="p-2 rounded-lg transition-all hover:bg-emerald-500/10 hover:text-emerald-500"
+                                    style={{ color: 'var(--text-faint)' }}
+                                    title="Restore"
+                                  >
+                                    <RefreshCcw size={16} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleDelete(row.id)}
+                                    className="p-2 rounded-lg transition-all hover:bg-red-500/10 hover:text-red-500"
+                                    style={{ color: 'var(--text-faint)' }}
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {paginatedData.map((row, idx) => {
-                  const globalIdx = (currentPage - 1) * pageSize + idx;
-                  const isSelected = selectedIds.has(row.submission_id);
-                  return (
+            </div>
+          ) : (
+            /* ── Grid View ── */
+            <div className="space-y-8">
+              {paginatedData.length === 0 ? (
+                <div className="rounded-3xl border border-dashed py-20 text-center" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
+                  <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}>
+                    <Search size={32} />
+                  </div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+                    {searchTerm ? 'No matches found for your search.' : 'No responses yet.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {paginatedData.map((row, idx) => {
+                    const globalIdx = (currentPage - 1) * pageSize + idx;
+                    const isSelected = selectedIds.has(row.id);
+                    return (
                       <div
-                        key={row.submission_id}
-                        className={`group relative p-6 rounded-4xl border transition-all duration-300 ${
-                          isSelected ? 'shadow-md translate-y-[-4px]' : 'hover:shadow-xl hover:translate-y-[-4px]'
-                        } ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
-                        style={{ 
+                        key={row.id}
+                        className={`group relative p-6 rounded-4xl border transition-all duration-300 ${isSelected ? 'shadow-md translate-y-[-4px]' : 'hover:shadow-xl hover:translate-y-[-4px]'
+                          } ${row.is_deleted ? 'opacity-60 grayscale-[0.2]' : ''}`}
+                        style={{
                           background: isSelected ? 'var(--accent-subtle)' : (row.is_deleted ? '#fef2f2' : 'var(--bg-surface)'),
                           borderColor: isSelected ? 'var(--accent)' : 'var(--border)'
                         }}
                       >
-                      {/* Checkbox Overlay */}
-                      <button
-                        onClick={() => toggleSelect(row.submission_id)}
-                        className={`absolute top-6 left-6 p-2 rounded-xl transition-all z-10 border ${
-                          isSelected ? 'bg-blue-600 text-white shadow-lg border-blue-600' : 'opacity-0 group-hover:opacity-100 shadow-sm'
-                        }`}
-                        style={{ 
-                          background: isSelected ? '#2563eb' : 'var(--bg-muted)',
-                          borderColor: isSelected ? '#2563eb' : 'var(--border)',
-                          color: isSelected ? 'white' : 'var(--text-faint)'
-                        }}
-                      >
-                        {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
+                        {/* Checkbox Overlay */}
+                        <button
+                          onClick={() => toggleSelect(row.id)}
+                          className={`absolute top-6 left-6 p-2 rounded-xl transition-all z-10 border ${isSelected ? 'bg-blue-600 text-white shadow-lg border-blue-600' : 'opacity-0 group-hover:opacity-100 shadow-sm'
+                            }`}
+                          style={{
+                            background: isSelected ? '#2563eb' : 'var(--bg-muted)',
+                            borderColor: isSelected ? '#2563eb' : 'var(--border)',
+                            color: isSelected ? 'white' : 'var(--text-faint)'
+                          }}
+                        >
+                          {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
 
-                      <div className="flex justify-end mb-6">
-                        {row.is_deleted ? (
-                          <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
-                            DELETED
-                          </span>
-                        ) : (
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                            row.submission_status === 'RESPONSE_DRAFT' 
-                              ? 'bg-amber-50 text-amber-600 border-amber-100' 
-                              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                          }`}>
-                            {row.submission_status || 'FINAL'}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-5 mb-8">
-                        {headers.filter(h => visibleColumns.has(h.key) && h.key !== 'submission_status').slice(0, 5).map(header => (
-                          <div key={header.key} className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>{header.label}</label>
-                            <p className="text-sm font-bold truncate group-hover:text-blue-600 transition-colors" style={{ color: 'var(--text-primary)' }}>
-                              {header.key === 'serial_no' ? globalIdx + 1 : header.key === 'submitted_at' ? new Date(row[header.key]).toLocaleDateString() : formatCellValue(row[header.key], header.type)}
-                            </p>
+                        <div className="flex justify-end mb-6">
+                          {row.is_deleted ? (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-red-50 text-red-600 border-red-100">
+                              DELETED
+                            </span>
+                          ) : (
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${row.submission_status === 'RESPONSE_DRAFT'
+                                ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              }`}>
+                              {row.submission_status || 'FINAL'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-5 mb-8">
+                          {headers.filter(h => visibleColumns.has(h.key) && h.key !== 'submission_status').slice(0, 5).map(header => (
+                            <div key={header.key} className="space-y-1.5">
+                              <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>{header.label}</label>
+                              <p className="text-sm font-bold truncate group-hover:text-blue-600 transition-colors" style={{ color: 'var(--text-primary)' }}>
+                                {header.key === 'serial_no' ? globalIdx + 1 : header.key === 'submitted_at' ? (row[header.key] ? new Date(row[header.key] as string | number).toLocaleDateString() : '') : formatCellValue(row[header.key], header.type)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-6 border-t" style={{ borderColor: 'var(--border)' }}>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-faint)' }}>Status</span>
+                            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                              {row.is_deleted ? 'Deleted' : (row.submission_status === 'RESPONSE_DRAFT' ? 'In Progress' : 'Completed')}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-6 border-t" style={{ borderColor: 'var(--border)' }}>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: 'var(--text-faint)' }}>Status</span>
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                            {row.is_deleted ? 'Deleted' : (row.submission_status === 'RESPONSE_DRAFT' ? 'In Progress' : 'Completed')}
-                          </span>
-                        </div>
-                        <div className="flex gap-1.5">
-                           <button 
-                            onClick={() => { setSelectedSubmission(row); setIsDrawerOpen(true); }} 
-                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
-                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
-                            title="View Details"
-                           >
-                            <Eye size={18} />
-                           </button>
-                           <a 
-                            href={`/f/${publicToken}?edit=${row.submission_id}`} 
-                            className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
-                            style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
-                            title="Edit"
-                           >
-                            <Edit size={18} />
-                           </a>
-                           {row.is_deleted ? (
-                              <button 
-                               onClick={() => handleRestore(row.submission_id)} 
-                               className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-emerald-500/10 hover:text-emerald-500"
-                               style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
-                               title="Restore"
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => { setSelectedSubmission(row); setIsDrawerOpen(true); }}
+                              className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
+                              style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                              title="View Details"
+                            >
+                              <Eye size={18} />
+                            </button>
+                            <a
+                              href={`/f/${publicToken}?edit=${row.id}`}
+                              className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm"
+                              style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                              title="Edit"
+                            >
+                              <Edit size={18} />
+                            </a>
+                            {row.is_deleted ? (
+                              <button
+                                onClick={() => handleRestore(row.id)}
+                                className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-emerald-500/10 hover:text-emerald-500"
+                                style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                                title="Restore"
                               >
-                               <RefreshCcw size={18} />
+                                <RefreshCcw size={18} />
                               </button>
-                           ) : (
-                              <button 
-                               onClick={() => handleDelete(row.submission_id)} 
-                               className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-red-500/10 hover:text-red-500"
-                               style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
-                               title="Delete"
+                            ) : (
+                              <button
+                                onClick={() => handleDelete(row.id)}
+                                className="p-2.5 rounded-2xl transition-all active:scale-90 shadow-sm hover:bg-red-500/10 hover:text-red-500"
+                                style={{ background: 'var(--bg-muted)', color: 'var(--text-faint)' }}
+                                title="Delete"
                               >
-                               <Trash2 size={18} />
+                                <Trash2 size={18} />
                               </button>
-                           )}
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Pagination */}
         {totalElements > 0 && (
@@ -1144,7 +1206,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-bg-muted"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsLeft size={16} />
@@ -1152,7 +1214,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-bg-muted"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronLeft size={16} />
@@ -1165,7 +1227,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-bg-muted"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronRight size={16} />
@@ -1173,7 +1235,7 @@ export default function ResponsesPage() {
               <button
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-(--bg-muted)"
+                className="p-2 rounded-xl border disabled:opacity-30 transition-all hover:bg-bg-muted"
                 style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
               >
                 <ChevronsRight size={16} />

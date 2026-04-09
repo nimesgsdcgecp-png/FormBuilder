@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.service;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sttl.formbuilder2.dto.internal.FormRuleDTO;
@@ -48,7 +50,7 @@ public class SubmissionService {
     }
 
     @Transactional
-    public UUID submitData(Long formId, Map<String, Object> data, Long formVersionId, String status) {
+    public UUID submitData(UUID formId, Map<String, Object> data, UUID formVersionId, String status) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
 
@@ -83,7 +85,7 @@ public class SubmissionService {
         // Validate submission payload version id matches latest active if provided
         if (data.containsKey("formVersionId")) {
             try {
-                Long payloadVersionId = Long.valueOf(data.get("formVersionId").toString());
+                UUID payloadVersionId = UUID.fromString(data.get("formVersionId").toString());
                 if (!latestVersion.getId().equals(payloadVersionId)) {
                     throw new com.sttl.formbuilder2.exception.FormBuilderException("VERSION_MISMATCH", "Form version has changed, please refresh the form.");
                 }
@@ -106,39 +108,39 @@ public class SubmissionService {
         // 1a. Native JSON Validations (required, min, max, minLength, maxLength, pattern)
         if (!"RESPONSE_DRAFT".equals(status)) {
             for (FormField field : activeFields) {
-                Object val = data.get(field.getColumnName());
+                Object val = data.get(field.getFieldKey());
                 boolean isBlank = (val == null || val.toString().trim().isEmpty());
                 
-                if (Boolean.TRUE.equals(field.getIsMandatory()) && isBlank) {
-                    errors.add(Map.of("fieldKey", field.getColumnName(), "message", field.getFieldLabel() + " is required."));
+                if (Boolean.TRUE.equals(field.getIsRequired()) && isBlank) {
+                    errors.add(Map.of("fieldKey", field.getFieldKey(), "message", field.getFieldLabel() + " is required."));
                 }
                 
                 if (!isBlank && field.getValidationRules() != null) {
                     Map<String, Object> vr = field.getValidationRules();
-                    String strVal = val.toString();
+                    String strVal = (val == null) ? "" : val.toString();
                     
                     try {
                         if (vr.containsKey("min") && vr.get("min") != null) {
                             double min = Double.parseDouble(vr.get("min").toString());
-                            if (Double.parseDouble(strVal) < min) errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Must be >= " + min));
+                            if (Double.parseDouble(strVal) < min) errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Must be >= " + min));
                         }
                         if (vr.containsKey("max") && vr.get("max") != null) {
                             double max = Double.parseDouble(vr.get("max").toString());
-                            if (Double.parseDouble(strVal) > max) errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Must be <= " + max));
+                            if (Double.parseDouble(strVal) > max) errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Must be <= " + max));
                         }
                     } catch(NumberFormatException ignored) {}
                     
                     if (vr.containsKey("minLength") && vr.get("minLength") != null) {
                         int minL = Integer.parseInt(vr.get("minLength").toString());
-                        if (strVal.length() < minL) errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Minimum length is " + minL));
+                        if (strVal.length() < minL) errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Minimum length is " + minL));
                     }
                     if (vr.containsKey("maxLength") && vr.get("maxLength") != null) {
                         int maxL = Integer.parseInt(vr.get("maxLength").toString());
-                        if (strVal.length() > maxL) errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Maximum length is " + maxL));
+                        if (strVal.length() > maxL) errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Maximum length is " + maxL));
                     }
                     if (vr.containsKey("pattern") && vr.get("pattern") != null) {
                         String pat = vr.get("pattern").toString();
-                        if (!strVal.matches(pat)) errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Invalid format"));
+                        if (!strVal.matches(pat)) errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Invalid format"));
                     }
                 }
 
@@ -226,7 +228,7 @@ public class SubmissionService {
         } else {
             // INSERT: New entry or new versioned submission
             submissionId = UUID.randomUUID();
-            data.put("submission_id", submissionId);
+            data.put("id", submissionId);
             data.put("submitted_at", LocalDateTime.now());
             data.put("updated_at", LocalDateTime.now());
             data.put("submission_status", status != null ? status : "SUBMITTED");
@@ -248,6 +250,24 @@ public class SubmissionService {
             
             try {
                 formSubmissionMetaRepository.save(meta);
+                
+                // TRIGGER POST-SUBMISSION WORKFLOWS (Rule Engine)
+                if (latestVersion.getRules() != null && !latestVersion.getRules().isBlank()) {
+                    try {
+                        com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(latestVersion.getRules());
+                        List<FormRuleDTO> rules;
+                        if (rootNode.isArray()) {
+                            rules = objectMapper.convertValue(rootNode, new TypeReference<List<FormRuleDTO>>() {});
+                        } else if (rootNode.isObject() && rootNode.has("rules")) {
+                            rules = objectMapper.convertValue(rootNode.get("rules"), new TypeReference<List<FormRuleDTO>>() {});
+                        } else {
+                            rules = new ArrayList<>();
+                        }
+                        ruleEngineService.executePostSubmissionWorkflows(rules, data);
+                    } catch (Exception e) {
+                        System.err.println(">>> [WORKFLOW ERROR] Failed to trigger rules: " + e.getMessage());
+                    }
+                }
             } catch (org.springframework.dao.DataIntegrityViolationException e) {
                 // Section 5.2: Handle concurrent draft creation failure
                 if (e.getMessage() != null && e.getMessage().contains("idx_one_draft_per_user")) {
@@ -265,7 +285,7 @@ public class SubmissionService {
      * SRS 6.2: Restore a soft-deleted submission
      */
     @Transactional
-    public void restoreSubmission(Long formId, UUID submissionId) {
+    public void restoreSubmission(UUID formId, UUID submissionId) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
         
@@ -285,14 +305,14 @@ public class SubmissionService {
     }
 
     @Transactional
-    public void restoreSubmissionsBulk(Long formId, List<UUID> submissionIds) {
+    public void restoreSubmissionsBulk(UUID formId, List<UUID> submissionIds) {
         for (UUID id : submissionIds) {
             restoreSubmission(formId, id);
         }
     }
 
     @Transactional
-    public UUID submitDataByToken(String token, Map<String, Object> data, Long formVersionId, String status) {
+    public UUID submitDataByToken(String token, Map<String, Object> data, UUID formVersionId, String status) {
         Form form = formRepository.findByPublicShareToken(token)
                 .or(() -> formRepository.findByCode(token))
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Invalid share token or form code"));
@@ -307,14 +327,14 @@ public class SubmissionService {
         return submitData(form.getId(), data, formVersionId, status);
     }
 
-    public Map<String, Object> getSubmissions(Long formId, int page, int size, String sortBy, String sortOrder,
+    public Map<String, Object> getSubmissions(UUID formId, int page, int size, String sortBy, String sortOrder,
             Map<String, String> filters) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         return dynamicTableService.fetchData(form.getTargetTableName(), page, size, sortBy, sortOrder, filters);
     }
 
-    public Map<String, Object> getSubmissionById(Long formId, UUID submissionId) {
+    public Map<String, Object> getSubmissionById(UUID formId, UUID submissionId) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
         
@@ -348,7 +368,7 @@ public class SubmissionService {
     }
 
     @Transactional
-    public UUID updateSubmission(Long formId, UUID submissionId, Map<String, Object> data, String status) {
+    public UUID updateSubmission(UUID formId, UUID submissionId, Map<String, Object> data, String status) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND", "Form not found"));
 
@@ -412,6 +432,24 @@ public class SubmissionService {
         meta.setSubmittedAt(java.time.Instant.now());
         formSubmissionMetaRepository.save(meta);
 
+        // TRIGGER POST-SUBMISSION WORKFLOWS (Rule Engine)
+        if (effectiveVersion.getRules() != null && !effectiveVersion.getRules().isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(effectiveVersion.getRules());
+                List<FormRuleDTO> rules;
+                if (rootNode.isArray()) {
+                    rules = objectMapper.convertValue(rootNode, new TypeReference<List<FormRuleDTO>>() {});
+                } else if (rootNode.isObject() && rootNode.has("rules")) {
+                    rules = objectMapper.convertValue(rootNode.get("rules"), new TypeReference<List<FormRuleDTO>>() {});
+                } else {
+                    rules = new ArrayList<>();
+                }
+                ruleEngineService.executePostSubmissionWorkflows(rules, data);
+            } catch (Exception e) {
+                System.err.println(">>> [WORKFLOW ERROR] Failed to trigger rules on update: " + e.getMessage());
+            }
+        }
+
         return submissionId;
     }
 
@@ -423,7 +461,7 @@ public class SubmissionService {
     }
 
     @Transactional
-    public void deleteSubmission(Long formId, UUID submissionId) {
+    public void deleteSubmission(UUID formId, UUID submissionId) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         dynamicTableService.deleteRow(form.getTargetTableName(), submissionId);
@@ -435,7 +473,7 @@ public class SubmissionService {
     }
 
     @Transactional
-    public void deleteSubmissionsBulk(Long formId, List<UUID> submissionIds) {
+    public void deleteSubmissionsBulk(UUID formId, List<UUID> submissionIds) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         dynamicTableService.deleteRowsBulk(form.getTargetTableName(), submissionIds);
@@ -452,7 +490,7 @@ public class SubmissionService {
      * SRS Bulk Operation: Update status for multiple submissions
      */
     @Transactional
-    public void updateSubmissionStatusBulk(Long formId, List<UUID> submissionIds, String newStatus) {
+    public void updateSubmissionStatusBulk(UUID formId, List<UUID> submissionIds, String newStatus) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Form not found"));
         
@@ -479,7 +517,7 @@ public class SubmissionService {
         }
     }
 
-    public String exportSubmissionsToCsv(Long formId, List<String> requestedColumns, String sortBy, String sortOrder, Map<String, String> filters) {
+    public String exportSubmissionsToCsv(UUID formId, List<String> requestedColumns, String sortBy, String sortOrder, Map<String, String> filters) {
         Form form = formRepository.findById(formId)
                 .orElseThrow(() -> new com.sttl.formbuilder2.exception.FormBuilderException("FORM_NOT_FOUND",
                         "Form not found"));
@@ -508,8 +546,9 @@ public class SubmissionService {
                 Object val = row.get(col);
                 String strVal = val == null ? "" : val.toString().replace("\"", "\"\"");
                 
-                // 7.2: CSV Injection Protection
-                if (strVal.startsWith("=") || strVal.startsWith("+") || strVal.startsWith("-") || strVal.startsWith("@")) {
+                // 7.2: CSV Injection Protection - escape formula indicators
+                if (strVal.startsWith("=") || strVal.startsWith("+") || strVal.startsWith("-") || 
+                    strVal.startsWith("@") || strVal.startsWith("#") || strVal.startsWith("!")) {
                     strVal = "'" + strVal;
                 }
                 rowValues.add("\"" + strVal + "\"");
@@ -529,44 +568,44 @@ public class SubmissionService {
 
         // 1a. Native JSON Validations (required, min, max, minLength, maxLength, pattern)
         for (FormField field : activeFields) {
-            Object val = data.get(field.getColumnName());
+            Object val = data.get(field.getFieldKey());
             boolean isBlank = (val == null || val.toString().trim().isEmpty());
 
-            if (Boolean.TRUE.equals(field.getIsMandatory()) && isBlank) {
-                errors.add(Map.of("fieldKey", field.getColumnName(), "message", field.getFieldLabel() + " is required."));
+            if (Boolean.TRUE.equals(field.getIsRequired()) && isBlank) {
+                errors.add(Map.of("fieldKey", field.getFieldKey(), "message", field.getFieldLabel() + " is required."));
             }
 
             if (!isBlank && field.getValidationRules() != null) {
                 Map<String, Object> vr = field.getValidationRules();
-                String strVal = val.toString();
+                String strVal = (val == null) ? "" : val.toString();
 
                 try {
                     if (vr.containsKey("min") && vr.get("min") != null) {
                         double min = Double.parseDouble(vr.get("min").toString());
                         if (Double.parseDouble(strVal) < min)
-                            errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Must be >= " + min));
+                            errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Must be >= " + min));
                     }
                     if (vr.containsKey("max") && vr.get("max") != null) {
                         double max = Double.parseDouble(vr.get("max").toString());
                         if (Double.parseDouble(strVal) > max)
-                            errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Must be <= " + max));
+                            errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Must be <= " + max));
                     }
                 } catch (NumberFormatException ignored) {}
 
                 if (vr.containsKey("minLength") && vr.get("minLength") != null) {
                     int minL = Integer.parseInt(vr.get("minLength").toString());
                     if (strVal.length() < minL)
-                        errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Minimum length is " + minL));
+                        errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Minimum length is " + minL));
                 }
                 if (vr.containsKey("maxLength") && vr.get("maxLength") != null) {
                     int maxL = Integer.parseInt(vr.get("maxLength").toString());
                     if (strVal.length() > maxL)
-                        errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Maximum length is " + maxL));
+                        errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Maximum length is " + maxL));
                 }
                 if (vr.containsKey("pattern") && vr.get("pattern") != null) {
                     String pat = vr.get("pattern").toString();
                     if (!strVal.matches(pat))
-                        errors.add(Map.of("fieldKey", field.getColumnName(), "message", "Invalid format"));
+                        errors.add(Map.of("fieldKey", field.getFieldKey(), "message", "Invalid format"));
                 }
             }
         }

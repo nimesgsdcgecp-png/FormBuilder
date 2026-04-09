@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,9 +23,9 @@ public class CalculationService {
             if (formula != null && !formula.isBlank()) {
                 try {
                     String result = evaluateFormula(formula, data);
-                    data.put(field.getColumnName(), result);
+                    data.put(field.getFieldKey(), result);
                 } catch (Exception e) {
-                    data.put(field.getColumnName(), "Error: " + e.getMessage());
+                    data.put(field.getFieldKey(), "Error: " + e.getMessage());
                 }
             }
         }

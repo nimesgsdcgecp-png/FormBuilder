@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +55,12 @@ public class WorkflowService {
         AppUser targetBuilder = userRepository.findById(request.getTargetBuilderId())
                 .orElseThrow(() -> new RuntimeException("Target Builder not found"));
 
+        // Safety: Check if an active workflow already exists for this form
+        instanceRepository.findByFormIdAndStatus(form.getId(), WorkflowInstance.WorkflowStatus.ACTIVE)
+                .stream().findFirst().ifPresent(existing -> {
+                    throw new RuntimeException("Form already has an active approval workflow in progress.");
+                });
+
         // Update Form Status
         if (form.getStatus() == FormStatus.DRAFT || form.getStatus() == FormStatus.REJECTED) {
             form.setStatus(FormStatus.PENDING_PUBLISH);
@@ -77,7 +84,7 @@ public class WorkflowService {
 
         // Create Intermediate Steps
         int stepIdx = 1;
-        for (Long authId : request.getIntermediateAuthorityIds()) {
+        for (UUID authId : request.getIntermediateAuthorityIds()) {
             AppUser auth = userRepository.findById(authId)
                     .orElseThrow(() -> new RuntimeException("Authority user not found: " + authId));
             
@@ -99,12 +106,13 @@ public class WorkflowService {
                 .build();
         stepRepository.save(finalStep);
 
-        auditService.log("WORKFLOW_INITIATE", creator.getUsername(), "WORKFLOW", instance.getId().toString(), "Workflow initiated for form " + form.getId());
+        auditService.log("WORKFLOW_INITIATE", creator.getUsername(), "WORKFLOW", instance.getId().toString(), 
+            "Workflow initiated for form: '" + form.getName() + "' (Target: " + targetBuilder.getUsername() + ")");
         return instance;
     }
 
     @Transactional
-    public void approveStep(Long stepId, String comments, AppUser actor) {
+    public void approveStep(UUID stepId, String comments, AppUser actor) {
         WorkflowStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new RuntimeException("Step not found"));
         
@@ -124,7 +132,8 @@ public class WorkflowService {
         form.setApprovalChain(newChain);
         formRepository.save(form);
 
-        auditService.log("WORKFLOW_APPROVE", actor.getUsername(), "WORKFLOW", step.getInstance().getId().toString(), "Step " + step.getStepIndex() + " approved");
+        auditService.log("WORKFLOW_APPROVE", actor.getUsername(), "WORKFLOW", step.getInstance().getId().toString(), 
+            "Step " + step.getStepIndex() + " approved for form: '" + form.getName() + "'");
 
         WorkflowInstance instance = step.getInstance();
         if (step.getStepIndex() < instance.getTotalSteps()) {
@@ -141,7 +150,7 @@ public class WorkflowService {
     }
 
     @Transactional
-    public void rejectStep(Long stepId, String comments, AppUser actor) {
+    public void rejectStep(UUID stepId, String comments, AppUser actor) {
         WorkflowStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new RuntimeException("Step not found"));
 
@@ -158,7 +167,8 @@ public class WorkflowService {
         instance.setUpdatedAt(LocalDateTime.now());
         instanceRepository.save(instance);
 
-        auditService.log("WORKFLOW_REJECT", actor.getUsername(), "WORKFLOW", instance.getId().toString(), "Workflow rejected at step " + step.getStepIndex());
+        auditService.log("WORKFLOW_REJECT", actor.getUsername(), "WORKFLOW", instance.getId().toString(), 
+            "Workflow rejected at step " + step.getStepIndex() + " for form: '" + instance.getForm().getName() + "'");
 
         Form form = instance.getForm();
         form.setStatus(FormStatus.REJECTED);
@@ -194,7 +204,7 @@ public class WorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserSummaryDTO> getAvailableAuthorities(Long formId) {
+    public List<UserSummaryDTO> getAvailableAuthorities(UUID formId) {
         return userRepository.findAll().stream()
                 .filter(user -> {
                     // Always show users with Global roles

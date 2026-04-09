@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.model.entity;
 
+import java.util.UUID;
+
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -12,8 +14,8 @@ import java.time.LocalDateTime;
 public class Module {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "module_name", nullable = false)
     private String moduleName;
@@ -22,10 +24,10 @@ public class Module {
     private String prefix;
 
     @Column(name = "parent_id")
-    private Long parentId;
+    private UUID parentId;
 
     @Column(name = "sub_parent_id")
-    private Long subParentId;
+    private UUID subParentId;
 
     @Column(name = "icon_css")
     private String menuIconCss;

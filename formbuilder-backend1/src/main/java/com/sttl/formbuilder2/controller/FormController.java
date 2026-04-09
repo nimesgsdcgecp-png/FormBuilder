@@ -8,14 +8,15 @@ import com.sttl.formbuilder2.dto.response.FormSummaryResponseDTO;
 import com.sttl.formbuilder2.service.DynamicTableService;
 import com.sttl.formbuilder2.service.FormService;
 import com.sttl.formbuilder2.service.SubmissionService;
+import com.sttl.formbuilder2.util.ApiConstants;
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -24,7 +25,7 @@ import java.util.stream.Collectors;
  * Delegates business logic to FormService, SubmissionService, and DynamicTableService.
  */
 @RestController
-@RequestMapping("/api/v1/forms")
+@RequestMapping(ApiConstants.FORMS_BASE)
 @RequiredArgsConstructor
 public class FormController {
 
@@ -42,7 +43,7 @@ public class FormController {
      * Uses {@code FormSummaryResponseDTO} to avoid over-fetching field/version
      * data.
      */
-    @GetMapping
+    @GetMapping(ApiConstants.FORMS_LIST)
     public ResponseEntity<List<FormSummaryResponseDTO>> getAllForms() {
         return ResponseEntity.ok(formService.getAllForms());
     }
@@ -51,7 +52,7 @@ public class FormController {
      * GET /api/forms/archived
      * Returns a list of all archived forms for the current user.
      */
-    @GetMapping("/archived")
+    @GetMapping(ApiConstants.FORMS_ARCHIVED)
     public ResponseEntity<List<FormSummaryResponseDTO>> getArchivedForms() {
         return ResponseEntity.ok(formService.getArchivedForms());
     }
@@ -60,7 +61,7 @@ public class FormController {
      * GET /api/forms/stats
      * Returns statistics for the dashboard.
      */
-    @GetMapping("/stats")
+    @GetMapping(ApiConstants.FORMS_STATS)
     public ResponseEntity<com.sttl.formbuilder2.dto.response.DashboardStatsResponseDTO> getDashboardStats() {
         return ResponseEntity.ok(formService.getDashboardStats());
     }
@@ -70,7 +71,7 @@ public class FormController {
      * Creates a brand-new form (DRAFT status). Does NOT create a submission table
      * yet — that only happens on Publish (PUT with status=PUBLISHED).
      */
-    @PostMapping
+    @PostMapping(ApiConstants.FORMS_CREATE)
     public ResponseEntity<FormDetailResponseDTO> createForm(@Valid @RequestBody CreateFormRequestDTO request) {
         return ResponseEntity.ok(formService.createForm(request));
     }
@@ -81,8 +82,8 @@ public class FormController {
      * logic rules. Used by the builder when loading an existing form to edit,
      * and by the responses page to build the table column headers.
      */
-    @GetMapping("/{id}")
-    public ResponseEntity<FormDetailResponseDTO> getForm(@PathVariable("id") Long id) {
+    @GetMapping(ApiConstants.FORMS_GET)
+    public ResponseEntity<FormDetailResponseDTO> getForm(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(formService.getFormById(id));
     }
 
@@ -92,8 +93,8 @@ public class FormController {
      * creates or alters the dynamic submission table via
      * {@code DynamicTableService}.
      */
-    @PutMapping("/{id}")
-    public ResponseEntity<FormDetailResponseDTO> updateForm(@PathVariable("id") Long id, @Valid @RequestBody UpdateFormRequestDTO request) {
+    @PutMapping(ApiConstants.FORMS_UPDATE)
+    public ResponseEntity<FormDetailResponseDTO> updateForm(@PathVariable("id") UUID id, @Valid @RequestBody UpdateFormRequestDTO request) {
         return ResponseEntity.ok(formService.updateForm(id, request));
     }
 
@@ -102,8 +103,8 @@ public class FormController {
      * Soft-deletes a form by setting its status to ARCHIVED. The form data and
      * all submissions remain in the database.
      */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteForm(@PathVariable("id") Long id) {
+    @DeleteMapping(ApiConstants.FORMS_DELETE)
+    public ResponseEntity<Void> deleteForm(@PathVariable("id") UUID id) {
         formService.deleteForm(id);
         return ResponseEntity.noContent().build();
     }
@@ -112,9 +113,9 @@ public class FormController {
      * DELETE /api/forms/{id}/permanent
      * Hard-deletes a form from the database. Restricted to administrators.
      */
-    @DeleteMapping("/{id}/permanent")
+    @DeleteMapping(ApiConstants.FORMS_DELETE_PERMANENT)
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'ROLE_ADMINISTRATOR')")
-    public ResponseEntity<?> hardDeleteForm(@PathVariable("id") Long id) {
+    public ResponseEntity<?> hardDeleteForm(@PathVariable("id") UUID id) {
         try {
             formService.hardDeleteForm(id);
             return ResponseEntity.noContent().build();
@@ -129,8 +130,8 @@ public class FormController {
      * PUT /api/forms/{id}/restore
      * Restores an archived form back to DRAFT status.
      */
-    @PutMapping("/{id}/restore")
-    public ResponseEntity<Void> restoreForm(@PathVariable("id") Long id) {
+    @PutMapping(ApiConstants.FORMS_RESTORE)
+    public ResponseEntity<Void> restoreForm(@PathVariable("id") UUID id) {
         formService.restoreForm(id);
         return ResponseEntity.ok().build();
     }
@@ -139,9 +140,9 @@ public class FormController {
     // Submission endpoints
     // ─────────────────────────────────────────────────────────
 
-    @GetMapping("/{id}/submissions")
+    @GetMapping(ApiConstants.SUBMISSIONS_LIST)
     public ResponseEntity<Map<String, Object>> getSubmissions(
-            @PathVariable("id") Long id,
+            @PathVariable("id") UUID id,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "50") int size,
             @RequestParam(name = "sortBy", defaultValue = "submitted_at") String sortBy,
@@ -156,9 +157,9 @@ public class FormController {
         return ResponseEntity.ok(submissionService.getSubmissions(id, page, size, sortBy, sortOrder, filters));
     }
 
-    @GetMapping("/{id}/submissions/export")
+    @GetMapping(ApiConstants.SUBMISSIONS_EXPORT)
     public ResponseEntity<byte[]> exportSubmissions(
-            @PathVariable("id") Long id,
+            @PathVariable("id") UUID id,
             @RequestParam(name = "columns", required = false) List<String> columns,
             @RequestParam(name = "sortBy", defaultValue = "submitted_at") String sortBy,
             @RequestParam(name = "sortOrder", defaultValue = "DESC") String sortOrder,
@@ -179,14 +180,14 @@ public class FormController {
 
     /**
      * POST /api/forms/{id}/submissions
-     * Accepts a JSON map of {columnName: value} pairs and inserts a new row into
+     * Accepts a JSON map of {fieldKey: value} pairs and inserts a new row into
      * the dynamic submissions table. Runs rule validation before inserting. Returns
      * the generated {@code submissionId} (UUID) so the frontend can offer an edit
      * link.
      */
-    @PostMapping("/{id}/submissions")
+    @PostMapping(ApiConstants.SUBMISSIONS_CREATE)
     public ResponseEntity<Map<String, Object>> submitForm(
-            @PathVariable("id") Long id,
+            @PathVariable("id") UUID id,
             @Valid @RequestBody SubmissionRequestDTO request) {
 
         UUID submissionId = submissionService.submitData(id, request.getData(), request.getFormVersionId(), request.getStatus());
@@ -200,9 +201,9 @@ public class FormController {
      * Retrieves a single submission row by its UUID. Used by the public form page
      * to pre-fill the form when a respondent clicks "Edit your response".
      */
-    @GetMapping("/{formId}/submissions/{submissionId}")
+    @GetMapping(ApiConstants.SUBMISSIONS_GET)
     public ResponseEntity<Map<String, Object>> getSubmission(
-            @PathVariable("formId") Long formId,
+            @PathVariable("formId") UUID formId,
             @PathVariable("submissionId") UUID submissionId) {
         return ResponseEntity.ok(submissionService.getSubmissionById(formId, submissionId));
     }
@@ -212,9 +213,9 @@ public class FormController {
      * Updates an existing submission row with new answer values. Only columns
      * present in the current form version are included in the UPDATE statement.
      */
-    @PutMapping("/{formId}/submissions/{submissionId}")
+    @PutMapping(ApiConstants.SUBMISSIONS_UPDATE)
     public ResponseEntity<Map<String, Object>> updateSubmission(
-            @PathVariable("formId") Long formId,
+            @PathVariable("formId") UUID formId,
             @PathVariable("submissionId") UUID submissionId,
             @Valid @RequestBody SubmissionRequestDTO request) {
         UUID id = submissionService.updateSubmission(formId, submissionId, request.getData(), request.getStatus());
@@ -226,9 +227,9 @@ public class FormController {
      * Hard-deletes a submission row from the dynamic table. Used by the admin
      * responses page. This action is irreversible.
      */
-    @DeleteMapping("/{formId}/submissions/{submissionId}")
+    @DeleteMapping(ApiConstants.SUBMISSIONS_DELETE)
     public ResponseEntity<Void> deleteSubmission(
-            @PathVariable("formId") Long formId,
+            @PathVariable("formId") UUID formId,
             @PathVariable("submissionId") UUID submissionId) {
         submissionService.deleteSubmission(formId, submissionId);
         return ResponseEntity.ok().build();
@@ -238,9 +239,9 @@ public class FormController {
      * DELETE /api/forms/{formId}/submissions/bulk
      * Hard-deletes multiple submission rows in one call.
      */
-    @DeleteMapping("/{formId}/submissions/bulk")
+    @DeleteMapping(ApiConstants.SUBMISSIONS_BULK_DELETE)
     public ResponseEntity<Void> deleteSubmissionsBulk(
-            @PathVariable("formId") Long formId,
+            @PathVariable("formId") UUID formId,
             @RequestBody List<UUID> submissionIds) {
         submissionService.deleteSubmissionsBulk(formId, submissionIds);
         return ResponseEntity.ok().build();
@@ -250,9 +251,9 @@ public class FormController {
      * POST /api/forms/{id}/submissions/{submissionId}/restore
      * Restores a soft-deleted submission.
      */
-    @PostMapping("/{id}/submissions/{submissionId}/restore")
+    @PostMapping(ApiConstants.SUBMISSIONS_RESTORE)
     public ResponseEntity<Void> restoreSubmission(
-            @PathVariable("id") Long id,
+            @PathVariable("id") UUID id,
             @PathVariable("submissionId") UUID submissionId) {
         submissionService.restoreSubmission(id, submissionId);
         return ResponseEntity.ok().build();
@@ -263,11 +264,12 @@ public class FormController {
      * Generic bulk operation endpoint (Blueprint §3.2).
      * Supports: DELETE, STATUS_UPDATE, RESTORE
      */
-    @PostMapping("/{formId}/submissions/bulk")
+    @PostMapping(ApiConstants.SUBMISSIONS_BULK)
     public ResponseEntity<Map<String, Object>> bulkOperation(
-            @PathVariable("formId") Long formId,
+            @PathVariable("formId") UUID formId,
             @RequestBody Map<String, Object> request) {
         String operation = (String) request.get("operation");
+        @SuppressWarnings("unchecked")
         List<String> idsStr = (List<String>) request.get("submissionIds");
         List<UUID> submissionIds = idsStr.stream().map(UUID::fromString).collect(Collectors.toList());
 
@@ -298,17 +300,17 @@ public class FormController {
     // ─────────────────────────────────────────────────────────
 
     /**
-     * GET /api/forms/{id}/columns/{columnName}/values
+     * GET /api/forms/{id}/columns/{fieldKey}/values
      * Returns distinct non-null values for a given column in the form's submission
      * table. Drives the dropdown choices for LOOKUP fields at form-fill time.
      * The column name is validated against the form schema to prevent SQL
      * injection.
      */
-    @GetMapping("/{id}/columns/{columnName}/values")
+    @GetMapping(ApiConstants.SUBMISSIONS_LOOKUP_VALUES)
     public ResponseEntity<List<String>> getLookupValues(
-            @PathVariable("id") Long id,
-            @PathVariable("columnName") String columnName) {
-        return ResponseEntity.ok(dynamicTableService.getColumnValues(id, columnName));
+            @PathVariable("id") UUID id,
+            @PathVariable("fieldKey") String fieldKey) {
+        return ResponseEntity.ok(dynamicTableService.getColumnValues(id, fieldKey));
     }
 
     // ─────────────────────────────────────────────────────────
@@ -321,7 +323,7 @@ public class FormController {
      * form page ({@code /f/[token]}) before rendering the form to respondents.
      * Uses a token instead of an ID to prevent enumeration attacks.
      */
-    @GetMapping("/public/{token}")
+    @GetMapping(ApiConstants.FORMS_PUBLIC)
     public ResponseEntity<FormDetailResponseDTO> getPublicForm(@PathVariable("token") String token) {
         return ResponseEntity.ok(formService.getFormByToken(token));
     }
@@ -333,7 +335,7 @@ public class FormController {
      * standard
      * submitData flow, including rule validation and workflow execution.
      */
-    @PostMapping("/public/{token}/submissions")
+    @PostMapping(ApiConstants.FORMS_PUBLIC_SUBMISSIONS)
     public ResponseEntity<?> submitPublicForm(
             @PathVariable("token") String token,
             @Valid @RequestBody SubmissionRequestDTO request) {
@@ -347,7 +349,7 @@ public class FormController {
      * GET /api/forms/public/{token}/submissions/{submissionId}
      * Publicly retrieve a single submission for editing.
      */
-    @GetMapping("/public/{token}/submissions/{submissionId}")
+    @GetMapping(ApiConstants.FORMS_PUBLIC_SUBMISSION_GET)
     public ResponseEntity<Map<String, Object>> getPublicSubmission(
             @PathVariable("token") String token,
             @PathVariable("submissionId") UUID submissionId) {
@@ -358,7 +360,7 @@ public class FormController {
      * PUT /api/forms/public/{token}/submissions/{submissionId}
      * Publicly update an existing submission.
      */
-    @PutMapping("/public/{token}/submissions/{submissionId}")
+    @PutMapping(ApiConstants.FORMS_PUBLIC_SUBMISSION_UPDATE)
     public ResponseEntity<Map<String, Object>> updatePublicSubmission(
             @PathVariable("token") String token,
             @PathVariable("submissionId") UUID submissionId,

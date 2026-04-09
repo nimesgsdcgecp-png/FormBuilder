@@ -1,23 +1,22 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import FormRenderer from '@/components/FormRenderer';
 import { FormSchema } from '@/types/schema';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Monitor, Tablet, Smartphone, Info } from 'lucide-react';
 
 export default function BuilderPreviewPage() {
-    const [schema, setSchema] = useState<FormSchema | null>(null);
     const [viewMode, setViewMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
-
-    useEffect(() => {
+    const schema = useMemo<FormSchema | null>(() => {
+        if (typeof window === 'undefined') return null;
         const saved = localStorage.getItem('form_builder_preview');
-        if (saved) {
-            try {
-                setSchema(JSON.parse(saved));
-            } catch (e) {
-                console.error("Failed to parse preview schema", e);
-            }
+        if (!saved) return null;
+        try {
+            return JSON.parse(saved) as FormSchema;
+        } catch (e) {
+            console.error("Failed to parse preview schema", e);
+            return null;
         }
     }, []);
 
@@ -28,7 +27,7 @@ export default function BuilderPreviewPage() {
                     <Info className="text-gray-400" size={32} />
                 </div>
                 <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Preview Data Found</h1>
-                <p className="text-gray-500 max-w-xs">Return to the form builder and click 'Preview' to generate a live preview of your work.</p>
+                <p className="text-gray-500 max-w-xs">Return to the form builder and click &apos;Preview&apos; to generate a live preview of your work.</p>
                 <button
                     onClick={() => window.close()}
                     className="mt-6 px-6 py-2 bg-black dark:bg-white dark:text-black text-white rounded-lg text-sm font-medium hover:opacity-80 transition-all shadow-sm"
@@ -82,7 +81,7 @@ export default function BuilderPreviewPage() {
 
                 <div className="flex items-center gap-4">
                     <ThemeToggle />
-                    <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-800 mx-2" />
+                    <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
                     <button
                         onClick={() => window.close()}
                         className="text-xs font-semibold text-gray-500 hover:text-red-500 transition-colors"

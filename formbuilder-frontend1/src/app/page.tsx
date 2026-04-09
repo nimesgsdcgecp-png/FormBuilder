@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, FileText, Edit, Eye, Trash2, User, Link2, LayoutGrid, List as ListIcon, MoreVertical, ExternalLink, Copy, Check, RotateCcw, Archive, Shield, LogOut, Settings, Users, ShieldAlert, Clock, Ban, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Edit, Eye, Trash2, User, Link2, LayoutGrid, List as ListIcon, ExternalLink, Check, RotateCcw, Archive, Shield, Users } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
-import { deleteForm, getArchivedForms, restoreForm, getDashboardStats, DashboardStats } from '@/services/api';
+import { deleteForm, restoreForm, getDashboardStats, DashboardStats, UnauthorizedError } from '@/services/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { AUTH, FORMS } from '@/utils/apiConstants';
 
 /** Shape of each form card item from GET /api/forms */
 interface FormSummary {
@@ -53,7 +54,7 @@ function SkeletonCard() {
 function StatsCard({ title, value, icon: Icon, colorClass, loading }: {
   title: string,
   value: number | string,
-  icon: any,
+  icon: LucideIcon,
   colorClass: string,
   loading?: boolean
 }) {
@@ -78,7 +79,7 @@ function StatsCard({ title, value, icon: Icon, colorClass, loading }: {
           <Icon size={22} strokeWidth={2} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] opacity-50 truncate" style={{ color: 'var(--text-muted)' }}>{title}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest opacity-50 truncate" style={{ color: 'var(--text-muted)' }}>{title}</p>
           <div className="flex items-center gap-2">
             {loading ? (
               <div className="shimmer h-8 w-16 rounded-lg mt-1" />
@@ -98,36 +99,18 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [username, setUsername] = useState<string | null>(null);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
   const [currentTab, setCurrentTab] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
-  const profileRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { hasPermission, assignments, refreshPermissions, clearCache } = usePermissions();
-
-  useEffect(() => {
-    fetchForms();
-    fetchStats();
-  }, [currentTab]);
-
-  useEffect(() => {
-    // Close profile dropdown on click outside
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const { hasPermission, assignments } = usePermissions();
 
   /** Fetches the form list from the backend and updates local state. */
-  const fetchForms = async () => {
+  const fetchForms = useCallback(async () => {
     setIsLoading(true);
     try {
       const url = currentTab === 'ACTIVE'
-        ? 'http://localhost:8080/api/v1/forms'
-        : 'http://localhost:8080/api/v1/forms/archived';
+        ? FORMS.LIST
+        : FORMS.ARCHIVED;
 
       const res = await fetch(url, {
         credentials: 'include' // Important for session cookie
@@ -137,30 +120,34 @@ export default function Dashboard() {
         router.push('/login');
         return;
       }
-      if (!res.ok) throw new Error('Failed to fetch forms');
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(`Failed to fetch forms: ${res.status} ${res.statusText}`, errorText);
+        throw new Error(`Failed to fetch forms: ${res.status}`);
+      }
 
       // Also fetch user profile information
       if (!username) {
         try {
-          const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+          const userRes = await fetch(AUTH.ME, { credentials: 'include' });
           if (userRes.ok) {
             const userData = await userRes.json();
             setUsername(userData.username);
           }
-        } catch (e) {
-          console.error("Could not fetch user profile", e);
+        } catch (err) {
+          console.error("Could not fetch user profile", err);
         }
       }
 
       const data = await res.json();
       setForms(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.message || 'Failed to load dashboard.');
+      toast.error(error instanceof Error ? error.message : 'Failed to load dashboard.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentTab, router, username]);
 
   /** Fetches dashboard statistics. */
   const fetchStats = async () => {
@@ -168,13 +155,20 @@ export default function Dashboard() {
     try {
       const data = await getDashboardStats();
       setStats(data);
-    } catch (error: any) {
-      console.error("Failed to fetch stats", error);
-      // We don't toast error here to avoid blocking the page
+    } catch (error: unknown) {
+      if (!(error instanceof UnauthorizedError)) {
+        console.error("Failed to fetch stats", error);
+      }
+      // We don't toast here to avoid blocking the page
     } finally {
       setIsStatsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchForms();
+    fetchStats();
+  }, [currentTab, fetchForms]);
 
   /**
    * Shows a Sonner confirmation toast before archiving a form.
@@ -186,11 +180,11 @@ export default function Dashboard() {
         label: 'Archive',
         onClick: async () => {
           try {
-            await deleteForm(id);
+            await deleteForm(id.toString());
             toast.success("Form archived");
             setForms((prevForms) => prevForms.filter(f => f.id !== id));
-          } catch (error: any) {
-            toast.error(error.message || "Failed to archive form");
+          } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to archive form");
           }
         }
       },
@@ -208,11 +202,11 @@ export default function Dashboard() {
    */
   const handleRestore = async (id: number) => {
     try {
-      await restoreForm(id);
+      await restoreForm(id.toString());
       toast.success("Form restored to drafts");
       setForms((prevForms) => prevForms.filter(f => f.id !== id));
-    } catch (error: any) {
-      toast.error(error.message || "Failed to restore form");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to restore form");
     }
   };
 
@@ -223,7 +217,7 @@ export default function Dashboard() {
         label: "Delete Now",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/v1/forms/${id}/permanent`, {
+            const res = await fetch(FORMS.DELETE_PERMANENT(id.toString()), {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -245,17 +239,6 @@ export default function Dashboard() {
     });
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:8080/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
-      clearCache();
-      router.push('/login');
-      toast.success('Logged out successfully');
-    } catch (e) {
-      toast.error('Logout failed');
-    }
-  };
-
   return (
     <div className="min-h-screen transition-colors duration-300" style={{ background: 'var(--bg-base)' }}>
       {/* ── Header ── */}
@@ -274,17 +257,17 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-3">
             {/* View Toggle */}
-            <div className="flex bg-[var(--bg-muted)] p-1 rounded-xl border border-[var(--border)] mr-2">
+            <div className="flex bg-bg-muted p-1 rounded-xl border mr-2" style={{ borderColor: 'var(--border)' }}>
               <button
                 onClick={() => setViewMode('GRID')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-[var(--card-bg)] shadow-sm text-(--accent)' : 'text-(--text-faint)'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'GRID' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
                 title="Grid View"
               >
                 <LayoutGrid size={18} />
               </button>
               <button
                 onClick={() => setViewMode('LIST')}
-                className={`p-1.5 rounded-lg transition-all ${viewMode === 'LIST' ? 'bg-[var(--card-bg)] shadow-sm text-(--accent)' : 'text-(--text-faint)'}`}
+                className={`p-1.5 rounded-lg transition-all ${viewMode === 'LIST' ? 'bg-card-bg shadow-sm text-accent' : 'text-text-faint'}`}
                 title="List View"
               >
                 <ListIcon size={18} />
@@ -341,7 +324,7 @@ export default function Dashboard() {
           <div className="flex gap-12 px-6">
             <button
               onClick={() => setCurrentTab('ACTIVE')}
-              className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ACTIVE' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
+              className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ACTIVE' ? 'text-accent' : 'text-text-muted'}`}
             >
               Active Forms
               {currentTab === 'ACTIVE' && (
@@ -350,7 +333,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setCurrentTab('ARCHIVED')}
-              className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ARCHIVED' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
+              className={`pb-4 text-sm font-bold tracking-tight transition-all relative ${currentTab === 'ARCHIVED' ? 'text-accent' : 'text-text-muted'}`}
             >
               Archived
               {currentTab === 'ARCHIVED' && (
@@ -408,7 +391,7 @@ export default function Dashboard() {
                   >
                     {/* Top colour accent bar by status */}
                     <div
-                      className={`h-1 w-full ${isPublished ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : form.status === 'REJECTED' ? 'bg-red-500' : form.status.startsWith('PENDING') ? 'bg-amber-500' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}
+                      className={`h-1 w-full ${isPublished ? 'bg-linear-to-r from-emerald-400 to-teal-500' : form.status === 'REJECTED' ? 'bg-red-500' : form.status.startsWith('PENDING') ? 'bg-amber-500' : 'bg-linear-to-r from-amber-400 to-orange-400'}`}
                     />
 
                     {/* Card body */}
@@ -429,7 +412,6 @@ export default function Dashboard() {
                                 form.status === 'REJECTED' ? '✕ Rejected' : '◒ Pending'
                           )}
                         </span>
-                        <span className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>#{form.id}</span>
                       </div>
 
                       <h3
@@ -444,7 +426,7 @@ export default function Dashboard() {
 
                       <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: 'var(--border)' }}>
                         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-faint)' }}>
-                          <User size={12} className="text-[var(--accent)]" />
+                          <User size={12} className="text-accent" />
                           <span>Owner: {form.ownerName || 'Unknown'}</span>
                         </div>
                         {form.issuedByUsername && (
@@ -578,27 +560,23 @@ export default function Dashboard() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b" style={{ background: 'var(--bg-muted)', borderColor: 'var(--border)' }}>
-                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">ID</th>
-                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">Form Title</th>
-                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-[var(--text-faint)]">Status</th>
-                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-right text-[var(--text-faint)]">Actions</th>
+                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-text-faint">Form Title</th>
+                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-text-faint">Status</th>
+                      <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-right text-text-faint">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
                     {forms.map((form) => {
                       const isPublished = form.status === 'PUBLISHED';
                       return (
-                        <tr key={form.id} className="hover:bg-[var(--bg-subtle)] transition-colors group">
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-mono font-medium text-[var(--text-faint)]">#{form.id}</span>
-                          </td>
+                        <tr key={form.id} className="hover:bg-bg-subtle transition-colors group">
                           <td className="px-6 py-4">
                             <div>
-                              <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{form.title}</p>
+                              <p className="text-sm font-bold text-text-primary leading-tight">{form.title}</p>
                               <div className="flex items-center gap-3 mt-1 overflow-hidden">
-                                <p className="text-[10px] text-[var(--text-muted)] truncate max-w-xs">{form.description || "No description"}</p>
-                                <span className="w-1 h-1 rounded-full bg-[var(--border)] shrink-0" />
-                                <span className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-tight whitespace-nowrap">Owner: {form.ownerName || 'Unknown'}</span>
+                                <p className="text-[10px] text-text-muted truncate max-w-xs">{form.description || "No description"}</p>
+                                <span className="w-1 h-1 rounded-full bg-border-color shrink-0" />
+                                <span className="text-[9px] font-black text-text-faint uppercase tracking-tight whitespace-nowrap">Owner: {form.ownerName || 'Unknown'}</span>
                               </div>
                             </div>
                           </td>
@@ -620,7 +598,7 @@ export default function Dashboard() {
                                 <>
                                   <Link
                                     href={`/builder?id=${form.id}`}
-                                    className="p-1.5 rounded-lg hover:bg-[var(--accent-subtle)] hover:text-[var(--accent)] text-[var(--text-muted)] transition-all"
+                                    className="p-1.5 rounded-lg hover:bg-accent-subtle hover:text-accent text-text-muted transition-all"
                                     title="Edit"
                                   >
                                     <Edit size={16} />
@@ -631,7 +609,7 @@ export default function Dashboard() {
                                       <Link
                                         href={`/f/${form.publicShareToken}`}
                                         target="_blank"
-                                        className="p-1.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/30 text-[var(--text-muted)] transition-all"
+                                        className="p-1.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/30 text-text-muted transition-all"
                                         title="View Public"
                                       >
                                         <ExternalLink size={16} />
@@ -639,7 +617,7 @@ export default function Dashboard() {
                                       {(hasPermission('READ', form.id) || form.issuedByUsername === username) && (
                                         <Link
                                           href={`/forms/${form.id}/responses`}
-                                          className="p-1.5 rounded-lg hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/30 text-[var(--text-muted)] transition-all"
+                                          className="p-1.5 rounded-lg hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/30 text-text-muted transition-all"
                                           title="Responses"
                                         >
                                           <FileText size={16} />
@@ -650,7 +628,7 @@ export default function Dashboard() {
 
                                   <button
                                     onClick={() => handleDelete(form.id)}
-                                    className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 text-[var(--text-faint)] transition-all"
+                                    className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 text-text-faint transition-all"
                                     title="Archive"
                                   >
                                     <Trash2 size={16} />
@@ -659,7 +637,7 @@ export default function Dashboard() {
                               ) : (
                                 <button
                                   onClick={() => handleRestore(form.id)}
-                                  className="p-1.5 rounded-lg hover:bg-[var(--accent-subtle)] text-[var(--accent)] transition-all"
+                                  className="p-1.5 rounded-lg hover:bg-accent-subtle text-accent transition-all"
                                   title="Restore"
                                 >
                                   <RotateCcw size={16} />
@@ -686,7 +664,6 @@ export default function Dashboard() {
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-1">
-                          <span className="text-[10px] font-mono font-medium text-[var(--text-faint)]">#{form.id}</span>
                           <span
                             className="inline-flex items-center w-fit px-2 py-0.5 rounded-full text-[9px] font-black border"
                             style={{
@@ -704,7 +681,8 @@ export default function Dashboard() {
                               {hasPermission('EDIT', form.id) && (
                                 <Link
                                   href={`/builder?id=${form.id}`}
-                                  className="p-2 rounded-xl bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-muted)]"
+                                  className="p-2 rounded-xl bg-bg-base border text-text-muted"
+                                  style={{ borderColor: 'var(--border)' }}
                                 >
                                   <Edit size={16} />
                                 </Link>
@@ -713,7 +691,7 @@ export default function Dashboard() {
                           ) : (
                             <button
                               onClick={() => handleRestore(form.id)}
-                              className="p-2 rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]"
+                              className="p-2 rounded-xl bg-accent-subtle text-accent"
                             >
                               <RotateCcw size={16} />
                             </button>
@@ -722,22 +700,23 @@ export default function Dashboard() {
                       </div>
 
                       <div>
-                        <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1 leading-tight">{form.title}</h3>
-                        <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">
+                        <h3 className="text-sm font-bold text-text-primary mb-1 leading-tight">{form.title}</h3>
+                        <p className="text-[10px] text-text-muted line-clamp-2 leading-relaxed">
                           {form.description || "No description provided."}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3 pt-3 border-t border-[var(--border)] border-dashed">
+                      <div className="flex items-center gap-3 pt-3 border-t border-dashed" style={{ borderColor: 'var(--border)' }}>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[9px] font-black text-[var(--text-faint)] uppercase tracking-widest mb-0.5">Owner Identity</p>
-                          <p className="text-[10px] font-bold text-[var(--text-secondary)] truncate">{form.ownerName || 'Unknown System User'}</p>
+                          <p className="text-[9px] font-black text-text-faint uppercase tracking-widest mb-0.5">Owner Identity</p>
+                          <p className="text-[10px] font-bold text-text-secondary truncate">{form.ownerName || 'Unknown System User'}</p>
                         </div>
                         <div className="flex gap-2">
                           {isPublished && currentTab === 'ACTIVE' && (
                             <Link
                               href={`/forms/${form.id}/responses`}
-                              className="px-3 py-1.5 rounded-lg bg-[var(--bg-muted)] text-[var(--text-primary)] text-[10px] font-black uppercase tracking-widest border border-[var(--border)]"
+                              className="px-3 py-1.5 rounded-lg bg-bg-muted text-text-primary text-[10px] font-black uppercase tracking-widest border"
+                              style={{ borderColor: 'var(--border)' }}
                             >
                               Stats
                             </Link>

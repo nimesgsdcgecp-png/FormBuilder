@@ -32,7 +32,8 @@
  */
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { FormField, FormSchema, FieldType } from '@/types/schema';
+import { FormField, FormSchema, FieldType, FormRule } from '@/types/schema';
+import type { ValidationRule } from '@/components/builder/CustomValidationsPanel';
 
 /** All store state + all action functions in one flat interface. */
 interface FormState {
@@ -41,9 +42,9 @@ interface FormState {
   isThemePanelOpen: boolean;
 
   // Rule actions — called from LogicPanel
-  addRule: (rule: any) => void;
-  setRules: (rules: any[]) => void;
-  updateRule: (id: string, rule: any) => void;
+  addRule: (rule: FormRule) => void;
+  setRules: (rules: FormRule[]) => void;
+  updateRule: (id: string, rule: FormRule) => void;
   deleteRule: (id: string) => void;
 
   // Schema lifecycle actions
@@ -65,8 +66,8 @@ interface FormState {
   selectField: (id: string | null) => void;
   reorderFields: (newOrder: FormField[], parentId?: string | null) => void;
   setThemePanelOpen: (isOpen: boolean) => void;
-  setStatus: (status: string) => void;
-  setFormValidations: (validations: any[]) => void;
+  setStatus: (status: NonNullable<FormSchema['status']>) => void;
+  setFormValidations: (validations: ValidationRule[]) => void;
 }
 
 /** Recursive helper to update a field within a tree of fields */
@@ -136,15 +137,6 @@ const reorderInTree = (fields: FormField[], newOrder: FormField[], parentId?: st
     }
     return field;
   });
-};
-
-/** Recursive helper to find all field columnNames in a tree */
-const getAllColumnNames = (fields: FormField[], names: string[] = []) => {
-  fields.forEach(f => {
-    names.push(f.columnName);
-    if (f.children) getAllColumnNames(f.children, names);
-  });
-  return names;
 };
 
 export const useFormStore = create<FormState>((set) => ({
@@ -218,7 +210,7 @@ export const useFormStore = create<FormState>((set) => ({
 
   /** Sets the form's status (e.g. DRAFT, PUBLISHED). */
   setStatus: (status) =>
-    set((state) => ({ schema: { ...state.schema, status: status as any } })),
+    set((state) => ({ schema: { ...state.schema, status } })),
 
   /** Replaces the entire field list — used when loading an existing form from the API. */
   setFields: (fields) =>
@@ -301,7 +293,8 @@ export const useFormStore = create<FormState>((set) => ({
    */
   updateField: (id, updates) => set((state) => {
     // SRS: Field type cannot be changed after creation - remove type from updates
-    const { type: _ignoredType, ...safeUpdates } = updates as any;
+    const safeUpdates = { ...updates };
+    delete safeUpdates.type;
 
     const fieldToUpdate = findFieldInTree(state.schema.fields, id);
     if (!fieldToUpdate) return state;
@@ -325,10 +318,10 @@ export const useFormStore = create<FormState>((set) => ({
     let updatedRules = state.schema.rules || [];
     if (newColumnName && oldColumnName && newColumnName !== oldColumnName) {
       updatedRules = updatedRules.map(rule => {
-        const newConditions = rule.conditions.map((cond: any) =>
+        const newConditions = rule.conditions.map((cond) =>
           cond.field === oldColumnName ? { ...cond, field: newColumnName } : cond
         );
-        const newActions = rule.actions.map((act: any) =>
+        const newActions = rule.actions.map((act) =>
           act.targetField === oldColumnName ? { ...act, targetField: newColumnName } : act
         );
         return { ...rule, conditions: newConditions, actions: newActions };
@@ -337,7 +330,7 @@ export const useFormStore = create<FormState>((set) => ({
       // Recursive formula update
       const updateFormulas = (fields: FormField[]): FormField[] => {
         return fields.map(f => {
-          let updatedF = { ...f };
+          const updatedF = { ...f };
           if (f.calculationFormula) {
             updatedF.calculationFormula = f.calculationFormula.replaceAll(
               new RegExp(`\\b${oldColumnName}\\b`, 'g'),

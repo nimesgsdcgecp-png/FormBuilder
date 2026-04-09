@@ -23,17 +23,19 @@ import {
   UserPlus,
   Send,
   ShieldCheck,
-  ChevronDown,
-  Clock
+  ChevronDown
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUIStore } from '@/store/useUIStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { MENU, WORKFLOW } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 // Icon mapping helper
-const IconMap: Record<string, any> = {
+const IconMap: Record<string, LucideIcon> = {
   LayoutDashboard,
   LayoutGrid,
   FileEdit,
@@ -64,12 +66,25 @@ interface MenuNode {
   children: MenuNode[];
 }
 
+interface StaticMenuItem {
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  show: boolean;
+  badge?: number | null;
+  color?: string;
+  matchExact?: boolean;
+  children?: StaticMenuItem[];
+}
+
+type MenuItem = MenuNode | StaticMenuItem;
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen, pendingApprovalsCount, setPendingApprovalsCount } = useUIStore();
   const { assignments } = usePermissions();
   const [menuTree, setMenuTree] = useState<MenuNode[]>([]);
-  const [expandedIds, setExpandedIds] = useState<number[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Array<number | string>>([]);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -79,9 +94,10 @@ export default function Sidebar() {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/v1/menu', { credentials: 'include' });
+        const res = await fetch(MENU.LIST, { credentials: 'include' });
         if (res.ok) {
-          const data = await res.json();
+          const raw = await res.json();
+          const data = extractArray<MenuNode>(raw, ['menu', 'menuTree', 'items', 'content']);
           setMenuTree(data);
         }
       } catch (err) {
@@ -92,8 +108,7 @@ export default function Sidebar() {
     fetchMenu();
   }, [assignments]);
 
-  // Handle auto-expansion of active parents
-  useEffect(() => {
+  const activeParentIds = useMemo(() => {
     const getActiveParentIds = (nodes: MenuNode[]): number[] => {
       let ids: number[] = [];
       nodes.forEach(node => {
@@ -113,12 +128,7 @@ export default function Sidebar() {
       return ids;
     };
 
-    if (menuTree.length > 0) {
-      const activeIds = getActiveParentIds(menuTree);
-      if (activeIds.length > 0) {
-        setExpandedIds(prev => Array.from(new Set([...prev, ...activeIds])));
-      }
-    }
+    return menuTree.length > 0 ? getActiveParentIds(menuTree) : [];
   }, [pathname, menuTree]);
   useEffect(() => {
     const fetchCounts = async () => {
@@ -126,9 +136,10 @@ export default function Sidebar() {
       if (document.visibilityState !== 'visible') return;
 
       try {
-        const res = await fetch('http://localhost:8080/api/v1/workflows/my-pending', { credentials: 'include' });
+        const res = await fetch(WORKFLOW.MY_PENDING, { credentials: 'include' });
         if (res.ok) {
-          const data = await res.json();
+          const raw = await res.json();
+          const data = extractArray<unknown>(raw, ['content', 'items']);
           setPendingApprovalsCount(data.length);
         }
       } catch (err) {
@@ -160,7 +171,7 @@ export default function Sidebar() {
   const isOnlyUser = assignments.length === 1 && assignments[0].role.name === 'USER';
   
   // Static Menu Items
-  const staticItems = [
+  const staticItems: StaticMenuItem[] = [
     {
       label: 'Dashboard',
       icon: LayoutGrid,
@@ -217,23 +228,26 @@ export default function Sidebar() {
 
   if (pathname.includes('/builder')) return null;
 
-  const renderMenuItem = (item: any, depth = 0, isDynamic = false) => {
+  const renderMenuItem = (item: MenuItem, depth = 0, isDynamic = false) => {
     const label = isDynamic ? item.name : item.label;
     const url = isDynamic ? item.url : item.href;
-    const Icon = isDynamic ? (IconMap[item.icon] || FileText) : item.icon;
+    const Icon = isDynamic ? (IconMap[(item as MenuNode).icon] || FileText) : (item as StaticMenuItem).icon;
+    const matchExact = isDynamic ? false : Boolean((item as StaticMenuItem).matchExact);
+    const badge = isDynamic ? null : ((item as StaticMenuItem).badge ?? null);
+    const itemColor = isDynamic ? '' : ((item as StaticMenuItem).color ?? '');
     const isActive = url && url !== '#' 
-      ? (item.matchExact ? pathname === url : (url === '/' ? pathname === '/' : pathname.startsWith(url))) 
+      ? (matchExact ? pathname === url : (url === '/' ? pathname === '/' : pathname.startsWith(url))) 
       : false;
     const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedIds.includes(item.id) || (item.label && expandedIds.includes(item.label as any));
-    const badge = item.badge;
+    const expandKey: number | string = isDynamic ? (item as MenuNode).id : (item as StaticMenuItem).label;
+    const isExpanded = expandedIds.includes(expandKey) || (typeof expandKey === 'number' && activeParentIds.includes(expandKey));
 
     const toggleExpand = (e: React.MouseEvent) => {
       if (hasChildren) {
         e.preventDefault();
         e.stopPropagation();
         setExpandedIds(prev => {
-          const id = isDynamic ? item.id : item.label;
+          const id: number | string = isDynamic ? (item as MenuNode).id : (item as StaticMenuItem).label;
           return prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
         });
       }
@@ -258,7 +272,7 @@ export default function Sidebar() {
             }
           }}
         >
-          <div className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-[var(--accent)]' : (item.color || '')}`}>
+          <div className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-[var(--accent)]' : itemColor}`}>
             <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
           </div>
           
@@ -290,7 +304,7 @@ export default function Sidebar() {
         
         {!sidebarCollapsed && hasChildren && isExpanded && (
           <div className="space-y-1 mt-1 transition-all">
-            {item.children.map((child: any) => renderMenuItem(child, depth + 1, isDynamic))}
+            {item.children.map(child => renderMenuItem(child as MenuItem, depth + 1, isDynamic))}
           </div>
         )}
       </div>

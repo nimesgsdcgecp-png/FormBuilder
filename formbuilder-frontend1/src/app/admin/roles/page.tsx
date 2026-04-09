@@ -2,40 +2,77 @@
 
 import { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Shield, UserPlus, Trash2, Plus, Info, Check, Search, Filter, ShieldCheck, FormInput, RotateCcw, Users, ShieldAlert, Edit2 } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Plus, Info, Check, ShieldCheck, FormInput, RotateCcw, Users, ShieldAlert, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import ThemeToggle from '@/components/ThemeToggle';
 import Header from '@/components/Header';
+import { AUTH, ADMIN_ROLES, ADMIN_USERS, ADMIN_PERMISSIONS, FORMS } from '@/utils/apiConstants';
+import { extractArray } from '@/utils/apiData';
 
 interface UserSummary {
-  id: number;
+  id: string | number;
   username: string;
   roles: string[];
 }
 
 interface Permission {
-  id: number;
+  id: string | number;
   name: string;
   category: string;
 }
 
 interface Role {
-  id: number;
+  id: string | number;
   name: string;
   description: string;
   permissions: Permission[];
 }
 
 interface Form {
-  id: number;
+  id: string | number;
   title: string;
 }
 
+interface RolesResponse {
+  content?: Role[];
+}
+
+interface UsersResponse {
+  content?: UserSummary[];
+}
+
+interface PermissionsResponse {
+  content?: Permission[];
+}
+
+interface FormsResponse {
+  content?: Form[];
+}
+
+function normalizeIdForApi(value: string): string | number {
+  const trimmed = value.trim();
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
+}
+
+function normalizeList<T>(payload: unknown, keys: string[] = []): T[] {
+  return extractArray<T>(payload, keys);
+}
+
+function normalizeRoles(payload: unknown): Role[] {
+  return normalizeList<Role>(payload, ['roles', 'content', 'items', 'data']).map((role) => ({
+    ...role,
+    permissions: Array.isArray(role.permissions) ? role.permissions : [],
+  }));
+}
+
+function normalizeUsers(payload: unknown): UserSummary[] {
+  return normalizeList<UserSummary>(payload, ['users', 'content', 'items', 'data']).map((user) => ({
+    ...user,
+    roles: Array.isArray(user.roles) ? user.roles : [],
+  }));
+}
+
 export default function RoleManagementPage() {
-  const { hasPermission, isLoading: permsLoading } = usePermissions();
-  const router = useRouter();
+  const { isLoading: permsLoading } = usePermissions();
   
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -51,7 +88,7 @@ export default function RoleManagementPage() {
 
   const [isAddingRole, setIsAddingRole] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [newRole, setNewRole] = useState({ name: "", description: "", permissionIds: [] as number[] });
+  const [newRole, setNewRole] = useState({ name: "", description: "", permissionIds: [] as Array<string | number> });
 
   useEffect(() => {
     if (editingRole) {
@@ -74,29 +111,34 @@ export default function RoleManagementPage() {
     setIsLoading(true);
     try {
       const [rolesRes, usersRes, permsRes, formsRes] = await Promise.all([
-        fetch('http://localhost:8080/api/v1/admin/roles', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/admin/users/summary', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/admin/permissions', { credentials: 'include' }),
-        fetch('http://localhost:8080/api/v1/forms', { credentials: 'include' })
+        fetch(ADMIN_ROLES.LIST, { credentials: 'include' }),
+        fetch(`${ADMIN_USERS.BASE}/summary`, { credentials: 'include' }),
+        fetch(ADMIN_PERMISSIONS.LIST, { credentials: 'include' }),
+        fetch(FORMS.LIST, { credentials: 'include' })
       ]);
 
-      const rolesData = await rolesRes.json();
-      const usersData = await usersRes.json();
-      const permsData = await permsRes.json();
-      const formsData = await formsRes.json();
+      if (!rolesRes.ok) toast.error("Roles restricted: Access denied.");
+      if (!usersRes.ok) toast.error("User list restricted: Access denied.");
+      if (!permsRes.ok) toast.error("Permissions restricted: Access denied.");
 
-      setRoles(rolesData.content || rolesData);
-      setUsers(usersData);
-      setPermissions(permsData);
-      setForms(formsData);
+      const rolesData = rolesRes.ok ? (await rolesRes.json()) as Role[] | RolesResponse : [];
+      const usersData = usersRes.ok ? (await usersRes.json()) as UserSummary[] | UsersResponse : [];
+      const permsData = permsRes.ok ? (await permsRes.json()) as Permission[] | PermissionsResponse : [];
+      const formsData = formsRes.ok ? (await formsRes.json()) as Form[] | FormsResponse : [];
 
-      const userRes = await fetch('http://localhost:8080/api/v1/auth/me', { credentials: 'include' });
+      setRoles(normalizeRoles(rolesData));
+      setUsers(normalizeUsers(usersData));
+      setPermissions(normalizeList<Permission>(permsData, ['permissions', 'content', 'items']));
+      setForms(normalizeList<Form>(formsData, ['forms', 'content', 'items']));
+
+      const userRes = await fetch(AUTH.ME, { credentials: 'include' });
       if (userRes.ok) {
         const userData = await userRes.json();
         setUsername(userData.username);
       }
-    } catch (err) {
-      toast.error("Failed to load management data");
+    } catch (error) {
+      console.error("Management fetch error:", error);
+      toast.error("An error occurred while loading management data.");
     } finally {
       setIsLoading(false);
     }
@@ -112,8 +154,8 @@ export default function RoleManagementPage() {
 
     try {
       const url = editingRole 
-        ? `http://localhost:8080/api/v1/admin/roles/${editingRole.id}`
-        : 'http://localhost:8080/api/v1/admin/roles';
+        ? ADMIN_ROLES.UPDATE(String(editingRole.id))
+        : ADMIN_ROLES.CREATE;
       
       const method = editingRole ? 'PUT' : 'POST';
 
@@ -132,12 +174,12 @@ export default function RoleManagementPage() {
         const err = await res.json();
         toast.error(err.error || `Failed to ${editingRole ? 'update' : 'create'} role`);
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred");
     }
   };
 
-  const handleDeleteRole = async (id: number, name: string) => {
+  const handleDeleteRole = async (id: string | number, name: string) => {
     if (['ADMIN', 'ROLE_ADMINISTRATOR', 'BUILDER', 'USER'].includes(name)) {
       toast.error("Cannot delete system protected role");
       return;
@@ -149,7 +191,7 @@ export default function RoleManagementPage() {
         label: "Delete",
         onClick: async () => {
           try {
-            const res = await fetch(`http://localhost:8080/api/v1/admin/roles/${id}`, {
+            const res = await fetch(ADMIN_ROLES.DELETE(String(id)), {
               method: 'DELETE',
               credentials: 'include'
             });
@@ -161,7 +203,7 @@ export default function RoleManagementPage() {
               const err = await res.json();
               toast.error(err.error || "Failed to delete role");
             }
-          } catch (err) {
+          } catch {
             toast.error("An error occurred");
           }
         }
@@ -178,14 +220,14 @@ export default function RoleManagementPage() {
     }
 
     try {
-      const res = await fetch('http://localhost:8080/api/v1/admin/roles/assign', {
+      const res = await fetch(`${ADMIN_ROLES.BASE}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          userId: parseInt(selectedUser),
-          roleId: parseInt(selectedRole),
-          formId: selectedForm === 'global' ? null : parseInt(selectedForm)
+          userId: normalizeIdForApi(selectedUser),
+          roleId: normalizeIdForApi(selectedRole),
+          formId: selectedForm === 'global' ? null : normalizeIdForApi(selectedForm)
         })
       });
 
@@ -199,7 +241,7 @@ export default function RoleManagementPage() {
         const error = await res.json();
         toast.error(error.error || "Assignment failed");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred during assignment");
     }
   };
@@ -399,7 +441,7 @@ export default function RoleManagementPage() {
                   <option value="">Choose a user...</option>
                   {users
                     .filter(u => !u.roles.some(r => ['ADMIN', 'ROLE_ADMINISTRATOR'].includes(r)) && u.username !== 'admin')
-                    .map(u => <option key={u.id} value={u.id}>{u.username} (ID: #{u.id})</option>)
+                    .map(u => <option key={u.id} value={u.id}>{u.username}</option>)
                   }
                 </select>
               </div>
@@ -450,7 +492,7 @@ export default function RoleManagementPage() {
                     className="w-full px-5 py-4 rounded-2xl border bg-[var(--bg-muted)] transition-all focus:ring-2 focus:ring-[var(--accent)] outline-none appearance-none"
                     style={{ borderColor: 'var(--border)' }}
                   >
-                    {forms.map(f => <option key={f.id} value={f.id}>{f.title} (ID: #{f.id})</option>)}
+                    {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
                   </select>
                 </div>
               )}

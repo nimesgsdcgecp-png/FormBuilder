@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +30,7 @@ public class DraftService {
         if (existingMeta.isPresent()) {
             // UPDATE existing draft row
             rowId = existingMeta.get().getSubmissionRowId();
-            data.put("submission_id", rowId);
+            data.put("id", rowId);
             data.put("updated_at", Instant.now().toString());
             data.put("form_version_id", version.getId());
             dynamicTableService.updateData(form.getTargetTableName(), rowId, data);
@@ -40,7 +40,7 @@ public class DraftService {
             data.put("submitted_by", username);
             data.put("is_draft", true);
             rowId = UUID.randomUUID();
-            data.put("submission_id", rowId);
+            data.put("id", rowId);
             dynamicTableService.insertData(form.getTargetTableName(), data);
             
             FormSubmissionMeta meta = FormSubmissionMeta.builder()
@@ -56,7 +56,7 @@ public class DraftService {
         return rowId;
     }
 
-    public void dropDraftsForVersion(Long formId, Long versionId) {
+    public void dropDraftsForVersion(UUID formId, UUID versionId) {
         List<FormSubmissionMeta> drafts = metaRepository
             .findByFormIdAndIsDeletedFalseAndStatus(formId, "RESPONSE_DRAFT");
         drafts.forEach(meta -> {

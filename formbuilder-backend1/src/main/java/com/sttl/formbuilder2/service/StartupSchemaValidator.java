@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+
 /**
  * StartupSchemaValidator — Fail-fast protection against manual database changes.
  * 
@@ -47,7 +48,7 @@ public class StartupSchemaValidator {
                 } catch (Exception e) {
                     System.err.println("*****************************************************************");
                     System.err.println(">>> [STARTUP FAIL] SCHEMA DRIFT DETECTED");
-                    System.err.println(">>> Form: " + form.getTitle() + " (ID: " + form.getId() + ")");
+                    System.err.println(">>> Form: " + form.getName() + " (ID: " + form.getId() + ")");
                     System.err.println(">>> Table: " + form.getTargetTableName());
                     System.err.println(">>> Error: " + e.getMessage());
                     System.err.println(">>> ACTION REQUIRED: Restore the missing columns in SQL or");

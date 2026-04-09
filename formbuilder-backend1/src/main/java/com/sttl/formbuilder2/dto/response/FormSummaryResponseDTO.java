@@ -1,5 +1,7 @@
 package com.sttl.formbuilder2.dto.response;
 
+import java.util.UUID;
+
 import com.sttl.formbuilder2.model.enums.FormStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -29,8 +31,9 @@ import java.time.Instant;
 @Data
 @Builder
 public class FormSummaryResponseDTO {
-    private Long id;
-    private String title;
+    private UUID id;
+    @com.fasterxml.jackson.annotation.JsonProperty("title")
+    private String name;
     private String description;
     private FormStatus status;
     private Instant createdAt;
@@ -39,7 +42,7 @@ public class FormSummaryResponseDTO {
     private String code;
     private String publicShareToken;
     private boolean allowEditResponse;
-    private Long ownerId;
+    private UUID ownerId;
     private String ownerName;
     private String approvedByName;
     private String issuedByUsername;

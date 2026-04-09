@@ -21,10 +21,10 @@ public class FormSubmissionMeta {
     private UUID id;
 
     @Column(name = "form_id", nullable = false)
-    private Long formId;
+    private UUID formId;
 
     @Column(name = "form_version_id", nullable = false)
-    private Long formVersionId;
+    private UUID formVersionId;
 
     @Column(name = "submission_table", nullable = false)
     private String submissionTable;

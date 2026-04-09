@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * FormVersionResponseDTO — A Single Version Snapshot in an API Response
@@ -31,7 +32,7 @@ import java.util.List;
 @Data
 @Builder
 public class FormVersionResponseDTO {
-    private Long id;
+    private UUID id;
     private Integer versionNumber;
     private String changeLog;
     private Boolean isActive;

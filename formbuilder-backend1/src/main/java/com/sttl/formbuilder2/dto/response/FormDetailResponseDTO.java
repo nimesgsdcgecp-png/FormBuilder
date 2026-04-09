@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * FormDetailResponseDTO — Full Form Response Including Schema and Versions
@@ -35,8 +36,9 @@ import java.util.List;
 @Data
 @Builder
 public class FormDetailResponseDTO {
-    private Long id;
-    private String title;
+    private UUID id;
+    @com.fasterxml.jackson.annotation.JsonProperty("title")
+    private String name;
     private String description;
     private FormStatus status;
     private Instant createdAt;
@@ -46,13 +48,20 @@ public class FormDetailResponseDTO {
     private Boolean codeLocked;
     private String publicShareToken;
     private boolean allowEditResponse;
-    private Long ownerId;
+    private UUID ownerId;
     private String ownerName;
-    private Long approvedById;
+    private UUID approvedById;
     private String approvedByName;
     private String themeColor;
     private String themeFont;
     private String issuedByUsername;
     private String approvalChain;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("fields")
+    private List<FormFieldResponseDTO> fields;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("rules")
+    private Object rules;
+    
     private List<FormVersionResponseDTO> versions;
 }

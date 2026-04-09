@@ -9,6 +9,7 @@ import com.sttl.formbuilder2.service.FormService;
 import com.sttl.formbuilder2.service.SubmissionService;
 import com.sttl.formbuilder2.service.DraftService;
 import com.sttl.formbuilder2.exception.FormBuilderException;
+import com.sttl.formbuilder2.util.ApiConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -18,7 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/runtime")
+@RequestMapping(ApiConstants.RUNTIME_BASE)
 @RequiredArgsConstructor
 public class RuntimeController {
 
@@ -28,12 +29,12 @@ public class RuntimeController {
     private final FormService formService;
     private final SubmissionService submissionService;
 
-    @GetMapping("/forms/{formCode}")
+    @GetMapping(ApiConstants.RUNTIME_GET_FORM)
     public ResponseEntity<?> getForm(@PathVariable("formCode") String formCode) {
         return ResponseEntity.ok(formService.getFormByCode(formCode));
     }
 
-    @PostMapping("/forms/{formCode}/submissions")
+    @PostMapping(ApiConstants.RUNTIME_SUBMIT)
     public ResponseEntity<?> submitForm(@PathVariable("formCode") String formCode,
                                         @RequestBody com.sttl.formbuilder2.dto.request.SubmissionRequestDTO request) {
         Form form = formRepository.findByCode(formCode)
@@ -47,7 +48,7 @@ public class RuntimeController {
         return ResponseEntity.ok(Map.of("submissionId", submissionId, "message", "Submission successful"));
     }
 
-    @PostMapping("/forms/{formCode}/drafts")
+    @PostMapping(ApiConstants.RUNTIME_SAVE_DRAFT)
     public ResponseEntity<?> saveDraft(@PathVariable("formCode") String formCode,
                                        @RequestBody Map<String, Object> request,
                                        Authentication auth) {
@@ -63,9 +64,9 @@ public class RuntimeController {
         FormVersion active = formVersionRepository.findByFormIdAndIsActiveTrue(form.getId())
             .orElseThrow(() -> new FormBuilderException("FORM_NOT_FOUND", "No active version"));
 
-        Long requestVersionId = null;
+        UUID requestVersionId = null;
         if (request.containsKey("formVersionId") && request.get("formVersionId") != null) {
-            requestVersionId = Long.valueOf(request.get("formVersionId").toString());
+            requestVersionId = UUID.fromString(request.get("formVersionId").toString());
         }
 
         if (requestVersionId != null && !active.getId().equals(requestVersionId)) {

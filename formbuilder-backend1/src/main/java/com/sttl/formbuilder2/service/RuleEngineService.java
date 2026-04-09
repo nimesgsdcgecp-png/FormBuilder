@@ -6,21 +6,29 @@ import com.sttl.formbuilder2.dto.internal.RuleActionDTO;
 import com.sttl.formbuilder2.dto.internal.RuleConditionEntryDTO;
 import com.sttl.formbuilder2.dto.internal.ConditionGroupDTO;
 import com.sttl.formbuilder2.model.enums.ConditionLogic;
+import com.sttl.formbuilder2.model.enums.ActionType;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 
-/**
 /**
  * Server-Side Logic Rule Evaluation Engine.
  * Evaluates the IF→THEN logic rules attached to a form version when a submission
  * is received, preventing invalid inserts and triggering post-submission workflows.
  */
 @Service
+@RequiredArgsConstructor
 public class RuleEngineService {
+
+    private final AuditService auditService;
+    private final JavaMailSender mailSender;
 
     /**
      * Validates a submission against all rules in the form's active version.
@@ -29,7 +37,7 @@ public class RuleEngineService {
      *
      * @param rules   The deserialized list of {@link FormRuleDTO}s from
      *                {@code FormVersion.rules}.
-     * @param answers Map of {columnName: value} pairs submitted by the respondent.
+     * @param answers Map of {fieldKey: value} pairs submitted by the respondent.
      * @throws ResponseStatusException HTTP 400 if a rule's action rejects the
      *                                 submission.
      */
@@ -100,9 +108,6 @@ public class RuleEngineService {
      * save has already succeeded. Since this runs after the save, failures here do
      * NOT roll back the submission.
      *
-     * Current implementation: SEND_EMAIL is simulated by printing to stdout.
-     * In production, inject JavaMailSender and send a real email.
-     *
      * @param rules   The deserialized list of {@link FormRuleDTO}s.
      * @param answers The respondent's submitted answers.
      */
@@ -113,17 +118,37 @@ public class RuleEngineService {
         for (FormRuleDTO rule : rules) {
             if (evaluateRule(rule, answers)) {
                 for (RuleActionDTO action : rule.getActions()) {
-                    if ("SEND_EMAIL".equals(action.getType().name())) {
+                    if (action.getType() == ActionType.SEND_EMAIL) {
                         String emailAddress = action.getMessage();
-                        System.out.println("==================================================");
-                        System.out.println("🚀 WORKFLOW TRIGGERED: SEND_EMAIL");
-                        System.out.println("📧 TO: " + emailAddress);
-                        System.out.println("📄 BODY: New submission received -> " + answers.toString());
-                        System.out.println("==================================================");
+                        String subject = "New Form Submission Received";
+
+                        // Create a body from the submission data
+                        StringBuilder body = new StringBuilder("Data Received:\n\n");
+                        answers.forEach((k, v) -> body.append(k).append(": ").append(v).append("\n"));
+
+                        // TRIGGER REAL EMAIL (ASYNC)
+                        sendRealEmail(emailAddress, subject, body.toString());
+                        
+                        // LOG TO AUDIT (VISIBLE IN UI)
+                        try {
+                            auditService.log("RULE_TRIGGERED", "SYSTEM", "FORM_RULE", action.getType().name(), 
+                                "Action: SEND_EMAIL to " + emailAddress);
+                        } catch (Exception e) {
+                            // Non-blocking log failure
+                        }
                     }
                 }
             }
         }
+    }
+
+    @Async
+    public void sendRealEmail(String to, String subject, String text) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(text);
+        mailSender.send(message);
     }
 
     /**
@@ -136,7 +161,7 @@ public class RuleEngineService {
      * - A missing or blank answer always returns {@code false}.
      *
      * @param condition The condition to evaluate.
-     * @param answers   The full map of submitted {columnName: value} pairs.
+     * @param answers   The full map of submitted {fieldKey: value} pairs.
      * @return {@code true} if the condition matches, {@code false} otherwise.
      */
     private boolean evaluateCondition(RuleConditionDTO condition, Map<String, Object> answers) {

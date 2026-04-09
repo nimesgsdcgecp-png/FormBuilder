@@ -24,11 +24,11 @@ import java.util.UUID;
 public class Form {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false)
-    private String title;
+    private String name;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -83,6 +83,9 @@ public class Form {
 
     @Column(name = "issued_by_username")
     private String issuedByUsername;
+
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
 
     @Column(name = "approval_chain", columnDefinition = "TEXT")
     private String approvalChain;

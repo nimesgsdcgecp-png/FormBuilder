@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -74,7 +75,7 @@ public class RoleService {
     }
 
     @Transactional
-    public RoleResponseDTO updateRole(Long id, RoleRequestDTO dto) {
+    public RoleResponseDTO updateRole(UUID id, RoleRequestDTO dto) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
@@ -155,7 +156,7 @@ public class RoleService {
     }
 
     @Transactional
-    public void deleteRole(Long id) {
+    public void deleteRole(UUID id) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
@@ -190,12 +191,12 @@ public class RoleService {
     }
 
     @Transactional
-    public void removeAssignment(Long id) {
+    public void removeAssignment(UUID id) {
         userFormRoleRepository.deleteById(id);
     }
 
     @Transactional(readOnly = true)
-    public List<UserRoleAssignmentResponseDTO> getUserAssignments(Long userId) {
+    public List<UserRoleAssignmentResponseDTO> getUserAssignments(UUID userId) {
         return userFormRoleRepository.findByUserId(userId).stream()
                 .map(ufr -> UserRoleAssignmentResponseDTO.builder()
                         .id(ufr.getId())

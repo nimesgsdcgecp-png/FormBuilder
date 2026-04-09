@@ -32,7 +32,7 @@ public class FormMapper {
     public FormSummaryResponseDTO toSummaryDTO(Form form) {
         return FormSummaryResponseDTO.builder()
                 .id(form.getId())
-                .title(form.getTitle())
+                .name(form.getName())
                 .description(form.getDescription())
                 .status(form.getStatus())
                 .createdAt(form.getCreatedAt())
@@ -63,13 +63,13 @@ public class FormMapper {
                 }
                 return FormFieldResponseDTO.builder()
                         .id(field.getId())
-                        .fieldLabel(field.getFieldLabel())
-                        .columnName(field.getColumnName())
-                        .fieldType(field.getFieldType())
-                        .isMandatory(field.getIsMandatory())
+                        .label(field.getFieldLabel())
+                        .columnName(field.getFieldKey())
+                        .type(field.getFieldType())
+                        .required(field.getIsRequired())
                         .defaultValue(field.getDefaultValue())
-                        .validationRules(field.getValidationRules())
-                        .ordinalPosition(field.getOrdinalPosition())
+                        .validation(field.getValidationRules())
+                        .displayOrder(field.getDisplayOrder())
                         .options(parsedOptions)
                         .calculationFormula(field.getCalculationFormula())
                         .helpText(field.getHelpText())
@@ -87,7 +87,7 @@ public class FormMapper {
                     .collect(Collectors.toMap(FormFieldResponseDTO::getColumnName, dto -> dto));
 
             for (FormField entity : version.getFields()) {
-                FormFieldResponseDTO dto = dtoMap.get(entity.getColumnName());
+                FormFieldResponseDTO dto = dtoMap.get(entity.getFieldKey());
                 if (entity.getParentColumnName() == null) {
                     rootFields.add(dto);
                 } else {
@@ -160,8 +160,10 @@ public class FormMapper {
         if (activeVersionDTO != null) {
             Object rules = activeVersionDTO.getRules();
             if (rules instanceof Map) {
+                @SuppressWarnings("unchecked")
                 Map<String, Object> rulesMap = (Map<String, Object>) rules;
                 if (rulesMap.containsKey("theme")) {
+                    @SuppressWarnings("unchecked")
                     Map<String, String> theme = (Map<String, String>) rulesMap.get("theme");
                     themeColor = theme.get("color");
                     themeFont = theme.get("font");
@@ -169,22 +171,32 @@ public class FormMapper {
             }
         }
 
+        // 5. Build final detail DTO with top-level fields/rules for frontend compatibility
+        List<FormFieldResponseDTO> rootFields = activeVersionDTO != null ? activeVersionDTO.getFields() : new ArrayList<>();
+        Object activeRules = activeVersionDTO != null ? activeVersionDTO.getRules() : new ArrayList<>();
+
         return FormDetailResponseDTO.builder()
                 .id(form.getId())
-                .title(form.getTitle())
+                .name(form.getName())
                 .description(form.getDescription())
                 .status(form.getStatus())
                 .createdAt(form.getCreatedAt())
                 .updatedAt(form.getUpdatedAt())
+                .targetTableName(form.getTargetTableName())
                 .code(form.getCode())
                 .codeLocked(form.getCodeLocked())
                 .publicShareToken(form.getPublicShareToken())
                 .allowEditResponse(form.isAllowEditResponse())
                 .ownerId(form.getOwner() != null ? form.getOwner().getId() : null)
+                .ownerName(form.getOwner() != null ? form.getOwner().getUsername() : "Unknown")
+                .approvedById(form.getApprovedBy() != null ? form.getApprovedBy().getId() : null)
+                .approvedByName(form.getApprovedBy() != null ? form.getApprovedBy().getUsername() : null)
                 .themeColor(themeColor)
                 .themeFont(themeFont)
                 .issuedByUsername(form.getIssuedByUsername())
-                .approvalChain(form.getApprovalChain())
+                .approvalChain(form.getApprovalChain() != null ? form.getApprovalChain() : "")
+                .fields(rootFields)
+                .rules(activeRules)
                 .versions(versionDTOs)
                 .build();
     }
@@ -203,7 +215,7 @@ public class FormMapper {
             entity.setFormVersion(version);
             entity.setFieldLabel(dto.getLabel());
             entity.setFieldType(dto.getType());
-            entity.setIsMandatory(dto.isRequired());
+            entity.setIsRequired(dto.isRequired());
             entity.setValidationRules(dto.getValidation());
             entity.setDefaultValue(dto.getDefaultValue());
             entity.setCalculationFormula(dto.getCalculationFormula());
@@ -213,7 +225,7 @@ public class FormMapper {
             entity.setIsDisabled(dto.isDisabled());
             entity.setIsMultiSelect(dto.isMultiSelect());
             entity.setParentColumnName(parentColumnName);
-            entity.setOrdinalPosition(allEntities.size());
+            entity.setDisplayOrder(allEntities.size());
 
             if (dto.getOptions() != null) {
                 try {
@@ -223,7 +235,7 @@ public class FormMapper {
                 }
             }
 
-            String colName = dto.getColumnName();
+            String colName = dto.getFieldKey();
             if (colName != null && !colName.trim().isEmpty()) {
                 // User provided a custom key — validate it strictly
                 if (!colName.matches("^[a-z][a-z0-9_]{0,99}$")) {
@@ -242,7 +254,7 @@ public class FormMapper {
                 colName = dto.getType().name().toLowerCase() + "_" + System.nanoTime() % 10000;
             }
             com.sttl.formbuilder2.util.SqlKeywordValidator.validate(colName);
-            entity.setColumnName(colName);
+            entity.setFieldKey(colName);
             allEntities.add(entity);
 
             if (dto.getChildren() != null && !dto.getChildren().isEmpty()) {
